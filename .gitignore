@@ -1,0 +1,47 @@
+# =========================
+# Dependencias
+# =========================
+# Node (React / Express)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python (Django)
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+
+# =========================
+# Entornos y Secretos
+# =========================
+# ¡NUNCA SUBIR EL .env REAL!
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+
+# =========================
+# Bases de datos locales
+# =========================
+*.sqlite3
+# Ignorar datos persistentes de Docker local
+database/data/
+
+# =========================
+# OS y Editores
+# =========================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
