@@ -1,9 +1,4 @@
-version: '3.8'
-
 services:
-  # ==========================================
-  # Base de Datos (MySQL 8.4 LTS)
-  # ==========================================
   db:
     image: mysql:8.4
     container_name: ideacampus_db
@@ -17,19 +12,13 @@ services:
       MYSQL_PASSWORD: ${DB_PASSWORD}
     volumes:
       - db_data:/var/lib/mysql
-      # Auto-ejecuta los scripts SQL al inicializar
       - ./database/init.sql:/docker-entrypoint-initdb.d/1_init.sql
       - ./database/seeds.sql:/docker-entrypoint-initdb.d/2_seeds.sql
 
-  # ==========================================
-  # Backend (Django)
-  # ==========================================
   backend:
     build: 
       context: ./backend
-      # dockerfile: Dockerfile (Lo crearemos cuando inicialicemos Django)
     container_name: ideacampus_backend
-    # Django usa el puerto 8000 por defecto
     ports:
       - "8000:8000"
     environment:
@@ -38,25 +27,25 @@ services:
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_NAME=${DB_NAME}
-      # - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
     depends_on:
       - db
-    # volumes:
-    #   - ./backend:/app
+    volumes:
+      # Refleja el código local en el contenedor (Hot Reloading)
+      - ./backend:/app
 
-  # ==========================================
-  # Frontend (React)
-  # ==========================================
   frontend:
     build:
       context: ./frontend
     container_name: ideacampus_frontend
     ports:
-      - "5173:5173" # Puerto por defecto de Vite/React
+      - "5173:5173"
     depends_on:
       - backend
-    # volumes:
-    #   - ./frontend:/app
+    volumes:
+      # Refleja el código local
+      - ./frontend:/app
+      # Ignora la carpeta node_modules local para usar la del contenedor de Linux
+      - /app/node_modules
 
 volumes:
   db_data:
