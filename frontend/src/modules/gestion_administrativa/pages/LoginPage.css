@@ -1,83 +1,452 @@
-.login-container {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem;
-  background-color: #f5f6f8;
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@600;700&display=swap");
+
+:root {
+  font-family: "Inter", sans-serif;
+  color: #1f2937;
+  background: #f8fafc;
+  font-synthesis: none;
 }
 
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+a {
+  font: inherit;
+}
+
+/* ─── Shell ──────────────────────────────────────────────────── */
+
+.app-shell {
+  position: relative;
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 40px 32px 64px;
+  box-sizing: border-box;
+  /* soft vignette that frames the card without obscuring the edges */
+  background:
+    radial-gradient(ellipse 65% 70% at 50% 46%, rgb(255 255 255 / 0.88) 0%, transparent 100%),
+    #f8fafc;
+}
+
+/* ─── Background panels ──────────────────────────────────────── */
+
+.bg-panel {
+  position: absolute;
+  pointer-events: none;
+  fill: none;
+  stroke: #94a3b8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.bg-panel-left {
+  left: 2%;
+  top: 50%;
+  transform: translateY(-50%);
+  width: clamp(180px, 18vw, 340px);
+  stroke-width: 1.2;
+  opacity: 0.13;
+}
+
+.bg-panel-right {
+  right: 2%;
+  top: 50%;
+  transform: translateY(-50%);
+  width: clamp(180px, 18vw, 340px);
+  stroke-width: 1.2;
+  opacity: 0.13;
+}
+
+.bg-accent-tr {
+  top: 3%;
+  right: 21%;
+  width: clamp(80px, 9vw, 150px);
+  stroke-width: 1.1;
+  opacity: 0.09;
+}
+
+.bg-accent-bl {
+  bottom: 5%;
+  left: 21%;
+  width: clamp(80px, 9vw, 150px);
+  stroke-width: 1.1;
+  opacity: 0.09;
+}
+
+/* ─── Login card ─────────────────────────────────────────────── */
+
 .login-card {
-  background: #ffffff;
-  border-radius: 16px;
-  border: 1px solid #e2e4e8;
-  padding: 2.5rem 2rem;
-  max-width: 400px;
-  width: 100%;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 430px;
+  height: 516px;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+  border: 1px solid rgb(255 255 255 / 0.18);
+  border-radius: 20px;
+  padding: 34px 44px 29px;
+  color: #fff;
+  background: #e63946;
+  box-shadow:
+    0 28px 64px rgb(31 41 55 / 0.16),
+    0 6px 18px rgb(230 57 70 / 0.14),
+    inset 0 1px 0 rgb(255 255 255 / 0.18);
+}
+
+/* ─── Brand ──────────────────────────────────────────────────── */
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
 }
 
-.login-logo {
+.brand-mark {
+  display: grid;
   width: 52px;
   height: 52px;
-  border-radius: 12px;
-  background-color: #1f7a4d;
-  color: #ffffff;
+  place-items: center;
+  border: 2px solid rgb(255 255 255 / 0.85);
+  border-radius: 50%;
+  font-family: "Montserrat", sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow:
+    inset 0 0 0 5px rgb(255 255 255 / 0.08),
+    0 0 0 6px rgb(255 255 255 / 0.06);
+}
+
+.brand h1 {
+  margin: 14px 0 7px;
+  font-family: "Montserrat", sans-serif;
+  font-size: 31px;
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  line-height: 1.1;
+}
+
+.tagline,
+.university,
+.institution-note p,
+.support p {
+  margin: 0;
+}
+
+.tagline {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.university {
+  margin-top: 5px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  opacity: 0.82;
+}
+
+/* ─── Google button ──────────────────────────────────────────── */
+
+.google-button {
+  display: grid;
+  width: 340px;
+  height: 50px;
+  flex: 0 0 auto;
+  grid-template-columns: 24px 1fr 24px;
+  align-items: center;
+  margin-top: 24px;
+  border: 0;
+  border-radius: 9px;
+  padding: 0 18px;
+  color: #1f2937;
+  background: #fff;
+  box-shadow:
+    0 4px 14px rgb(114 27 34 / 0.16),
+    0 1px 3px rgb(0 0 0 / 0.06);
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+
+.google-button span {
+  grid-column: 2;
+  font-size: 14px;
   font-weight: 600;
-  font-size: 20px;
+  text-align: center;
+}
+
+.google-icon {
+  width: 21px;
+  height: 21px;
+}
+
+.google-button:hover {
+  transform: translateY(-2px);
+  background: #fbfdff;
+  box-shadow:
+    0 8px 20px rgb(114 27 34 / 0.2),
+    0 2px 6px rgb(0 0 0 / 0.07);
+}
+
+.google-button:active {
+  transform: translateY(0);
+  box-shadow: 0 3px 8px rgb(114 27 34 / 0.14);
+}
+
+.google-button:focus-visible,
+.support a:focus-visible {
+  outline: 3px solid rgb(255 255 255 / 0.65);
+  outline-offset: 3px;
+}
+
+/* ─── Institution note ───────────────────────────────────────── */
+
+.institution-note {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 1rem;
+  gap: 10px;
+  margin-top: 21px;
+  text-align: left;
 }
 
-.login-header h1 {
-  font-size: 20px;
-  margin: 0 0 0.5rem;
+.institution-note svg,
+.support svg {
+  width: 23px;
+  height: 23px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+  opacity: 0.9;
 }
 
-.login-header p {
-  font-size: 13px;
-  color: #6b7280;
-  margin: 0 0 1.5rem;
+.institution-note p {
+  font-size: 11.5px;
+  line-height: 1.3;
+  opacity: 0.82;
 }
 
-.google-button {
+.institution-note strong {
+  display: block;
+  margin-top: 1px;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* ─── Separator ──────────────────────────────────────────────── */
+
+.separator {
   width: 100%;
-  padding: 0.75rem;
-  border-radius: 8px;
-  border: 1px solid #d1d5db;
-  background-color: #ffffff;
-  font-size: 14px;
-  cursor: pointer;
+  height: 1px;
+  margin: 21px 0 18px;
+  background: rgb(255 255 255 / 0.28);
 }
 
-.google-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+/* ─── Support ────────────────────────────────────────────────── */
+
+.support {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  text-align: left;
 }
 
-.login-status {
-  font-size: 13px;
-  color: #6b7280;
-  margin-top: 0.75rem;
+.support p,
+.support a {
+  font-size: 11.5px;
+  line-height: 1.5;
 }
 
-.login-error {
-  font-size: 13px;
-  color: #dc2626;
-  margin-top: 0.75rem;
+.support p {
+  opacity: 0.82;
 }
 
-.login-hint {
-  font-size: 12px;
+.support a {
+  display: block;
+  width: fit-content;
+  color: #fff;
+  font-weight: 600;
+  text-underline-offset: 3px;
+}
+
+/* ─── Page footer ────────────────────────────────────────────── */
+
+.page-footer {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+  font-size: 11px;
   color: #9ca3af;
-  margin-top: 1.25rem;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+  user-select: none;
 }
 
-/* Responsivo para móvil */
-@media (max-width: 480px) {
-  .login-card {
-    padding: 2rem 1.5rem;
+.footer-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #d1d5db;
+  flex-shrink: 0;
+}
+
+/* ─── Mobile ─────────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .app-shell {
+    padding: 20px 16px 56px;
+    background:
+      radial-gradient(ellipse 90% 60% at 50% 44%, rgb(255 255 255 / 0.94) 0%, transparent 100%),
+      #f8fafc;
   }
+
+  .bg-panel-left,
+  .bg-panel-right {
+    width: 170px;
+    opacity: 0.08;
+  }
+
+  .bg-panel-left {
+    left: -70px;
+    top: 50%;
+  }
+
+  .bg-panel-right {
+    right: -70px;
+    top: 50%;
+  }
+
+  .bg-accent-tr,
+  .bg-accent-bl {
+    display: none;
+  }
+
+  .login-card {
+    width: min(88vw, 366px);
+    height: auto;
+    min-height: 530px;
+    justify-content: flex-start;
+    border-radius: 19px;
+    padding: 29px 24px 25px;
+    box-shadow:
+      0 20px 45px rgb(31 41 55 / 0.14),
+      0 4px 12px rgb(230 57 70 / 0.1);
+  }
+
+  .brand-mark {
+    width: 46px;
+    height: 46px;
+    font-size: 21px;
+  }
+
+  .brand h1 {
+    margin-top: 13px;
+    font-size: 27px;
+  }
+
+  .tagline {
+    font-size: 13px;
+  }
+
+  .university {
+    max-width: 260px;
+    font-size: 10.5px;
+  }
+
+  .google-button {
+    width: 100%;
+    height: 50px;
+    margin-top: 22px;
+    padding: 0 17px;
+  }
+
+  .institution-note {
+    margin-top: 20px;
+  }
+
+  .separator {
+    margin: 20px 0 18px;
+  }
+
+  .page-footer {
+    font-size: 10px;
+    gap: 8px;
+    bottom: 14px;
+    flex-wrap: wrap;
+    justify-content: center;
+    text-align: center;
+    padding: 0 16px;
+  }
+}
+
+@media (max-height: 700px) and (max-width: 600px) {
+  .app-shell {
+    padding-block: 12px 48px;
+  }
+
+  .login-card {
+    min-height: 0;
+    padding-block: 21px;
+  }
+
+  .brand-mark {
+    width: 40px;
+    height: 40px;
+    font-size: 19px;
+  }
+
+  .brand h1 {
+    margin-top: 9px;
+  }
+
+  .google-button {
+    margin-top: 16px;
+  }
+
+  .institution-note {
+    margin-top: 15px;
+  }
+
+  .separator {
+    margin: 15px 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .google-button {
+    transition: none;
+  }
+}
+
+.login-error-msg {
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: #fff;
+  background: rgb(0 0 0 / 0.15);
+  padding: 8px 12px;
+  border-radius: 8px;
 }
