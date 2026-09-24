@@ -1,0 +1,83 @@
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background-color: #f5f6f8;
+}
+
+.login-card {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #e2e4e8;
+  padding: 2.5rem 2rem;
+  max-width: 400px;
+  width: 100%;
+  text-align: center;
+}
+
+.login-logo {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background-color: #1f7a4d;
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem;
+}
+
+.login-header h1 {
+  font-size: 20px;
+  margin: 0 0 0.5rem;
+}
+
+.login-header p {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0 0 1.5rem;
+}
+
+.google-button {
+  width: 100%;
+  padding: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.google-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.login-status {
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 0.75rem;
+}
+
+.login-error {
+  font-size: 13px;
+  color: #dc2626;
+  margin-top: 0.75rem;
+}
+
+.login-hint {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 1.25rem;
+}
+
+/* Responsivo para móvil */
+@media (max-width: 480px) {
+  .login-card {
+    padding: 2rem 1.5rem;
+  }
+}
