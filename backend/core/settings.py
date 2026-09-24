@@ -10,6 +10,7 @@ load_dotenv(BASE_DIR / '../.env')
 
 SECRET_KEY = 'django-insecure-dhc*!sdse9(tmg8u6-bq5&v-vc9r(o81k%qd+=1&axqd=a3i$z'
 
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
@@ -40,7 +41,7 @@ INSTALLED_APPS = [
 AUTENTICATION_BACKENDS = [
     'allauth.account.auth_backends.AuthenticationBackend',
 ]
-
+#INICIO DE CONFIGURACION PARA GOOGLE LOGIN
 SOCIALACCOUNT_PROVIDERS = {
     'google': {
         'APP': {
@@ -51,6 +52,11 @@ SOCIALACCOUNT_PROVIDERS = {
         'SCOPE': ['profile', 'email'],
     }
 }
+
+#JWT SETTINGS
+JWT_SECRET = os.getenv("JWT_KEY")
+JWT_ALGORITHM = "HS256"
+JWT_EXP_DELTA_HOURS = 24
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

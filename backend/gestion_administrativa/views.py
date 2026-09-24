@@ -5,7 +5,10 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
 
-from .models import Usuario  # ajusta el import según dónde esté tu models.py
+from .models import Usuario  
+from .jwt_utils import generar_token
+from rest_framework.permissions import IsAuthenticated
+from .authentication import JWTAuthentication
 
 GOOGLE_CLIENT_ID = "260735986909-fu7gptlsfojfho3kmaj212djjf8k6p60.apps.googleusercontent.com"
 
@@ -34,25 +37,33 @@ class GoogleLogin(APIView):
 
         google_id = idinfo.get("sub")
         email = idinfo.get("email")
-        nombre = idinfo.get("name", "")  # nombre completo que da Google
+        nombre = idinfo.get("name", "")
 
         usuario, created = Usuario.objects.get_or_create(
             google_id=google_id,
-            defaults={
-                "nombre": nombre,
-                "correo": email,
-            }
+            defaults={"nombre": nombre, "correo": email}
         )
 
-        # Actualiza el último acceso cada vez que inicia sesión
         usuario.ultimo_acceso = timezone.now()
         usuario.save(update_fields=["ultimo_acceso"])
 
+        jwt_token = generar_token(usuario)
+
         return Response({
-            "id_usuario": usuario.id_usuario,
-            "nombre": usuario.nombre,
-            "correo": usuario.correo,
-            "google_id": usuario.google_id,
+            "token": jwt_token,
+            "usuario": {
+                "id_usuario": usuario.id_usuario,
+                "nombre": usuario.nombre,
+                "correo": usuario.correo,
+            },
             "created": created,
             "message": "Login exitoso"
         }, status=status.HTTP_200_OK)
+
+class AlgunaVistaProtegida(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        usuario = request.user  # tu objeto Usuario custom
+        return Response({"nombre": usuario.nombre})

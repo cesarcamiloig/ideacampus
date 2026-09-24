@@ -15,6 +15,11 @@ class Usuario(models.Model):
 
     def __str__(self):
         return self.nombre
+    
+    @property
+    def is_authenticated(self):
+        # Siempre True: si llegamos aquí es porque el JWT ya fue validado
+        return True 
 
 
 class Rol(models.Model):
