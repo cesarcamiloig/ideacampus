@@ -2,3 +2,9 @@ Django>=5.0.3
 mysqlclient>=2.2.4
 djangorestframework>=3.15.1
 django-cors-headers>=4.3.1
+python-dotenv
+django-allauth[socialaccount]
+dj-rest-auth
+requests==2.32.3
+google-auth
+PyJWT
