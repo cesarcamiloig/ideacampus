@@ -11,13 +11,13 @@ load_dotenv(BASE_DIR / '../.env')
 SECRET_KEY = 'django-insecure-dhc*!sdse9(tmg8u6-bq5&v-vc9r(o81k%qd+=1&axqd=a3i$z'
 
 
-# SECURITY WARNING: don't run with debug turned on in production!
+
 DEBUG = True
 
 ALLOWED_HOSTS = []
 
 
-# Application definition
+
 
 INSTALLED_APPS = [
     'django.contrib.admin',
