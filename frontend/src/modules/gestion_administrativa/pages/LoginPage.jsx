@@ -1,7 +1,8 @@
-import { useState } from "react";
-import GoogleButton from "../components/GoogleButton";
-import { loginWithGoogle } from "../services/authService";
+import { useEffect, useRef, useState } from "react";
+import { authenticateWithGoogle } from "../services/authService";
 import "./LoginPage.css";
+
+const GOOGLE_CLIENT_ID = "260735986909-fu7gptlsfojfho3kmaj212djjf8k6p60.apps.googleusercontent.com";
 
 function InstitutionIcon() {
   return (
@@ -75,7 +76,7 @@ function BgAccentBL() {
   );
 }
 
-function LoginCard({ status, onLogin }) {
+function LoginCard({ status, googleButtonRef }) {
   return (
     <main className="login-card" aria-labelledby="gennova-title">
       <header className="brand">
@@ -85,8 +86,9 @@ function LoginCard({ status, onLogin }) {
         <p className="university">Universidad Francisco de Paula Santander</p>
       </header>
 
-      <GoogleButton onClick={onLogin} disabled={status === "loading"} />
+      <div ref={googleButtonRef} className="google-button-container" />
 
+      {status === "loading" && <p className="login-status">Conectando...</p>}
       {status === "error" && (
         <p className="login-error-msg" role="alert">No pudimos verificar tu cuenta.</p>
       )}
@@ -122,13 +124,56 @@ function PageFooter() {
   );
 }
 
-function LoginPage() {
-  const [status, setStatus] = useState("idle"); // idle | loading | error
+function LoginPage({ onLoginSuccess }) {
+  const [status, setStatus] = useState("idle");
+  const googleButtonRef = useRef(null);
 
-  const handleLogin = () => {
+  async function handleCredentialResponse(response) {
+    console.log("[Google] Callback ejecutado");
+    console.log("[Google] Token recibido:", response?.credential);
+
+    if (!response?.credential) {
+      console.error("[Google] La respuesta no contiene un token credential", response);
+      setStatus("error");
+      return;
+    }
+
     setStatus("loading");
-    loginWithGoogle();
-  };
+    try {
+      const data = await authenticateWithGoogle(response.credential);
+      console.log("Sesión iniciada:", data.usuario);
+      onLoginSuccess();
+    } catch (err) {
+      console.error(err);
+      setStatus("error");
+    }
+  }
+
+  const initialized = useRef(false);
+    useEffect(() => {
+   if (initialized.current) return;
+  initialized.current = true;
+  const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.onload = () => {
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleCredentialResponse,
+      });
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        theme: "outline",
+        size: "large",
+        width: 340,
+        text: "continue_with",
+      });
+    };
+    script.onerror = () => {
+      console.error("[Google] No se pudo cargar Google Identity Services");
+      setStatus("error");
+    };
+    document.body.appendChild(script);
+  }, []);
 
   return (
     <div className="app-shell">
@@ -136,7 +181,7 @@ function LoginPage() {
       <BgRight />
       <BgAccentTR />
       <BgAccentBL />
-      <LoginCard status={status} onLogin={handleLogin} />
+      <LoginCard status={status} googleButtonRef={googleButtonRef} />
       <PageFooter />
     </div>
   );
