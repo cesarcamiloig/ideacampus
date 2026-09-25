@@ -49,12 +49,19 @@ class GoogleLogin(APIView):
 
         jwt_token = generar_token(usuario)
 
+        roles = list(
+        usuario.usuariorol_set
+        .filter(estado='activo')
+        .values_list('rol__nombre_rol', flat=True)
+    )
+
         return Response({
             "token": jwt_token,
             "usuario": {
                 "id_usuario": usuario.id_usuario,
                 "nombre": usuario.nombre,
                 "correo": usuario.correo,
+                "roles": roles
             },
             "created": created,
             "message": "Login exitoso"

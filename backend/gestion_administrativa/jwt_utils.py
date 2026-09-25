@@ -4,11 +4,16 @@ from django.conf import settings
 
 
 def generar_token(usuario):
+    roles = list(
+        usuario.usuariorol_set
+        .filter(estado='activo')
+        .values_list('rol__nombre_rol', flat=True)
+    )
+
     payload = {
         "id_usuario": usuario.id_usuario,
         "correo": usuario.correo,
-        "exp": datetime.utcnow() + timedelta(hours=settings.JWT_EXP_DELTA_HOURS),
-        "iat": datetime.utcnow(),
+        "roles": roles
     }
     token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
     return token
