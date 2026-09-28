@@ -1,19 +1,19 @@
 services:
-  db:
-    image: mysql:8.4
-    container_name: ideacampus_db
-    restart: always
-    ports:
-      - "3306:3306"
-    environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${DB_NAME}
-      MYSQL_USER: ${DB_USER}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
-    volumes:
-      - db_data:/var/lib/mysql
-      - ./database/init.sql:/docker-entrypoint-initdb.d/1_init.sql
-      - ./database/seeds.sql:/docker-entrypoint-initdb.d/2_seeds.sql
+#  db:
+#    image: mysql:8.4
+#    container_name: ideacampus_db
+#    restart: always
+#    ports:
+#     - "3306:3306"
+#    environment:
+#      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+#      MYSQL_DATABASE: ${DB_NAME}
+#      MYSQL_USER: ${DB_USER}
+#      MYSQL_PASSWORD: ${DB_PASSWORD}
+#    volumes:
+#      - db_data:/var/lib/mysql
+#      - ./database/init.sql:/docker-entrypoint-initdb.d/1_init.sql
+#      - ./database/seeds.sql:/docker-entrypoint-initdb.d/2_seeds.sql 
 
   backend:
     build: 
@@ -22,13 +22,12 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DB_HOST=db
-      - DB_PORT=3306
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_NAME=${DB_NAME}
-    depends_on:
-      - db
+      - JWT_KEY=${JWT_KEY}
     volumes:
       # Refleja el código local en el contenedor (Hot Reloading)
       - ./backend:/app
