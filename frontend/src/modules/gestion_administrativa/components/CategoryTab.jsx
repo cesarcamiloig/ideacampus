@@ -1,20 +1,12 @@
-import React, { useState } from "react";
-import { Plus } from "lucide-react";
-import { CharacterizationCategory } from "../types/parameter.types";
-import { VariableFormDialog } from "./VariableFormDialog";
-
-export interface VariableItem {
-  id: string;
-  nombre: string;
-  descripcion: string;
-  tipo: string;
-  creacion: string;
-  activo: boolean;
-}
+import React, { useState } from "react"
+import { Plus } from "lucide-react"
+import { VariableFormDialog } from "./VariableFormDialog"
 
 export default function CategoryTab() {
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [variables, setVariables] = useState<VariableItem[]>([
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+
+  // Datos iniciales de variables de caracterización
+  const [variables, setVariables] = useState([
     {
       id: "1001",
       nombre: "SECTOR_TECNOLOGICO",
@@ -31,32 +23,35 @@ export default function CategoryTab() {
       creacion: "15/05/2026",
       activo: true,
     },
-  ]);
+  ])
 
-  // Desactivación lógica según regla FA1 del CU-18 (sin borrado físico)
-  const handleToggle = (id: string) => {
+  // Desactivación lógica (Regla FA1 del CU-18: no eliminación física)
+  const handleToggle = (id) => {
     setVariables((prev) =>
-      prev.map((v) => (v.id === id ? { ...v, activo: !v.activo } : v)),
-    );
-  };
+      prev.map((item) =>
+        item.id === id ? { ...item, activo: !item.activo } : item
+      )
+    )
+  }
 
-  const handleSaveVariable = (data: Omit<CharacterizationCategory, "id">) => {
-    const nuevaVar: VariableItem = {
+  // Recepción de la nueva variable enviada desde VariableFormDialog
+  const handleSaveVariable = (data) => {
+    const nuevaVar = {
       id: (1000 + variables.length + 1).toString(),
-      nombre: data.name.toUpperCase().replace(/\s+/g, "_"),
-      descripcion: data.description,
+      nombre: (data.name || "").toUpperCase().replace(/\s+/g, "_"),
+      descripcion: data.description || "Sin descripción",
       tipo: "Texto",
       creacion: new Date().toLocaleDateString("es-ES"),
-      activo: data.isActive,
-    };
+      activo: data.isActive ?? true,
+    }
 
-    setVariables((prev) => [...prev, nuevaVar]);
-    setIsDialogOpen(false);
-  };
+    setVariables((prev) => [...prev, nuevaVar])
+    setIsDialogOpen(false)
+  }
 
   return (
     <div>
-      {/* Botón superior de acción */}
+      {/* Botón superior: Nueva Variable */}
       <div className="flex justify-end mb-4">
         <button
           type="button"
@@ -68,8 +63,8 @@ export default function CategoryTab() {
         </button>
       </div>
 
-      {/* Tabla de variables */}
-      <div className="overflow-hidden rounded-lg">
+      {/* Tabla de Parámetros */}
+      <div className="overflow-hidden rounded-lg border border-slate-100">
         <table className="w-full text-left text-xs">
           <thead className="bg-[#f0f2f5] text-slate-700 font-semibold">
             <tr>
@@ -83,7 +78,7 @@ export default function CategoryTab() {
           </thead>
           <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
             {variables.map((item) => (
-              <tr key={item.id} className="hover:bg-slate-50/50">
+              <tr key={item.id} className="hover:bg-slate-50/60 transition-colors">
                 <td className="px-5 py-3.5 text-slate-500">{item.id}</td>
                 <td className="px-5 py-3.5 font-semibold text-slate-900">
                   {item.nombre}
@@ -92,6 +87,7 @@ export default function CategoryTab() {
                 <td className="px-5 py-3.5">{item.tipo}</td>
                 <td className="px-5 py-3.5 text-slate-500">{item.creacion}</td>
                 <td className="px-5 py-3.5 text-center">
+                  {/* Interruptor de estado con estilos nativos de Tailwind */}
                   <button
                     type="button"
                     onClick={() => handleToggle(item.id)}
@@ -100,7 +96,7 @@ export default function CategoryTab() {
                     }`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
                         item.activo ? "translate-x-6" : "translate-x-1"
                       }`}
                     />
@@ -112,14 +108,12 @@ export default function CategoryTab() {
         </table>
       </div>
 
-      {/* Diálogo Modal conectado */}
-      {isDialogOpen && (
-        <VariableFormDialog
-          open={isDialogOpen}
-          onOpenChange={setIsDialogOpen}
-          onSave={handleSaveVariable}
-        />
-      )}
+      {/* Modal para registrar nueva variable */}
+      <VariableFormDialog
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        onSave={handleSaveVariable}
+      />
     </div>
-  );
+  )
 }
