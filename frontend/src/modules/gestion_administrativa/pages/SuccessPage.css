@@ -51,3 +51,25 @@
   color: #15803d;
   font-size: 14px;
 }
+
+.logout-button {
+  width: 100%;
+  margin-top: 28px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  background: #dc2626;
+  cursor: pointer;
+}
+
+.logout-button:hover {
+  background: #b91c1c;
+}
+
+.logout-button:focus-visible {
+  outline: 3px solid rgb(220 38 38 / 0.3);
+  outline-offset: 2px;
+}

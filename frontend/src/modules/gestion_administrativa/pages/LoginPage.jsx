@@ -76,7 +76,7 @@ function BgAccentBL() {
   );
 }
 
-function LoginCard({ status, googleButtonRef }) {
+function LoginCard({ status, errorMessage, googleButtonRef, rolSeleccionado, setRolSeleccionado }) {
   return (
     <main className="login-card" aria-labelledby="gennova-title">
       <header className="brand">
@@ -86,11 +86,26 @@ function LoginCard({ status, googleButtonRef }) {
         <p className="university">Universidad Francisco de Paula Santander</p>
       </header>
 
+      <select
+        className="role-select"
+        aria-label="Selecciona un rol para iniciar sesión"
+        value={rolSeleccionado}
+        onChange={(e) => setRolSeleccionado(e.target.value)}
+      >
+        <option value="">Selecciona un rol</option>
+        <option value="estudiante">Estudiante</option>
+        <option value="administrador">Administrador</option>
+        <option value="mentor">Mentor</option>
+        <option value="tutor">Tutor</option>
+        <option value="evaluador">Evaluador</option>
+        <option value="coordinador">Coordinador</option>
+      </select>
+
       <div ref={googleButtonRef} className="google-button-container" />
 
       {status === "loading" && <p className="login-status">Conectando...</p>}
       {status === "error" && (
-        <p className="login-error-msg" role="alert">No pudimos verificar tu cuenta.</p>
+        <p className="login-error-msg" role="alert">{errorMessage}</p>
       )}
 
       <section className="institution-note" aria-label="Acceso institucional">
@@ -126,28 +141,43 @@ function PageFooter() {
 
 function LoginPage({ onLoginSuccess }) {
   const [status, setStatus] = useState("idle");
+  const [errorMessage, setErrorMessage] = useState("No pudimos verificar tu cuenta.");
+  const [rolSeleccionado, setRolSeleccionado] = useState("");
+  const rolRef = useRef(rolSeleccionado);
   const googleButtonRef = useRef(null);
 
+  useEffect(() => {
+    rolRef.current = rolSeleccionado;
+  }, [rolSeleccionado]);
+
   async function handleCredentialResponse(response) {
-    console.log("[Google] Callback ejecutado");
-    console.log("[Google] Token recibido:", response?.credential);
+  console.log("[Google] Callback ejecutado");
 
-    if (!response?.credential) {
-      console.error("[Google] La respuesta no contiene un token credential", response);
-      setStatus("error");
-      return;
-    }
-
-    setStatus("loading");
-    try {
-      const data = await authenticateWithGoogle(response.credential);
-      console.log("Sesión iniciada:", data.usuario);
-      onLoginSuccess();
-    } catch (err) {
-      console.error(err);
-      setStatus("error");
-    }
+  if (!response?.credential) {
+    console.error("[Google] La respuesta no contiene un token credential", response);
+    setErrorMessage("La respuesta de Google no contiene un token válido.");
+    setStatus("error");
+    return;
   }
+
+  const rolActual = rolRef.current;
+  if (!rolActual) {
+    setErrorMessage("Por favor selecciona un rol antes de iniciar sesión.");
+    setStatus("error");
+    return;
+  }
+
+  setStatus("loading");
+  try {
+    const data = await authenticateWithGoogle(response.credential, rolActual);
+    console.log("Sesión iniciada:", data.usuario);
+    onLoginSuccess();
+  } catch (err) {
+    console.error(err);
+    setErrorMessage(err.message || "No pudimos verificar tu cuenta.");
+    setStatus("error");
+  }
+}
 
   const initialized = useRef(false);
     useEffect(() => {
@@ -176,15 +206,21 @@ function LoginPage({ onLoginSuccess }) {
   }, []);
 
   return (
-    <div className="app-shell">
-      <BgLeft />
-      <BgRight />
-      <BgAccentTR />
-      <BgAccentBL />
-      <LoginCard status={status} googleButtonRef={googleButtonRef} />
-      <PageFooter />
-    </div>
-  );
+  <div className="app-shell">
+    <BgLeft />
+    <BgRight />
+    <BgAccentTR />
+    <BgAccentBL />
+    <LoginCard
+      status={status}
+      errorMessage={errorMessage}
+      googleButtonRef={googleButtonRef}
+      rolSeleccionado={rolSeleccionado}
+      setRolSeleccionado={setRolSeleccionado}
+    />
+    <PageFooter />
+  </div>
+);
 }
 
 export default LoginPage;

@@ -7,7 +7,7 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(Boolean(getToken()));
 
   return isAuthenticated ? (
-    <SuccessPage />
+    <SuccessPage onLogout={() => setIsAuthenticated(false)} />
   ) : (
     <LoginPage onLoginSuccess={() => setIsAuthenticated(true)} />
   );

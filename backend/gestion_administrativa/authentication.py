@@ -2,7 +2,7 @@
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 from .jwt_utils import verificar_token
-from .models import Usuario
+from .models import Usuario, UsuarioRol
 
 
 class JWTAuthentication(BaseAuthentication):
@@ -21,5 +21,15 @@ class JWTAuthentication(BaseAuthentication):
             usuario = Usuario.objects.get(id_usuario=payload["id_usuario"])
         except Usuario.DoesNotExist:
             raise AuthenticationFailed("Usuario no encontrado")
+
+        rol_token = payload.get("rol")
+        if rol_token != "estudiante":
+            tiene_rol_activo = UsuarioRol.objects.filter(
+                usuario=usuario,
+                rol__nombre_rol=rol_token,
+                estado="activo"
+            ).exists()
+            if not tiene_rol_activo:
+                raise AuthenticationFailed("El rol del token no está asignado o activo")
 
         return (usuario, None)  # request.user = usuario
