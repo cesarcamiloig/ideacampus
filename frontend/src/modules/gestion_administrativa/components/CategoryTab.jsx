@@ -1,70 +1,97 @@
 import React, { useState } from "react"
-import { Plus } from "lucide-react"
+import { Plus, Search, Edit2 } from "lucide-react"
 import { VariableFormDialog } from "./VariableFormDialog"
 
 export default function CategoryTab() {
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-
-  // Datos iniciales de variables de caracterización
-  const [variables, setVariables] = useState([
+  const [searchTerm, setSearchTerm] = useState("")
+  const [categories, setCategories] = useState([
     {
       id: "1001",
-      nombre: "SECTOR_TECNOLOGICO",
-      descripcion: "Sector de la iniciativa",
-      tipo: "Texto",
-      creacion: "15/05/2026",
-      activo: true,
+      name: "SECTOR_TECNOLOGICO",
+      description: "Sector de la iniciativa",
+      type: "Texto",
+      createdAt: "15/05/2026",
+      isActive: true,
+      hasActiveInitiatives: false,
     },
     {
       id: "1002",
-      nombre: "TIPO_EMPRENDIMIENTO",
-      descripcion: "Clasificación de la idea",
-      tipo: "Texto",
-      creacion: "15/05/2026",
-      activo: true,
+      name: "TIPO_EMPRENDIMIENTO",
+      description: "Clasificación de la idea",
+      type: "Texto",
+      createdAt: "15/05/2026",
+      isActive: true,
+      hasActiveInitiatives: false,
     },
   ])
 
-  // Desactivación lógica (Regla FA1 del CU-18: no eliminación física)
-  const handleToggle = (id) => {
-    setVariables((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, activo: !item.activo } : item
-      )
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingCategory, setEditingCategory] = useState(null)
+
+  const handleToggleActive = (id) => {
+    setCategories((prev) =>
+      prev.map((cat) => (cat.id === id ? { ...cat, isActive: !cat.isActive } : cat))
     )
   }
 
-  // Recepción de la nueva variable enviada desde VariableFormDialog
-  const handleSaveVariable = (data) => {
-    const nuevaVar = {
-      id: (1000 + variables.length + 1).toString(),
-      nombre: (data.name || "").toUpperCase().replace(/\s+/g, "_"),
-      descripcion: data.description || "Sin descripción",
-      tipo: "Texto",
-      creacion: new Date().toLocaleDateString("es-ES"),
-      activo: data.isActive ?? true,
-    }
-
-    setVariables((prev) => [...prev, nuevaVar])
-    setIsDialogOpen(false)
+  const handleOpenCreate = () => {
+    setEditingCategory(null)
+    setIsDialogOpen(true)
   }
 
+  const handleOpenEdit = (category) => {
+    setEditingCategory(category)
+    setIsDialogOpen(true)
+  }
+
+  const handleSaveCategory = (data) => {
+    if (editingCategory) {
+      setCategories((prev) =>
+        prev.map((c) => (c.id === editingCategory.id ? { ...c, ...data } : c))
+      )
+    } else {
+      const newEntry = {
+        ...data,
+        id: String(1001 + categories.length),
+        type: "Texto",
+        createdAt: "28/09/2026",
+        isActive: true,
+      }
+      setCategories((prev) => [newEntry, ...prev])
+    }
+  }
+
+  const filteredCategories = categories.filter(
+    (c) =>
+      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.description.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
   return (
-    <div>
-      {/* Botón superior: Nueva Variable */}
-      <div className="flex justify-end mb-4">
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full sm:w-72">
+          <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Buscar por variable o criterio..."
+            className="w-full rounded-md border border-slate-300 bg-white py-1.5 pl-9 pr-3 text-xs text-slate-800 placeholder-slate-400 focus:border-red-600 focus:outline-none focus:ring-1 focus:ring-red-600"
+          />
+        </div>
+
         <button
           type="button"
-          onClick={() => setIsDialogOpen(true)}
-          className="flex items-center gap-1.5 rounded-lg bg-[#c81e1e] px-4 py-2 text-xs font-semibold text-white shadow hover:bg-red-700 transition-colors"
+          onClick={handleOpenCreate}
+          className="flex items-center gap-1.5 rounded-md bg-[#c81e1e] px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-red-700 transition-colors"
         >
-          <Plus className="h-4 w-4 stroke-[2.5]" />
+          <Plus className="h-4 w-4" />
           <span>Nueva Variable</span>
         </button>
       </div>
 
-      {/* Tabla de Parámetros */}
-      <div className="overflow-hidden rounded-lg border border-slate-100">
+      <div className="overflow-hidden rounded-xl border border-slate-200">
         <table className="w-full text-left text-xs">
           <thead className="bg-[#f0f2f5] text-slate-700 font-semibold">
             <tr>
@@ -73,34 +100,38 @@ export default function CategoryTab() {
               <th className="px-5 py-3">Descripción</th>
               <th className="px-5 py-3">Tipo</th>
               <th className="px-5 py-3">Creación</th>
+              <th className="px-5 py-3 text-center">Acciones</th>
               <th className="px-5 py-3 text-center">Estado Activo</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
-            {variables.map((item) => (
-              <tr key={item.id} className="hover:bg-slate-50/60 transition-colors">
-                <td className="px-5 py-3.5 text-slate-500">{item.id}</td>
-                <td className="px-5 py-3.5 font-semibold text-slate-900">
-                  {item.nombre}
-                </td>
-                <td className="px-5 py-3.5">{item.descripcion}</td>
-                <td className="px-5 py-3.5">{item.tipo}</td>
-                <td className="px-5 py-3.5 text-slate-500">{item.creacion}</td>
+          <tbody className="divide-y divide-slate-100 bg-white">
+            {filteredCategories.map((cat) => (
+              <tr key={cat.id} className="hover:bg-slate-50/50 transition-colors">
+                <td className="px-5 py-3.5 text-slate-600 font-medium">{cat.id}</td>
+                <td className="px-5 py-3.5 font-semibold text-slate-800">{cat.name}</td>
+                <td className="px-5 py-3.5 text-slate-600">{cat.description}</td>
+                <td className="px-5 py-3.5 text-slate-600">{cat.type}</td>
+                <td className="px-5 py-3.5 text-slate-600">{cat.createdAt}</td>
                 <td className="px-5 py-3.5 text-center">
-                  {/* Interruptor de estado con estilos nativos de Tailwind */}
                   <button
                     type="button"
-                    onClick={() => handleToggle(item.id)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                      item.activo ? "bg-[#16a34a]" : "bg-slate-300"
-                    }`}
+                    onClick={() => handleOpenEdit(cat)}
+                    className="inline-flex items-center gap-1 rounded border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
                   >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                        item.activo ? "translate-x-6" : "translate-x-1"
-                      }`}
-                    />
+                    <Edit2 className="h-3 w-3 text-slate-500" />
+                    <span>Editar</span>
                   </button>
+                </td>
+                <td className="px-5 py-3.5 text-center">
+                  <label className="relative inline-flex cursor-pointer items-center">
+                    <input
+                      type="checkbox"
+                      checked={cat.isActive}
+                      onChange={() => handleToggleActive(cat.id)}
+                      className="peer sr-only"
+                    />
+                    <div className="peer h-6 w-11 rounded-full bg-slate-200 transition-colors after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow-sm after:transition-all after:content-[''] peer-checked:bg-green-600 peer-checked:after:translate-x-full" />
+                  </label>
                 </td>
               </tr>
             ))}
@@ -108,11 +139,11 @@ export default function CategoryTab() {
         </table>
       </div>
 
-      {/* Modal para registrar nueva variable */}
       <VariableFormDialog
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
-        onSave={handleSaveVariable}
+        onSave={handleSaveCategory}
+        initialData={editingCategory}
       />
     </div>
   )
