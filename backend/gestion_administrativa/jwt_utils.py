@@ -1,13 +1,16 @@
 import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from django.conf import settings
 
 
 def generar_token(usuario, rol):
+    now = datetime.now(timezone.utc)
     payload = {
         "id_usuario": usuario.id_usuario,
         "correo": usuario.correo,
-        "rol": rol
+        "rol": rol,
+        "iat": now,
+        "exp": now + timedelta(hours=getattr(settings, "JWT_EXP_DELTA_HOURS", 24)),
     }
     token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
     return token

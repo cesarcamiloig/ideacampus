@@ -8,15 +8,18 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / '../.env')
 
-SECRET_KEY = 'django-insecure-dhc*!sdse9(tmg8u6-bq5&v-vc9r(o81k%qd+=1&axqd=a3i$z'
+SECRET_KEY = os.getenv(
+    'DJANGO_SECRET_KEY',
+    'django-insecure-dhc*!sdse9(tmg8u6-bq5&v-vc9r(o81k%qd+=1&axqd=a3i$z'
+)
 
+DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() in ('true', '1', 'yes')
 
-
-DEBUG = True
-
-ALLOWED_HOSTS = []
-
-
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+    if host.strip()
+]
 
 
 INSTALLED_APPS = [
@@ -39,10 +42,12 @@ INSTALLED_APPS = [
     'corsheaders',
 ]
 
-AUTENTICATION_BACKENDS = [
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
     'allauth.account.auth_backends.AuthenticationBackend',
 ]
-#INICIO DE CONFIGURACION PARA GOOGLE LOGIN
+
+# INICIO DE CONFIGURACION PARA GOOGLE LOGIN
 SOCIALACCOUNT_PROVIDERS = {
     'google': {
         'APP': {
@@ -54,8 +59,8 @@ SOCIALACCOUNT_PROVIDERS = {
     }
 }
 
-#JWT SETTINGS
-JWT_SECRET = os.getenv("JWT_KEY")
+# JWT SETTINGS
+JWT_SECRET = os.getenv("JWT_KEY") or SECRET_KEY
 JWT_ALGORITHM = "HS256"
 JWT_EXP_DELTA_HOURS = 24
 
@@ -99,32 +104,24 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
+import sys
+
 DATABASES = {
-
     'default': {
-
         'ENGINE': 'django.db.backends.mysql',
-
         'NAME': os.getenv('DB_NAME'),
-
         'USER': os.getenv('DB_USER'),
-
         'PASSWORD': os.getenv('DB_PASSWORD'),
-
         'HOST': os.getenv('DB_HOST'),
-
         'PORT': os.getenv('DB_PORT'),
-
     }
-
 }
 
-""" DATABASES = {
-    'default': {
+if 'test' in sys.argv:
+    DATABASES['default'] = {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': ':memory:',
     }
-} """
 
 
 # Password validation

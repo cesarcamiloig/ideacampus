@@ -1,3 +1,4 @@
+import os
 from google.oauth2 import id_token as google_id_token
 from google.auth.transport import requests as google_requests
 from rest_framework.views import APIView
@@ -11,7 +12,17 @@ from .authentication import JWTAuthentication
 from .models import Usuario, UsuarioRol, Rol
 from .jwt_utils import generar_token
 
-GOOGLE_CLIENT_ID = "260735986909-fu7gptlsfojfho3kmaj212djjf8k6p60.apps.googleusercontent.com"
+DEFAULT_GOOGLE_CLIENT_ID = "260735986909-fu7gptlsfojfho3kmaj212djjf8k6p60.apps.googleusercontent.com"
+env_client_id = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_ID = (
+    env_client_id
+    if env_client_id and not env_client_id.startswith("tu_client_id")
+    else DEFAULT_GOOGLE_CLIENT_ID
+)
+ALLOWED_EMAIL_DOMAIN = "@ufps.edu.co"
+ROLE_ALIASES = {
+    "administrador": "admin",
+}
 
 
 class GoogleLogin(APIView):
@@ -31,6 +42,8 @@ class GoogleLogin(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        rol_normalizado = ROLE_ALIASES.get(rol_solicitado, rol_solicitado)
+
         try:
             idinfo = google_id_token.verify_oauth2_token(
                 token,
@@ -45,8 +58,14 @@ class GoogleLogin(APIView):
             )
 
         google_id = idinfo.get("sub")
-        email = idinfo.get("email")
+        email = (idinfo.get("email") or "").strip().lower()
         nombre = idinfo.get("name", "")
+
+        if not email.endswith(ALLOWED_EMAIL_DOMAIN):
+            return Response(
+                {"error": f"Solo se permiten cuentas institucionales ({ALLOWED_EMAIL_DOMAIN})"},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         with transaction.atomic():
             rol_estudiante, _ = Rol.objects.get_or_create(
@@ -54,7 +73,7 @@ class GoogleLogin(APIView):
                 defaults={"descripcion": "Usuario estudiante"}
             )
             try:
-                rol = Rol.objects.get(nombre_rol=rol_solicitado)
+                rol = Rol.objects.get(nombre_rol=rol_normalizado)
             except Rol.DoesNotExist:
                 return Response(
                     {"error": f"El rol '{rol_solicitado}' no existe"},
@@ -73,14 +92,14 @@ class GoogleLogin(APIView):
                     defaults={"estado": "activo"}
                 )
 
-            if rol_solicitado == "estudiante":
+            if rol.nombre_rol == "estudiante":
                 UsuarioRol.objects.update_or_create(
                     usuario=usuario,
                     rol=rol_estudiante,
                     defaults={"estado": "activo"}
                 )
 
-        if rol_solicitado != "estudiante":
+        if rol.nombre_rol != "estudiante":
             tiene_el_rol = UsuarioRol.objects.filter(
                 usuario=usuario,
                 rol=rol,
@@ -89,21 +108,21 @@ class GoogleLogin(APIView):
 
             if not tiene_el_rol:
                 return Response(
-                    {"error": f"No tienes el rol '{rol_solicitado}' asignado"},
+                    {"error": f"No tienes el rol '{rol.nombre_rol}' asignado"},
                     status=status.HTTP_403_FORBIDDEN
                 )
 
         usuario.ultimo_acceso = timezone.now()
         usuario.save(update_fields=["ultimo_acceso"])
 
-        jwt_token = generar_token(usuario, rol_solicitado)  
+        jwt_token = generar_token(usuario, rol.nombre_rol)
 
         return Response({
             "token": jwt_token,
             "usuario": {
                 "nombre": usuario.nombre,
                 "correo": usuario.correo,
-                "rol": rol_solicitado,  
+                "rol": rol.nombre_rol,
             },
             "created": created,
             "message": "Login exitoso"
