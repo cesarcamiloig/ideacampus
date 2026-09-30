@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { authenticateWithGoogle } from "../services/authService";
 import "./LoginPage.css";
 
-const GOOGLE_CLIENT_ID = "260735986909-fu7gptlsfojfho3kmaj212djjf8k6p60.apps.googleusercontent.com";
+const DEFAULT_GOOGLE_CLIENT_ID = "260735986909-fu7gptlsfojfho3kmaj212djjf8k6p60.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID;
 
 function InstitutionIcon() {
   return (
@@ -94,11 +95,12 @@ function LoginCard({ status, errorMessage, googleButtonRef, rolSeleccionado, set
       >
         <option value="">Selecciona un rol</option>
         <option value="estudiante">Estudiante</option>
-        <option value="administrador">Administrador</option>
-        <option value="mentor">Mentor</option>
-        <option value="tutor">Tutor</option>
-        <option value="evaluador">Evaluador</option>
+        <option value="admin">Administrador</option>
+        <option value="direccion_del_programa">Dirección del Programa</option>
         <option value="coordinador">Coordinador</option>
+        <option value="tutor">Tutor</option>
+        <option value="mentor">Mentor</option>
+        <option value="evaluador">Evaluador</option>
       </select>
 
       <div ref={googleButtonRef} className="google-button-container" />
@@ -144,46 +146,52 @@ function LoginPage({ onLoginSuccess }) {
   const [errorMessage, setErrorMessage] = useState("No pudimos verificar tu cuenta.");
   const [rolSeleccionado, setRolSeleccionado] = useState("");
   const rolRef = useRef(rolSeleccionado);
+  const onLoginSuccessRef = useRef(onLoginSuccess);
   const googleButtonRef = useRef(null);
 
   useEffect(() => {
     rolRef.current = rolSeleccionado;
   }, [rolSeleccionado]);
 
-  async function handleCredentialResponse(response) {
-  console.log("[Google] Callback ejecutado");
-
-  if (!response?.credential) {
-    console.error("[Google] La respuesta no contiene un token credential", response);
-    setErrorMessage("La respuesta de Google no contiene un token válido.");
-    setStatus("error");
-    return;
-  }
-
-  const rolActual = rolRef.current;
-  if (!rolActual) {
-    setErrorMessage("Por favor selecciona un rol antes de iniciar sesión.");
-    setStatus("error");
-    return;
-  }
-
-  setStatus("loading");
-  try {
-    const data = await authenticateWithGoogle(response.credential, rolActual);
-    console.log("Sesión iniciada:", data.usuario);
-    onLoginSuccess();
-  } catch (err) {
-    console.error(err);
-    setErrorMessage(err.message || "No pudimos verificar tu cuenta.");
-    setStatus("error");
-  }
-}
+  useEffect(() => {
+    onLoginSuccessRef.current = onLoginSuccess;
+  }, [onLoginSuccess]);
 
   const initialized = useRef(false);
-    useEffect(() => {
-   if (initialized.current) return;
-  initialized.current = true;
-  const script = document.createElement("script");
+  useEffect(() => {
+    if (initialized.current) return;
+    initialized.current = true;
+
+    async function handleCredentialResponse(response) {
+      console.log("[Google] Callback ejecutado");
+
+      if (!response?.credential) {
+        console.error("[Google] La respuesta no contiene un token credential", response);
+        setErrorMessage("La respuesta de Google no contiene un token válido.");
+        setStatus("error");
+        return;
+      }
+
+      const rolActual = rolRef.current;
+      if (!rolActual) {
+        setErrorMessage("Por favor selecciona un rol antes de iniciar sesión.");
+        setStatus("error");
+        return;
+      }
+
+      setStatus("loading");
+      try {
+        const data = await authenticateWithGoogle(response.credential, rolActual);
+        console.log("Sesión iniciada:", data.usuario);
+        onLoginSuccessRef.current();
+      } catch (err) {
+        console.error(err);
+        setErrorMessage(err.message || "No pudimos verificar tu cuenta.");
+        setStatus("error");
+      }
+    }
+
+    const script = document.createElement("script");
     script.src = "https://accounts.google.com/gsi/client";
     script.async = true;
     script.onload = () => {

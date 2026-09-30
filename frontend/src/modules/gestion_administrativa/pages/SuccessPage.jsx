@@ -1,8 +1,9 @@
-import { getToken, logout } from "../services/authService";
+import { getToken, getUsuario, logout } from "../services/authService";
 import "./SuccessPage.css";
 
 function SuccessPage({ onLogout }) {
   const token = getToken();
+  const usuario = getUsuario();
 
   function handleLogout() {
     logout();
@@ -17,6 +18,11 @@ function SuccessPage({ onLogout }) {
         </div>
         <h1 id="success-title">Login exitoso</h1>
         <p>Tu sesión fue iniciada correctamente.</p>
+        {usuario && (
+          <p>
+            <strong>{usuario.nombre}</strong> ({usuario.correo}) — Rol: <strong>{usuario.rol}</strong>
+          </p>
+        )}
         {token && <p className="token-status">Token JWT guardado en el almacenamiento local.</p>}
         <button type="button" className="logout-button" onClick={handleLogout}>
           Cerrar sesión

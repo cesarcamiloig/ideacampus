@@ -1,4 +1,20 @@
-const API_URL = "http://localhost:8000/api/auth/google/";
+const BASE_API_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000/api").replace(/\/$/, "");
+const API_URL = `${BASE_API_URL}/auth/google/`;
+
+function isTokenValid(token) {
+  if (!token || typeof token !== "string") return false;
+  const parts = token.split(".");
+  if (parts.length !== 3) return false;
+  try {
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+    if (payload.exp && Date.now() >= payload.exp * 1000) {
+      return false;
+    }
+    return Boolean(payload.id_usuario && payload.correo);
+  } catch {
+    return false;
+  }
+}
 
 export async function authenticateWithGoogle(idToken, rol) {
   const response = await fetch(API_URL, {
@@ -24,12 +40,22 @@ export async function authenticateWithGoogle(idToken, rol) {
 }
 
 export function getToken() {
-  return localStorage.getItem("token");
+  const token = localStorage.getItem("token");
+  if (token && !isTokenValid(token)) {
+    logout();
+    return null;
+  }
+  return token;
 }
 
 export function getUsuario() {
   const raw = localStorage.getItem("usuario");
-  return raw ? JSON.parse(raw) : null;
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
 }
 
 export function logout() {
