@@ -1,15 +1,22 @@
-import { useState } from "react";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import LoginPage from "./modules/gestion_administrativa/pages/LoginPage";
 import SuccessPage from "./modules/gestion_administrativa/pages/SuccessPage";
-import { getToken } from "./modules/gestion_administrativa/services/authService";
 
-function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(Boolean(getToken()));
+function AppContent() {
+  const { isAuthenticated, refreshSession, logout } = useAuth();
 
   return isAuthenticated ? (
-    <SuccessPage onLogout={() => setIsAuthenticated(false)} />
+    <SuccessPage onLogout={logout} />
   ) : (
-    <LoginPage onLoginSuccess={() => setIsAuthenticated(true)} />
+    <LoginPage onLoginSuccess={refreshSession} />
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 
