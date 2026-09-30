@@ -3,17 +3,11 @@ from datetime import datetime, timedelta
 from django.conf import settings
 
 
-def generar_token(usuario):
-    roles = list(
-        usuario.usuariorol_set
-        .filter(estado='activo')
-        .values_list('rol__nombre_rol', flat=True)
-    )
-
+def generar_token(usuario, rol):
     payload = {
         "id_usuario": usuario.id_usuario,
         "correo": usuario.correo,
-        "roles": roles
+        "rol": rol
     }
     token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
     return token
