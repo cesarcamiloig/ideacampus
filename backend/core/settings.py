@@ -64,6 +64,12 @@ JWT_SECRET = os.getenv("JWT_KEY") or SECRET_KEY
 JWT_ALGORITHM = "HS256"
 JWT_EXP_DELTA_HOURS = 24
 
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'gestion_administrativa.authentication.JWTAuthentication',
+    ],
+}
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',

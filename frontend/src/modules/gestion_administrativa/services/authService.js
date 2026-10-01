@@ -1,5 +1,4 @@
-const BASE_API_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000/api").replace(/\/$/, "");
-const API_URL = `${BASE_API_URL}/auth/google/`;
+import { apiClient } from "../../../services/apiClient";
 
 function isTokenValid(token) {
   if (!token || typeof token !== "string") return false;
@@ -17,19 +16,13 @@ function isTokenValid(token) {
 }
 
 export async function authenticateWithGoogle(idToken, rol) {
-  const response = await fetch(API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id_token: idToken, rol: rol }),
-  });
+  const data = await apiClient.post(
+    "/auth/google/",
+    { id_token: idToken, rol },
+    { auth: false }
+  );
 
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error || "No pudimos verificar tu cuenta");
-  }
-
-  if (!data.token) {
+  if (!data?.token) {
     throw new Error("La respuesta del servidor no contiene un token JWT");
   }
 
@@ -37,6 +30,14 @@ export async function authenticateWithGoogle(idToken, rol) {
   localStorage.setItem("usuario", JSON.stringify(data.usuario));
 
   return data;
+}
+
+export async function fetchPerfilUsuario() {
+  const perfil = await apiClient.get("/auth/me/");
+  if (perfil) {
+    localStorage.setItem("usuario", JSON.stringify(perfil));
+  }
+  return perfil;
 }
 
 export function getToken() {

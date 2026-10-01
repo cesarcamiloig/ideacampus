@@ -1,13 +1,21 @@
-import { getToken, getUsuario, logout } from "../services/authService";
+import { useAuth } from "../../../context/AuthContext";
+import { getToken, getUsuario, logout as clearAuthStorage } from "../services/authService";
 import "./SuccessPage.css";
 
 function SuccessPage({ onLogout }) {
-  const token = getToken();
-  const usuario = getUsuario();
+  const auth = useAuth();
+  const token = auth?.token ?? getToken();
+  const usuario = auth?.usuario ?? getUsuario();
 
   function handleLogout() {
-    logout();
-    onLogout();
+    if (auth?.logout) {
+      auth.logout();
+    } else {
+      clearAuthStorage();
+    }
+    if (onLogout) {
+      onLogout();
+    }
   }
 
   return (
@@ -20,7 +28,7 @@ function SuccessPage({ onLogout }) {
         <p>Tu sesión fue iniciada correctamente.</p>
         {usuario && (
           <p>
-            <strong>{usuario.nombre}</strong> ({usuario.correo}) — Rol: <strong>{usuario.rol}</strong>
+            <strong>{usuario.nombre}</strong> ({usuario.correo}) — Rol activo: <strong>{usuario.rol}</strong>
           </p>
         )}
         {token && <p className="token-status">Token JWT guardado en el almacenamiento local.</p>}

@@ -25,6 +25,14 @@ ROLE_ALIASES = {
 }
 
 
+def obtener_roles_activos(usuario):
+    return list(
+        UsuarioRol.objects.filter(usuario=usuario, estado="activo")
+        .select_related("rol")
+        .values_list("rol__nombre_rol", flat=True)
+    )
+
+
 class GoogleLogin(APIView):
     def post(self, request):
         token = request.data.get("id_token")
@@ -85,6 +93,12 @@ class GoogleLogin(APIView):
                 defaults={"nombre": nombre, "correo": email}
             )
 
+            if usuario.estado != "activo":
+                return Response(
+                    {"error": "Tu cuenta de usuario se encuentra inactiva"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
             if created:
                 UsuarioRol.objects.get_or_create(
                     usuario=usuario,
@@ -116,22 +130,36 @@ class GoogleLogin(APIView):
         usuario.save(update_fields=["ultimo_acceso"])
 
         jwt_token = generar_token(usuario, rol.nombre_rol)
+        roles_asignados = obtener_roles_activos(usuario)
 
         return Response({
             "token": jwt_token,
             "usuario": {
+                "id_usuario": usuario.id_usuario,
                 "nombre": usuario.nombre,
                 "correo": usuario.correo,
                 "rol": rol.nombre_rol,
+                "roles_asignados": roles_asignados,
             },
             "created": created,
             "message": "Login exitoso"
         }, status=status.HTTP_200_OK)
 
-class AlgunaVistaProtegida(APIView):
+
+class PerfilUsuarioView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        usuario = request.user  
-        return Response({"nombre": usuario.nombre})
+        usuario = request.user
+        rol_activo = getattr(usuario, "rol_activo", None)
+        return Response({
+            "id_usuario": usuario.id_usuario,
+            "nombre": usuario.nombre,
+            "correo": usuario.correo,
+            "rol": rol_activo,
+            "roles_asignados": obtener_roles_activos(usuario),
+        })
+
+
+AlgunaVistaProtegida = PerfilUsuarioView
