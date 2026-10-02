@@ -11,23 +11,47 @@ import {
     BookOpen,
     Award,
 } from "lucide-react"
+import { useAuth } from "../../../../context/AuthContext"
+
+const ROLE_LABELS = {
+    admin: "Administrador del Sistema",
+    coordinador: "Coordinador de Emprendimiento",
+    tutor: "Tutor Académico",
+    mentor: "Mentor Especializado",
+    evaluador: "Evaluador de Iniciativas",
+    estudiante: "Estudiante Emprendedor",
+    direccion_del_programa: "Dirección de Programa",
+    direccion: "Dirección de Programa",
+}
 
 export default function MainLayout({ children, activeModule = "parametros" }) {
     // Estado del menú desplegable de perfil
     const [profileMenuOpen, setProfileMenuOpen] = useState(false)
 
-    // Simulación de sesión de usuario autenticado con múltiples roles asignados (CU-01 / RF01)
-    const [userSession, setUserSession] = useState({
-        name: "Obed Ayala",
-        email: "obeda@ufps.edu.co",
-        initials: "OA",
-        activeRole: "admin", // Rol activo actual en la vista
-        assignedRoles: [
-            { id: "admin", label: "Administrador del Sistema" },
-            { id: "tutor", label: "Tutor Académico" },
-            { id: "evaluador", label: "Evaluador de Iniciativas" },
-        ],
-    })
+    // Conexión a la sesión real del usuario autenticado
+    const { usuario, rolActivo, rolesAsignados, logout } = useAuth()
+    const [activeRole, setActiveRole] = useState(rolActivo || "admin")
+
+    const userName = usuario?.nombre || "Usuario Institucional"
+    const userEmail = usuario?.correo || ""
+    const initials =
+        userName
+            .split(" ")
+            .filter(Boolean)
+            .map((n) => n[0])
+            .slice(0, 2)
+            .join("")
+            .toUpperCase() || "UI"
+
+    const rawRoles =
+        rolesAsignados && rolesAsignados.length > 0
+            ? rolesAsignados
+            : [rolActivo || "admin"]
+
+    const assignedRoles = rawRoles.map((rId) => ({
+        id: rId,
+        label: ROLE_LABELS[rId] || rId.replace(/_/g, " ").toUpperCase(),
+    }))
 
     // Menús de navegación según el rol seleccionado en la cabecera
     const menuConfigByRole = {
@@ -55,16 +79,14 @@ export default function MainLayout({ children, activeModule = "parametros" }) {
         ],
     }
 
-    const currentMenuItems = menuConfigByRole[userSession.activeRole] || menuConfigByRole.admin
+    const currentMenuItems = menuConfigByRole[activeRole] || menuConfigByRole.admin
 
     const handleRoleSwitch = (roleId) => {
-        setUserSession((prev) => ({ ...prev, activeRole: roleId }))
+        setActiveRole(roleId)
         setProfileMenuOpen(false)
     }
 
-    const activeRoleLabel =
-        userSession.assignedRoles.find((r) => r.id === userSession.activeRole)?.label ||
-        "Usuario Institucional"
+    const activeRoleLabel = ROLE_LABELS[activeRole] || activeRole.replace(/_/g, " ").toUpperCase()
 
     return (
         <div className="flex h-screen w-full bg-[#f4f5f7] font-sans text-slate-800 antialiased">
@@ -148,14 +170,14 @@ export default function MainLayout({ children, activeModule = "parametros" }) {
                             className="flex items-center gap-3 rounded-lg p-1.5 hover:bg-slate-50 transition-colors select-none focus:outline-none"
                         >
                             <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-slate-200 text-xs font-bold text-slate-600">
-                                {userSession.initials}
+                                {initials}
                             </div>
                             <div className="text-left hidden sm:block">
                                 <span className="block text-xs font-bold text-slate-800 leading-tight">
                                     {activeRoleLabel}
                                 </span>
                                 <span className="block text-[10px] text-slate-500">
-                                    {userSession.name}
+                                    {userName}
                                 </span>
                             </div>
                             <ChevronDown className="h-4 w-4 text-slate-500" />
@@ -165,8 +187,8 @@ export default function MainLayout({ children, activeModule = "parametros" }) {
                         {profileMenuOpen && (
                             <div className="absolute right-0 mt-2 w-64 rounded-xl border border-slate-200 bg-white shadow-lg py-2 z-50 animate-in fade-in zoom-in-95 duration-100">
                                 <div className="px-4 py-2 border-b border-slate-100">
-                                    <p className="text-xs font-bold text-slate-900">{userSession.name}</p>
-                                    <p className="text-[11px] text-slate-500">{userSession.email}</p>
+                                    <p className="text-xs font-bold text-slate-900">{userName}</p>
+                                    <p className="text-[11px] text-slate-500">{userEmail}</p>
                                 </div>
 
                                 <div className="px-4 pt-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -174,8 +196,8 @@ export default function MainLayout({ children, activeModule = "parametros" }) {
                                 </div>
 
                                 <div className="space-y-0.5">
-                                    {userSession.assignedRoles.map((role) => {
-                                        const isSelected = userSession.activeRole === role.id
+                                    {assignedRoles.map((role) => {
+                                        const isSelected = activeRole === role.id
                                         return (
                                             <button
                                                 key={role.id}
@@ -197,7 +219,12 @@ export default function MainLayout({ children, activeModule = "parametros" }) {
 
                                 <button
                                     type="button"
-                                    onClick={() => setProfileMenuOpen(false)}
+                                    onClick={() => {
+                                        setProfileMenuOpen(false)
+                                        if (logout) {
+                                            logout()
+                                        }
+                                    }}
                                     className="w-full flex items-center gap-2 px-4 py-2 text-xs text-left text-slate-600 hover:bg-slate-50 hover:text-red-600 transition-colors"
                                 >
                                     <LogOut className="h-3.5 w-3.5" />
@@ -205,6 +232,7 @@ export default function MainLayout({ children, activeModule = "parametros" }) {
                                 </button>
                             </div>
                         )}
+
                     </div>
                 </header>
 

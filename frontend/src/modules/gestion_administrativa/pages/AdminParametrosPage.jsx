@@ -1,11 +1,27 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import MainLayout from "../components/layout/MainLayout"
 import CategoryTab from "../components/CategoryTab"
 import PeriodosTab from "../components/PeriodosTab"
 import RolesTab from "../components/RolesTab"
+import { getPeriodos } from "../services/parametroService"
 
 export default function AdminParametrosPage() {
   const [activeTab, setActiveTab] = useState("variables")
+  const [activePeriodos, setActivePeriodos] = useState([])
+
+  useEffect(() => {
+    async function fetchActivePeriodos() {
+      try {
+        const data = await getPeriodos()
+        if (Array.isArray(data)) {
+          setActivePeriodos(data.filter((p) => p.isActive))
+        }
+      } catch {
+        // Silencioso si falla la carga inicial
+      }
+    }
+    fetchActivePeriodos()
+  }, [activeTab])
 
   return (
     <MainLayout activeModule="parametros">
@@ -69,20 +85,36 @@ export default function AdminParametrosPage() {
                 <tr>
                   <th className="px-4 py-2 rounded-l">Año</th>
                   <th className="px-4 py-2">Semestre</th>
-                  <th className="px-4 py-2 rounded-r" colSpan={2}>
-                    Nombre del Ciclo
-                  </th>
+                  <th className="px-4 py-2">Nombre del Ciclo</th>
+                  <th className="px-4 py-2 rounded-r">Vigencia</th>
                 </tr>
               </thead>
               <tbody className="text-slate-700 font-medium">
-                <tr>
-                  <td className="px-4 py-3">2026</td>
-                  <td className="px-4 py-3">1º</td>
-                  <td className="px-4 py-3">Ciclo 2026-I</td>
-                  <td className="px-4 py-3 text-slate-500">
-                    15-Mar a 15-Dic-2026
-                  </td>
-                </tr>
+                {activePeriodos.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-3 text-center text-slate-400">
+                      No hay ciclos activos registrados actualmente.
+                    </td>
+                  </tr>
+                ) : (
+                  activePeriodos.map((p) => (
+                    <tr key={p.id}>
+                      <td className="px-4 py-3">{p.year}</td>
+                      <td className="px-4 py-3">{p.semester}</td>
+                      <td className="px-4 py-3 font-semibold">
+                        {p.name}
+                        {p.isCurrent && (
+                          <span className="ml-1.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-800">
+                            Vigente
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-slate-500">
+                        {p.startDate} a {p.endDate}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -90,4 +122,4 @@ export default function AdminParametrosPage() {
       </div>
     </MainLayout>
   )
-}
+}

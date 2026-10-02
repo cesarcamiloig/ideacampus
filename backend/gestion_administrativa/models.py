@@ -142,3 +142,22 @@ class VariableCaracterizacion(models.Model):
 
     def __str__(self):
         return self.nombre
+
+
+class PeriodoAcademico(models.Model):
+    id_periodo = models.CharField(max_length=30, primary_key=True)
+    anio = models.IntegerField()
+    semestre = models.CharField(max_length=10)
+    nombre = models.CharField(max_length=150)
+    fecha_inicio = models.DateField()
+    fecha_fin = models.DateField()
+    es_vigente = models.BooleanField(default=False)
+    estado = models.CharField(max_length=20, default='activo')
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'periodo_academico'
+        ordering = ['-anio', '-semestre']
+
+    def __str__(self):
+        return self.nombre

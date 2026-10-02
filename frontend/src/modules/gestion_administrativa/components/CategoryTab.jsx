@@ -1,37 +1,48 @@
-import React, { useState } from "react"
-import { Plus, Search, Edit2 } from "lucide-react"
+import React, { useState, useEffect } from "react"
+import { Plus, Search, Edit2, Loader2, AlertCircle } from "lucide-react"
 import { VariableFormDialog } from "./VariableFormDialog"
+import {
+  getVariables,
+  createVariable,
+  updateVariable,
+  toggleVariableActive,
+} from "../services/parametroService"
 
 export default function CategoryTab() {
   const [searchTerm, setSearchTerm] = useState("")
-  const [categories, setCategories] = useState([
-    {
-      id: "1001",
-      name: "SECTOR_TECNOLOGICO",
-      description: "Sector de la iniciativa",
-      type: "Texto",
-      createdAt: "15/05/2026",
-      isActive: true,
-      hasActiveInitiatives: false,
-    },
-    {
-      id: "1002",
-      name: "TIPO_EMPRENDIMIENTO",
-      description: "Clasificación de la idea",
-      type: "Texto",
-      createdAt: "15/05/2026",
-      isActive: true,
-      hasActiveInitiatives: false,
-    },
-  ])
-
+  const [categories, setCategories] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [errorMessage, setErrorMessage] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingCategory, setEditingCategory] = useState(null)
 
-  const handleToggleActive = (id) => {
-    setCategories((prev) =>
-      prev.map((cat) => (cat.id === id ? { ...cat, isActive: !cat.isActive } : cat))
-    )
+  async function loadVariables() {
+    setIsLoading(true)
+    setErrorMessage("")
+    try {
+      const data = await getVariables()
+      setCategories(Array.isArray(data) ? data : [])
+    } catch (err) {
+      setErrorMessage(err.message || "Error al cargar las variables de caracterización.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadVariables()
+  }, [])
+
+
+  const handleToggleActive = async (id, currentActive) => {
+    try {
+      const updated = await toggleVariableActive(id, !currentActive)
+      setCategories((prev) =>
+        prev.map((cat) => (cat.id === id ? { ...cat, isActive: updated.isActive } : cat))
+      )
+    } catch (err) {
+      setErrorMessage(err.message || "Error al cambiar el estado de la variable.")
+    }
   }
 
   const handleOpenCreate = () => {
@@ -44,31 +55,39 @@ export default function CategoryTab() {
     setIsDialogOpen(true)
   }
 
-  const handleSaveCategory = (data) => {
-    if (editingCategory) {
-      setCategories((prev) =>
-        prev.map((c) => (c.id === editingCategory.id ? { ...c, ...data } : c))
-      )
-    } else {
-      const newEntry = {
-        ...data,
-        id: String(1001 + categories.length),
-        type: "Texto",
-        createdAt: "28/09/2026",
-        isActive: true,
+  const handleSaveCategory = async (data) => {
+    try {
+      if (editingCategory) {
+        const updated = await updateVariable(editingCategory.id, data)
+        setCategories((prev) =>
+          prev.map((c) => (c.id === editingCategory.id ? updated : c))
+        )
+      } else {
+        const created = await createVariable(data)
+        setCategories((prev) => [...prev, created])
       }
-      setCategories((prev) => [newEntry, ...prev])
+      setIsDialogOpen(false)
+      setEditingCategory(null)
+    } catch (err) {
+      setErrorMessage(err.message || "Error al guardar la variable de caracterización.")
     }
   }
 
   const filteredCategories = categories.filter(
     (c) =>
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.description.toLowerCase().includes(searchTerm.toLowerCase())
+      c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.description?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   return (
     <div className="space-y-4">
+      {errorMessage && (
+        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{errorMessage}</span>
+        </div>
+      )}
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative w-full sm:w-72">
           <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
@@ -105,36 +124,53 @@ export default function CategoryTab() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
-            {filteredCategories.map((cat) => (
-              <tr key={cat.id} className="hover:bg-slate-50/50 transition-colors">
-                <td className="px-5 py-3.5 text-slate-600 font-medium">{cat.id}</td>
-                <td className="px-5 py-3.5 font-semibold text-slate-800">{cat.name}</td>
-                <td className="px-5 py-3.5 text-slate-600">{cat.description}</td>
-                <td className="px-5 py-3.5 text-slate-600">{cat.type}</td>
-                <td className="px-5 py-3.5 text-slate-600">{cat.createdAt}</td>
-                <td className="px-5 py-3.5 text-center">
-                  <button
-                    type="button"
-                    onClick={() => handleOpenEdit(cat)}
-                    className="inline-flex items-center gap-1 rounded border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
-                  >
-                    <Edit2 className="h-3 w-3 text-slate-500" />
-                    <span>Editar</span>
-                  </button>
-                </td>
-                <td className="px-5 py-3.5 text-center">
-                  <label className="relative inline-flex cursor-pointer items-center">
-                    <input
-                      type="checkbox"
-                      checked={cat.isActive}
-                      onChange={() => handleToggleActive(cat.id)}
-                      className="peer sr-only"
-                    />
-                    <div className="peer h-6 w-11 rounded-full bg-slate-200 transition-colors after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow-sm after:transition-all after:content-[''] peer-checked:bg-green-600 peer-checked:after:translate-x-full" />
-                  </label>
+            {isLoading ? (
+              <tr>
+                <td colSpan={7} className="px-5 py-8 text-center text-slate-500">
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                    <span>Cargando variables de caracterización...</span>
+                  </div>
                 </td>
               </tr>
-            ))}
+            ) : filteredCategories.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="px-5 py-8 text-center text-slate-500">
+                  No hay variables de caracterización registradas.
+                </td>
+              </tr>
+            ) : (
+              filteredCategories.map((cat) => (
+                <tr key={cat.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="px-5 py-3.5 text-slate-600 font-medium">{cat.id}</td>
+                  <td className="px-5 py-3.5 font-semibold text-slate-800">{cat.name}</td>
+                  <td className="px-5 py-3.5 text-slate-600">{cat.description || "—"}</td>
+                  <td className="px-5 py-3.5 text-slate-600">{cat.type}</td>
+                  <td className="px-5 py-3.5 text-slate-600">{cat.createdAt}</td>
+                  <td className="px-5 py-3.5 text-center">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEdit(cat)}
+                      className="inline-flex items-center gap-1 rounded border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      <Edit2 className="h-3 w-3 text-slate-500" />
+                      <span>Editar</span>
+                    </button>
+                  </td>
+                  <td className="px-5 py-3.5 text-center">
+                    <label className="relative inline-flex cursor-pointer items-center">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(cat.isActive)}
+                        onChange={() => handleToggleActive(cat.id, cat.isActive)}
+                        className="peer sr-only"
+                      />
+                      <div className="peer h-6 w-11 rounded-full bg-slate-200 transition-colors after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow-sm after:transition-all after:content-[''] peer-checked:bg-green-600 peer-checked:after:translate-x-full" />
+                    </label>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

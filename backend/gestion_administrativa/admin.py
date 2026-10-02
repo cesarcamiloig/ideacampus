@@ -5,7 +5,8 @@ from .models import (
     UsuarioRol,
     Permiso,
     RolPermiso,
-    VariableCaracterizacion
+    VariableCaracterizacion,
+    PeriodoAcademico,
 )
 
 admin.site.register(Usuario)
@@ -14,3 +15,4 @@ admin.site.register(UsuarioRol)
 admin.site.register(Permiso)
 admin.site.register(RolPermiso)
 admin.site.register(VariableCaracterizacion)
+admin.site.register(PeriodoAcademico)

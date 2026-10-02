@@ -1,7 +1,8 @@
 import React, { useState } from "react"
-import { X, Calendar, AlertCircle } from "lucide-react"
+import { X, Calendar } from "lucide-react"
 
-export function PeriodoFormDialog({ open, onOpenChange, onSave }) {
+
+export function PeriodoFormDialog({ open, onOpenChange, onSave, initialData }) {
     const [formData, setFormData] = useState({
         year: "2026",
         semester: "1",
@@ -10,6 +11,29 @@ export function PeriodoFormDialog({ open, onOpenChange, onSave }) {
         endDate: "",
     })
     const [errors, setErrors] = useState({})
+
+    React.useEffect(() => {
+        if (open) {
+            if (initialData) {
+                setFormData({
+                    year: String(initialData.year || "2026"),
+                    semester: String(initialData.semester || "1").replace("°", "").replace("º", ""),
+                    name: initialData.name || "",
+                    startDate: initialData.startDate || "",
+                    endDate: initialData.endDate || "",
+                })
+            } else {
+                setFormData({
+                    year: "2026",
+                    semester: "1",
+                    name: "Ciclo 2026-I",
+                    startDate: "",
+                    endDate: "",
+                })
+            }
+            setErrors({})
+        }
+    }, [open, initialData])
 
     if (!open) return null
 
@@ -53,23 +77,13 @@ export function PeriodoFormDialog({ open, onOpenChange, onSave }) {
         if (!validate()) return
 
         onSave({
-            id: `PER-${formData.year}-${formData.semester}`,
             year: parseInt(formData.year, 10),
             semester: `${formData.semester}°`,
             name: formData.name,
             startDate: formData.startDate,
             endDate: formData.endDate,
-            isActive: true,
-            isCurrent: false,
         })
 
-        setFormData({
-            year: "2026",
-            semester: "1",
-            name: "Ciclo 2026-I",
-            startDate: "",
-            endDate: "",
-        })
         setErrors({})
         onOpenChange(false)
     }

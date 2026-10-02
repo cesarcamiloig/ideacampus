@@ -9,7 +9,7 @@ const formSchema = z.object({
   description: z.string().min(5, "Ingresa una descripción clara de la variable"),
 })
 
-export function VariableFormDialog({ open, onOpenChange, onSave }) {
+export function VariableFormDialog({ open, onOpenChange, onSave, initialData }) {
   const {
     register,
     handleSubmit,
@@ -23,14 +23,28 @@ export function VariableFormDialog({ open, onOpenChange, onSave }) {
     },
   })
 
+  React.useEffect(() => {
+    if (open) {
+      if (initialData) {
+        reset({
+          name: initialData.name || "",
+          description: initialData.description || "",
+        })
+      } else {
+        reset({
+          name: "",
+          description: "",
+        })
+      }
+    }
+  }, [open, initialData, reset])
+
   if (!open) return null
 
   const onSubmit = (data) => {
     onSave({
       name: data.name,
       description: data.description,
-      isActive: true,
-      hasActiveInitiatives: false,
     })
     reset()
     onOpenChange(false)
@@ -58,10 +72,10 @@ export function VariableFormDialog({ open, onOpenChange, onSave }) {
         {/* Encabezado */}
         <div className="mb-4">
           <h2 className="text-lg font-bold text-slate-900">
-            Nueva Variable de Caracterización
+            {initialData ? "Editar Variable de Caracterización" : "Nueva Variable de Caracterización"}
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Registra una variable para la matriz de iniciativas (RF12 / RF33).
+            {initialData ? "Modifica los datos del parámetro de caracterización." : "Registra una variable para la matriz de iniciativas (RF12 / RF33)."}
           </p>
         </div>
 

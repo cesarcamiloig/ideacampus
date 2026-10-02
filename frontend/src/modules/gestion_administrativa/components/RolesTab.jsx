@@ -1,115 +1,78 @@
-import React, { useState } from "react"
-import { Shield, Search, Mail, Check, AlertCircle, Lock } from "lucide-react"
+import React, { useState, useEffect } from "react"
+import { Shield, Search, Mail, Check, AlertCircle, Lock, Loader2, RefreshCw } from "lucide-react"
+import {
+    getRolesCatalogo,
+    getUsuarios,
+    updateUsuarioRoles,
+    toggleUsuarioActive,
+} from "../services/parametroService"
+
+const ROLE_COLORS = {
+    admin: "bg-red-50 text-red-700 border-red-200",
+    coordinador: "bg-purple-50 text-purple-700 border-purple-200",
+    tutor: "bg-blue-50 text-blue-700 border-blue-200",
+    mentor: "bg-amber-50 text-amber-700 border-amber-200",
+    evaluador: "bg-teal-50 text-teal-700 border-teal-200",
+    estudiante: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    direccion_del_programa: "bg-slate-100 text-slate-700 border-slate-300",
+    direccion: "bg-slate-100 text-slate-700 border-slate-300",
+}
 
 export default function RolesTab() {
     const [viewMode, setViewMode] = useState("usuarios") // "usuarios" | "catalogo"
     const [searchTerm, setSearchTerm] = useState("")
 
-    // Catálogo base de roles institucionales (RF01 / RF33)
-    const allRoles = [
-        {
-            id: "admin",
-            name: "Administrador / Superadmin",
-            color: "bg-red-50 text-red-700 border-red-200",
-            isAssignable: false, // Bloqueado: No asignable desde el panel operativo
-            description: "Gestión técnica, parametrización y seguridad global (Reservado a consola/DB)",
-        },
-        {
-            id: "coordinador",
-            name: "Coordinador de Emprendimiento",
-            color: "bg-purple-50 text-purple-700 border-purple-200",
-            isAssignable: true,
-            description: "Administración de convocatorias, iniciativas y asignación de tutores/mentores",
-        },
-        {
-            id: "tutor",
-            name: "Tutor Académico",
-            color: "bg-blue-50 text-blue-700 border-blue-200",
-            isAssignable: true,
-            description: "Acompañamiento continuo y responsable del seguimiento formal por etapas",
-        },
-        {
-            id: "mentor",
-            name: "Mentor Especializado",
-            color: "bg-amber-50 text-amber-700 border-amber-200",
-            isAssignable: true,
-            description: "Asesorías técnicas, financieras o legales puntuales con registro de compromisos",
-        },
-        {
-            id: "evaluador",
-            name: "Evaluador",
-            color: "bg-teal-50 text-teal-700 border-teal-200",
-            isAssignable: true,
-            description: "Calificación de iniciativas mediante rúbricas y determinación de nivel TRL",
-        },
-        {
-            id: "estudiante",
-            name: "Estudiante Emprendedor",
-            color: "bg-emerald-50 text-emerald-700 border-emerald-200",
-            isAssignable: true,
-            description: "Postulación de iniciativas, registro de equipo y carga de evidencias de avance",
-        },
-        {
-            id: "direccion",
-            name: "Dirección de Programa",
-            color: "bg-slate-100 text-slate-700 border-slate-300",
-            isAssignable: true,
-            description: "Consulta de indicadores consolidados y reportes de acreditación institucional",
-        },
-    ]
-
-    // Usuarios con soporte para múltiples roles (Tabla ROL_USUARIO)
-    const [users, setUsers] = useState([
-        {
-            id: "USR-1152442",
-            name: "Obed Ayala",
-            email: "obeda@ufps.edu.co",
-            roles: ["estudiante"],
-            isActive: true,
-            lastLogin: "28/09/2026",
-        },
-        {
-            id: "USR-002341",
-            name: "Ing. Claudia Gómez",
-            email: "claudiag@ufps.edu.co",
-            roles: ["coordinador"],
-            isActive: true,
-            lastLogin: "28/09/2026",
-        },
-        {
-            id: "USR-001092",
-            name: "Docente Milton Matías",
-            email: "miltonm@ufps.edu.co",
-            roles: ["tutor", "evaluador"], // Múltiples roles simultáneos
-            isActive: true,
-            lastLogin: "26/09/2026",
-        },
-        {
-            id: "USR-004512",
-            name: "Carlos Mendoza (Externo)",
-            email: "carlos.innova@gmail.com",
-            roles: ["mentor"],
-            isActive: true,
-            lastLogin: "20/09/2026",
-        },
-    ])
+    const [rolesCatalog, setRolesCatalog] = useState([])
+    const [users, setUsers] = useState([])
+    const [isLoading, setIsLoading] = useState(true)
+    const [errorMessage, setErrorMessage] = useState("")
 
     const [selectedUser, setSelectedUser] = useState(null)
     const [selectedRoles, setSelectedRoles] = useState([])
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [modalError, setModalError] = useState("")
+    const [isSaving, setIsSaving] = useState(false)
+
+    async function loadData() {
+        setIsLoading(true)
+        setErrorMessage("")
+        try {
+            const [rolesRes, usersRes] = await Promise.all([
+                getRolesCatalogo(),
+                getUsuarios(),
+            ])
+            setRolesCatalog(Array.isArray(rolesRes) ? rolesRes : rolesRes?.data || [])
+            setUsers(Array.isArray(usersRes) ? usersRes : usersRes?.data || [])
+        } catch (err) {
+            setErrorMessage(err.message || "Error al cargar la información de roles y usuarios.")
+        } finally {
+            setIsLoading(false)
+        }
+    }
+
+    useEffect(() => {
+        loadData()
+    }, [])
 
     // Desactivación lógica según CU-18 / FA1
-    const handleToggleUserActive = (id) => {
-        setUsers((prev) =>
-            prev.map((u) => (u.id === id ? { ...u, isActive: !u.isActive } : u))
-        )
+    const handleToggleUserActive = async (user) => {
+        const nextActive = !user.isActive
+        try {
+            await toggleUsuarioActive(user.id_usuario, nextActive)
+            setUsers((prev) =>
+                prev.map((u) =>
+                    u.id_usuario === user.id_usuario ? { ...u, isActive: nextActive } : u
+                )
+            )
+        } catch (err) {
+            setErrorMessage(err.message || "No se pudo actualizar el estado del usuario.")
+        }
     }
 
     const handleOpenAssignModal = (user) => {
         setSelectedUser(user)
-        // Se cargan los roles actuales excluyendo "admin" si existiese en datos legados
-        setSelectedRoles([...user.roles.filter((r) => r !== "admin")])
+        // Se cargan los roles actuales excluyendo "admin"
+        setSelectedRoles([...(user.roles || []).filter((r) => r !== "admin")])
         setModalError("")
         setIsModalOpen(true)
     }
@@ -124,29 +87,67 @@ export default function RolesTab() {
         )
     }
 
-    const handleSaveRoles = () => {
+    const handleSaveRoles = async () => {
         if (selectedRoles.length === 0) {
             setModalError("Debes asignar al menos un rol funcional al usuario.")
             return
         }
 
-        setUsers((prev) =>
-            prev.map((u) =>
-                u.id === selectedUser.id ? { ...u, roles: selectedRoles } : u
+        setIsSaving(true)
+        setModalError("")
+        try {
+            const updated = await updateUsuarioRoles(selectedUser.id_usuario, selectedRoles)
+            setUsers((prev) =>
+                prev.map((u) =>
+                    u.id_usuario === selectedUser.id_usuario ? (updated?.data || updated) : u
+                )
             )
-        )
-        setIsModalOpen(false)
-        setSelectedUser(null)
+            // Actualizar catálogo de roles con el nuevo conteo
+            const rolesRes = await getRolesCatalogo()
+            setRolesCatalog(Array.isArray(rolesRes) ? rolesRes : rolesRes?.data || [])
+
+            setIsModalOpen(false)
+            setSelectedUser(null)
+        } catch (err) {
+            const msg =
+                err.response?.data?.roles?.[0] ||
+                err.response?.data?.error ||
+                err.message ||
+                "Error al guardar los roles del usuario."
+            setModalError(msg)
+        } finally {
+            setIsSaving(false)
+        }
     }
 
-    const filteredUsers = users.filter(
-        (u) =>
-            u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            u.email.toLowerCase().includes(searchTerm.toLowerCase())
-    )
+    const filteredUsers = users.filter((u) => {
+        const q = searchTerm.toLowerCase()
+        return (
+            (u.name && u.name.toLowerCase().includes(q)) ||
+            (u.email && u.email.toLowerCase().includes(q)) ||
+            (u.id && u.id.toLowerCase().includes(q))
+        )
+    })
 
     return (
         <div className="space-y-4">
+            {/* Mensaje de error general si ocurre */}
+            {errorMessage && (
+                <div className="flex items-center justify-between rounded-lg bg-red-50 p-3 text-xs text-red-700 border border-red-200">
+                    <div className="flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        <span>{errorMessage}</span>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={loadData}
+                        className="inline-flex items-center gap-1 font-semibold hover:underline"
+                    >
+                        <RefreshCw className="h-3 w-3" /> Reintentar
+                    </button>
+                </div>
+            )}
+
             {/* Selector de subvista y buscador */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="inline-flex rounded-lg border border-slate-200 bg-[#f0f2f5] p-1">
@@ -186,8 +187,14 @@ export default function RolesTab() {
                 )}
             </div>
 
-            {/* VISTA 1: TABLA DE USUARIOS Y ROLES MÚLTIPLES */}
-            {viewMode === "usuarios" && (
+            {/* Estado de carga */}
+            {isLoading ? (
+                <div className="flex h-48 flex-col items-center justify-center gap-2 text-slate-500">
+                    <Loader2 className="h-6 w-6 animate-spin text-red-600" />
+                    <span className="text-xs">Cargando roles y usuarios institucionales...</span>
+                </div>
+            ) : viewMode === "usuarios" ? (
+                /* VISTA 1: TABLA DE USUARIOS Y ROLES MÚLTIPLES */
                 <div className="overflow-hidden rounded-xl border border-slate-200">
                     <table className="w-full text-left text-xs">
                         <thead className="bg-[#f0f2f5] text-slate-700 font-semibold">
@@ -200,69 +207,75 @@ export default function RolesTab() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 bg-white">
-                            {filteredUsers.map((user) => (
-                                <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
-                                    <td className="px-5 py-3.5">
-                                        <div className="font-semibold text-slate-900">{user.name}</div>
-                                        <div className="text-[11px] text-slate-400 font-mono">{user.id}</div>
-                                    </td>
-                                    <td className="px-5 py-3.5 text-slate-600">
-                                        <div className="flex items-center gap-1.5">
-                                            <Mail className="h-3.5 w-3.5 text-slate-400" />
-                                            <span>{user.email}</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-5 py-3.5">
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {user.roles.length === 0 ? (
-                                                <span className="rounded bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 border border-amber-200">
-                                                    Sin Rol Asignado
-                                                </span>
-                                            ) : (
-                                                user.roles.map((rId) => {
-                                                    const rData = allRoles.find((r) => r.id === rId)
-                                                    return (
-                                                        <span
-                                                            key={rId}
-                                                            className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-semibold ${rData ? rData.color : "bg-slate-100 text-slate-700 border-slate-200"
-                                                                }`}
-                                                        >
-                                                            {rData ? rData.name : rId}
-                                                        </span>
-                                                    )
-                                                })
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td className="px-5 py-3.5 text-center">
-                                        <button
-                                            type="button"
-                                            onClick={() => handleOpenAssignModal(user)}
-                                            className="rounded-md border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
-                                        >
-                                            Gestionar Roles
-                                        </button>
-                                    </td>
-                                    <td className="px-5 py-3.5 text-center">
-                                        <label className="relative inline-flex cursor-pointer items-center">
-                                            <input
-                                                type="checkbox"
-                                                checked={user.isActive}
-                                                onChange={() => handleToggleUserActive(user.id)}
-                                                className="peer sr-only"
-                                            />
-                                            <div className="peer h-6 w-11 rounded-full bg-slate-200 transition-colors after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow-sm after:transition-all after:content-[''] peer-checked:bg-green-600 peer-checked:after:translate-x-full" />
-                                        </label>
+                            {filteredUsers.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} className="py-8 text-center text-xs text-slate-400">
+                                        No se encontraron usuarios institucionales registrados.
                                     </td>
                                 </tr>
-                            ))}
+                            ) : (
+                                filteredUsers.map((user) => (
+                                    <tr key={user.id_usuario || user.id} className="hover:bg-slate-50/50 transition-colors">
+                                        <td className="px-5 py-3.5">
+                                            <div className="font-semibold text-slate-900">{user.name}</div>
+                                            <div className="text-[11px] text-slate-400 font-mono">{user.id}</div>
+                                        </td>
+                                        <td className="px-5 py-3.5 text-slate-600">
+                                            <div className="flex items-center gap-1.5">
+                                                <Mail className="h-3.5 w-3.5 text-slate-400" />
+                                                <span>{user.email}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-5 py-3.5">
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {!user.roles || user.roles.length === 0 ? (
+                                                    <span className="rounded bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 border border-amber-200">
+                                                        Sin Rol Asignado
+                                                    </span>
+                                                ) : (
+                                                    user.roles.map((rId) => {
+                                                        const rData = rolesCatalog.find((r) => r.id === rId)
+                                                        const badgeColor = ROLE_COLORS[rId] || "bg-slate-100 text-slate-700 border-slate-200"
+                                                        return (
+                                                            <span
+                                                                key={rId}
+                                                                className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-semibold ${badgeColor}`}
+                                                            >
+                                                                {rData ? rData.name : rId}
+                                                            </span>
+                                                        )
+                                                    })
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="px-5 py-3.5 text-center">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleOpenAssignModal(user)}
+                                                className="rounded-md border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                                            >
+                                                Gestionar Roles
+                                            </button>
+                                        </td>
+                                        <td className="px-5 py-3.5 text-center">
+                                            <label className="relative inline-flex cursor-pointer items-center">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={user.isActive}
+                                                    onChange={() => handleToggleUserActive(user)}
+                                                    className="peer sr-only"
+                                                />
+                                                <div className="peer h-6 w-11 rounded-full bg-slate-200 transition-colors after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow-sm after:transition-all after:content-[''] peer-checked:bg-green-600 peer-checked:after:translate-x-full" />
+                                            </label>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
                 </div>
-            )}
-
-            {/* VISTA 2: CATÁLOGO DE ROLES DEL SISTEMA */}
-            {viewMode === "catalogo" && (
+            ) : (
+                /* VISTA 2: CATÁLOGO DE ROLES DEL SISTEMA */
                 <div className="overflow-hidden rounded-xl border border-slate-200">
                     <table className="w-full text-left text-xs">
                         <thead className="bg-[#f0f2f5] text-slate-700 font-semibold">
@@ -275,8 +288,11 @@ export default function RolesTab() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 bg-white">
-                            {allRoles.map((role, idx) => {
-                                const count = users.filter((u) => u.roles.includes(role.id)).length
+                            {rolesCatalog.map((role, idx) => {
+                                const count =
+                                    role.usersCount !== undefined
+                                        ? role.usersCount
+                                        : users.filter((u) => u.roles?.includes(role.id)).length
                                 return (
                                     <tr key={role.id} className="hover:bg-slate-50/50 transition-colors">
                                         <td className="px-5 py-3.5 font-medium text-slate-900">
@@ -340,8 +356,8 @@ export default function RolesTab() {
                             </label>
 
                             <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
-                                {allRoles
-                                    .filter((r) => r.isAssignable) // Excluye el rol de Administrador
+                                {rolesCatalog
+                                    .filter((r) => r.isAssignable && r.id !== "admin") // Excluye estrictamente el rol de Administrador
                                     .map((r) => {
                                         const isChecked = selectedRoles.includes(r.id)
                                         return (
@@ -377,7 +393,7 @@ export default function RolesTab() {
 
                             {modalError && (
                                 <div className="flex items-center gap-1.5 pt-2 text-xs text-red-600 font-medium">
-                                    <AlertCircle className="h-3.5 w-3.5" />
+                                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                                     <span>{modalError}</span>
                                 </div>
                             )}
@@ -386,20 +402,23 @@ export default function RolesTab() {
                         <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100 mt-4">
                             <button
                                 type="button"
+                                disabled={isSaving}
                                 onClick={() => {
                                     setIsModalOpen(false)
                                     setSelectedUser(null)
                                 }}
-                                className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
+                                className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors disabled:opacity-50"
                             >
                                 Cancelar
                             </button>
                             <button
                                 type="button"
+                                disabled={isSaving}
                                 onClick={handleSaveRoles}
-                                className="rounded-lg bg-[#c81e1e] px-4 py-2 text-xs font-semibold text-white shadow hover:bg-red-700 transition-colors"
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-[#c81e1e] px-4 py-2 text-xs font-semibold text-white shadow hover:bg-red-700 transition-colors disabled:opacity-50"
                             >
-                                Guardar Roles
+                                {isSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                                <span>{isSaving ? "Guardando..." : "Guardar Roles"}</span>
                             </button>
                         </div>
                     </div>
