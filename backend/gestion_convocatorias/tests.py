@@ -1,3 +1,197 @@
-from django.test import TestCase
+from datetime import timedelta
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.test import APITestCase
 
-# Create your tests here.
+from gestion_administrativa.jwt_utils import generar_token
+from gestion_administrativa.models import Rol, Usuario, UsuarioRol
+from .models import Convocatoria, NotificacionConvocatoria
+from .services import actualizar_estados_convocatorias, notificar_apertura
+
+
+class GestionConvocatoriasTests(APITestCase):
+    def setUp(self):
+        # 1. Configurar Roles institucionales
+        self.rol_admin, _ = Rol.objects.get_or_create(nombre_rol="admin", defaults={"descripcion": "Admin"})
+        self.rol_coordinador, _ = Rol.objects.get_or_create(nombre_rol="coordinador", defaults={"descripcion": "Coordinador"})
+        self.rol_estudiante, _ = Rol.objects.get_or_create(nombre_rol="estudiante", defaults={"descripcion": "Estudiante"})
+
+        # 2. Configurar Usuarios
+        self.coordinador = Usuario.objects.create(
+            nombre="Coordinadora Claudia",
+            correo="claudiag@ufps.edu.co",
+            google_id="coord-1",
+            estado="activo",
+        )
+        UsuarioRol.objects.create(usuario=self.coordinador, rol=self.rol_coordinador, estado="activo")
+        self.token_coordinador = generar_token(self.coordinador, "coordinador")
+
+        self.estudiante = Usuario.objects.create(
+            nombre="Estudiante Pedro",
+            correo="pedro@ufps.edu.co",
+            google_id="est-1",
+            estado="activo",
+        )
+        UsuarioRol.objects.create(usuario=self.estudiante, rol=self.rol_estudiante, estado="activo")
+        self.token_estudiante = generar_token(self.estudiante, "estudiante")
+
+    def test_creacion_convocatoria_por_coordinador(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+
+        now = timezone.now()
+        payload = {
+            "nombre": "Convocatoria Innovación 2026-I",
+            "descripcion": "Recepción de iniciativas de base tecnológica",
+            "categoria": "Tecnología",
+            "requisitos_documentacion": "Formato de postulación y pitch deck",
+            "criterios_evaluacion": "TRL 3+, impacto regional y viabilidad",
+            "fecha_apertura": (now + timedelta(days=1)).isoformat(),
+            "fecha_cierre": (now + timedelta(days=30)).isoformat(),
+            "estado": "borrador",
+        }
+
+        res = self.client.post("/api/convocatorias/", payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data["nombre"], "Convocatoria Innovación 2026-I")
+        self.assertEqual(res.data["creador_nombre"], "Coordinadora Claudia")
+
+    def test_validacion_fechas_inconsistentes(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+
+        now = timezone.now()
+        payload_error = {
+            "nombre": "Convocatoria Fechas Mal",
+            "fecha_apertura": (now + timedelta(days=10)).isoformat(),
+            "fecha_cierre": (now + timedelta(days=2)).isoformat(), # Cierre antes de apertura
+            "estado": "borrador",
+        }
+
+        res = self.client.post("/api/convocatorias/", payload_error, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("fecha_cierre", res.data)
+
+    def test_control_acceso_estudiante_no_puede_crear_convocatorias(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_estudiante}")
+
+        now = timezone.now()
+        payload = {
+            "nombre": "Convocatoria Ilegal",
+            "fecha_apertura": now.isoformat(),
+            "fecha_cierre": (now + timedelta(days=5)).isoformat(),
+        }
+
+        res = self.client.post("/api/convocatorias/", payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_transicion_automatica_de_estados_por_fechas(self):
+        now = timezone.now()
+
+        # Convocatoria 1: Publicada pero su fecha de apertura ya llegó -> debe pasar a 'abierta'
+        c1 = Convocatoria.objects.create(
+            nombre="Convocatoria Pasada a Abierta",
+            fecha_apertura=now - timedelta(hours=1),
+            fecha_cierre=now + timedelta(days=5),
+            estado="publicada",
+        )
+
+        # Convocatoria 2: Abierta pero su fecha de cierre ya pasó -> debe pasar a 'cerrada'
+        c2 = Convocatoria.objects.create(
+            nombre="Convocatoria Expirada",
+            fecha_apertura=now - timedelta(days=10),
+            fecha_cierre=now - timedelta(hours=2),
+            estado="abierta",
+        )
+
+        actualizar_estados_convocatorias()
+
+        c1.refresh_from_db()
+        c2.refresh_from_db()
+        self.assertEqual(c1.estado, "abierta")
+        self.assertEqual(c2.estado, "cerrada")
+
+    def test_visibilidad_segun_rol(self):
+        now = timezone.now()
+        # Convocatoria en borrador
+        Convocatoria.objects.create(
+            nombre="Borrador Oculto",
+            fecha_apertura=now + timedelta(days=1),
+            fecha_cierre=now + timedelta(days=10),
+            estado="borrador",
+        )
+        # Convocatoria abierta
+        Convocatoria.objects.create(
+            nombre="Convocatoria Visible",
+            fecha_apertura=now - timedelta(days=1),
+            fecha_cierre=now + timedelta(days=10),
+            estado="abierta",
+        )
+
+        # 1. Estudiante no ve borradores
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_estudiante}")
+        res_est = self.client.get("/api/convocatorias/")
+        self.assertEqual(res_est.status_code, status.HTTP_200_OK)
+        nombres_est = [c["nombre"] for c in res_est.data]
+        self.assertIn("Convocatoria Visible", nombres_est)
+        self.assertNotIn("Borrador Oculto", nombres_est)
+
+        # 2. Coordinador sí ve borradores
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+        res_coord = self.client.get("/api/convocatorias/")
+        self.assertEqual(res_coord.status_code, status.HTTP_200_OK)
+        nombres_coord = [c["nombre"] for c in res_coord.data]
+        self.assertIn("Convocatoria Visible", nombres_coord)
+        self.assertIn("Borrador Oculto", nombres_coord)
+
+    def test_publicacion_y_emision_de_notificaciones(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+
+        now = timezone.now()
+        convocatoria = Convocatoria.objects.create(
+            nombre="Gran Convocatoria 2026",
+            fecha_apertura=now - timedelta(hours=1),
+            fecha_cierre=now + timedelta(days=15),
+            estado="borrador",
+            creador=self.coordinador,
+        )
+
+        # Acción publicar
+        res_pub = self.client.post(f"/api/convocatorias/{convocatoria.id_convocatoria}/publicar/")
+        self.assertEqual(res_pub.status_code, status.HTTP_200_OK)
+        convocatoria.refresh_from_db()
+        self.assertEqual(convocatoria.estado, "abierta")
+
+        # Verificar que el estudiante recibió la notificación
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_estudiante}")
+        res_notif = self.client.get("/api/notificaciones-convocatoria/")
+        self.assertEqual(res_notif.status_code, status.HTTP_200_OK)
+        self.assertTrue(len(res_notif.data) >= 1)
+        notif = res_notif.data[0]
+        self.assertIn("Gran Convocatoria 2026", notif["titulo"])
+        self.assertFalse(notif["leida"])
+
+        # Marcar notificación como leída
+        id_notif = notif["id_notificacion"]
+        res_read = self.client.patch(f"/api/notificaciones-convocatoria/{id_notif}/leer/")
+        self.assertEqual(res_read.status_code, status.HTTP_200_OK)
+        self.assertTrue(res_read.data["leida"])
+
+        # Resumen de notificaciones
+        res_resumen = self.client.get("/api/notificaciones-convocatoria/resumen/")
+        self.assertEqual(res_resumen.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_resumen.data["no_leidas"], 0)
+
+    def test_cierre_manual_convocatoria(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+
+        now = timezone.now()
+        convocatoria = Convocatoria.objects.create(
+            nombre="Convocatoria a Cerrar",
+            fecha_apertura=now - timedelta(days=5),
+            fecha_cierre=now + timedelta(days=5),
+            estado="abierta",
+        )
+
+        res_close = self.client.post(f"/api/convocatorias/{convocatoria.id_convocatoria}/cerrar/")
+        self.assertEqual(res_close.status_code, status.HTTP_200_OK)
+        convocatoria.refresh_from_db()
+        self.assertEqual(convocatoria.estado, "cerrada")
