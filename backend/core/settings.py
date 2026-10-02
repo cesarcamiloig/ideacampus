@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'gestion_administrativa',
+    'gestion_acompaniamiento',
     'django.contrib.sites',
     'allauth',
     'allauth.account',
@@ -60,7 +61,7 @@ SOCIALACCOUNT_PROVIDERS = {
 }
 
 # JWT SETTINGS
-JWT_SECRET = os.getenv("JWT_KEY") or SECRET_KEY
+JWT_SECRET = os.getenv("JWT_KEY")
 JWT_ALGORITHM = "HS256"
 JWT_EXP_DELTA_HOURS = 24
 

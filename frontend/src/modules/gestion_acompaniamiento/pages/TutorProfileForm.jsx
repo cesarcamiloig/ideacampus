@@ -1,6 +1,10 @@
-import { useState } from "react";
-import { getUsuario } from "../../gestion_administrativa/services/authService";
-import { registerTutorProfile } from "../services/tutorService";
+import { useEffect, useRef, useState } from "react";
+import { useAuth } from "../../../context/AuthContext";
+import {
+  getCachedTutorProfile,
+  getTutorProfile,
+  registerTutorProfile,
+} from "../services/tutorService";
 import "./TutorProfileForm.css";
 
 const NIVELES_ACADEMICOS = ["Pregrado", "Especializacion", "Maestria", "Doctorado"];
@@ -19,6 +23,25 @@ const initialState = {
   enlacePerfil: "",
   disponibilidad: "",
 };
+
+function mapProfileToForm(perfil, esMentor) {
+  if (!perfil) return initialState;
+
+  const nivelAcademico = NIVELES_ACADEMICOS.find(
+    (nivel) => nivel.toLowerCase() === perfil.nivel_academico?.toLowerCase()
+  ) || "";
+
+  return {
+    areaEspecializacion: (esMentor
+      ? perfil.area_especializacion
+      : perfil.area_conocimiento) || "",
+    nivelAcademico,
+    aniosExperiencia: perfil.anios_experiencia ?? "",
+    biografia: perfil.biografia || "",
+    enlacePerfil: perfil.enlace_perfil || "",
+    disponibilidad: perfil.disponibilidad || "",
+  };
+}
 
 function validate(form, esMentor) {
   const errors = {};
@@ -46,16 +69,49 @@ function ChevronDown() {
 }
 
 function TutorProfileForm() {
-  const usuario = getUsuario();
-  const esMentor = usuario?.rol === "mentor";
+  const { usuario, logout } = useAuth();
+  const rolActivo = usuario?.rol?.trim().toLowerCase();
+  const esMentor = rolActivo === "mentor";
+  const hasEditedForm = useRef(false);
 
-  const [form, setForm] = useState(initialState);
+  const [form, setForm] = useState(() =>
+    mapProfileToForm(
+      getCachedTutorProfile(rolActivo, usuario?.id_usuario),
+      esMentor
+    )
+  );
   const [errors, setErrors] = useState({});
   const [status, setStatus] = useState("idle"); // idle | loading | success | error
   const [serverError, setServerError] = useState("");
+  const [profileLoadError, setProfileLoadError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProfile() {
+      setProfileLoadError("");
+      try {
+        const perfil = await getTutorProfile(rolActivo, usuario?.id_usuario);
+        if (cancelled) return;
+        if (!hasEditedForm.current) {
+          setForm(mapProfileToForm(perfil, esMentor));
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setProfileLoadError(err.message || "No se pudo cargar el perfil.");
+        }
+      }
+    }
+
+    loadProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, [esMentor, rolActivo, usuario?.id_usuario]);
 
   function handleChange(e) {
     const { name, value } = e.target;
+    hasEditedForm.current = true;
     setForm((prev) => ({ ...prev, [name]: value }));
   }
 
@@ -69,15 +125,15 @@ function TutorProfileForm() {
     setServerError("");
     try {
       await registerTutorProfile({
-        nombre: usuario?.nombre || "",
-        correo: usuario?.correo || "",
-        area_especializacion: form.areaEspecializacion,
+        ...(esMentor
+          ? { area_especializacion: form.areaEspecializacion }
+          : { area_conocimiento: form.areaEspecializacion }),
         nivel_academico: form.nivelAcademico.toLowerCase(),
         anios_experiencia: Number(form.aniosExperiencia),
         biografia: form.biografia,
         enlace_perfil: form.enlacePerfil,
         ...(esMentor && { disponibilidad: form.disponibilidad }),
-      });
+      }, rolActivo, usuario?.id_usuario);
       setStatus("success");
     } catch (err) {
       setStatus("error");
@@ -95,9 +151,14 @@ function TutorProfileForm() {
             <div className="tutor-brand-sub">Universidad Francisco de Paula Santander</div>
           </div>
         </div>
-        <span className="tutor-breadcrumb">
-          HU-16 · Perfil de {esMentor ? "Mentor" : "Tutor"}
-        </span>
+        <div className="tutor-header-actions">
+          <span className="tutor-breadcrumb">
+            HU-16 · Perfil de {esMentor ? "Mentor" : "Tutor"}
+          </span>
+          <button type="button" className="tutor-logout" onClick={logout}>
+            Cerrar sesión
+          </button>
+        </div>
       </header>
 
       <main className="tutor-layout">
@@ -133,8 +194,15 @@ function TutorProfileForm() {
             <div className="tutor-section-label">Cuenta institucional</div>
             <div className="tutor-grid-2">
               <div className="tutor-field">
-                <label htmlFor="nombre">Nombre completo</label>
-                <input id="nombre" type="text" value={usuario?.nombre || ""} disabled />
+                <label id="nombre-label">Nombre completo</label>
+                <div
+                  className="tutor-readonly-name"
+                  role="textbox"
+                  aria-readonly="true"
+                  aria-labelledby="nombre-label"
+                >
+                  {usuario?.nombre || ""}
+                </div>
               </div>
               <div className="tutor-field">
                 <label htmlFor="correo">Correo institucional</label>
@@ -143,6 +211,9 @@ function TutorProfileForm() {
             </div>
 
             <div className="tutor-section-label">Perfil académico</div>
+            {profileLoadError && (
+              <p className="tutor-error-banner" role="alert">{profileLoadError}</p>
+            )}
 
             <div className="tutor-field">
               <label htmlFor="areaEspecializacion">
