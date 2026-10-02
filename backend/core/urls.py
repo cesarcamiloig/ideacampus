@@ -3,6 +3,9 @@ from django.urls import path, include
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    # Conectamos las rutas del módulo; verifica que el nombre coincida con tu carpeta
-    path('api/v1/', include('gestion_convocatorias.urls')), 
+    path('accounts/', include('allauth.urls')),
+    path('api/', include('gestion_administrativa.urls')),
+    path('api/', include('gestion_acompaniamiento.urls')),
+    path('api/', include('gestion_convocatorias.urls')),
 ]
+
