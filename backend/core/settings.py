@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'gestion_administrativa',
+    'gestion_acompaniamiento',
     'django.contrib.sites',
     'allauth',
     'allauth.account',
