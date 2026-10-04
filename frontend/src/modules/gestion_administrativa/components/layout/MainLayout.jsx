@@ -24,13 +24,27 @@ const ROLE_LABELS = {
     direccion: "Dirección de Programa",
 }
 
-export default function MainLayout({ children, activeModule = "parametros" }) {
+export default function MainLayout({
+    children,
+    activeModule = "parametros",
+    onModuleChange,
+    activeRole: propActiveRole,
+    onRoleChange,
+}) {
     // Estado del menú desplegable de perfil
     const [profileMenuOpen, setProfileMenuOpen] = useState(false)
 
     // Conexión a la sesión real del usuario autenticado
-    const { usuario, rolActivo, rolesAsignados, logout } = useAuth()
-    const [activeRole, setActiveRole] = useState(rolActivo || "admin")
+    const { usuario, rolActivo, rolesAsignados, logout, switchRole } = useAuth()
+    const [activeRole, setActiveRole] = useState(propActiveRole || rolActivo || "admin")
+
+    React.useEffect(() => {
+        if (propActiveRole) {
+            setActiveRole(propActiveRole)
+        } else if (rolActivo) {
+            setActiveRole(rolActivo)
+        }
+    }, [propActiveRole, rolActivo])
 
     const userName = usuario?.nombre || "Usuario Institucional"
     const userEmail = usuario?.correo || ""
@@ -63,6 +77,12 @@ export default function MainLayout({ children, activeModule = "parametros" }) {
         tutor: [
             { id: "tutorias", label: "Mis Iniciativas Asignadas", icon: BookOpen },
             { id: "acompanamiento", label: "Registro de Tutorías", icon: Users },
+            { id: "perfil", label: "Mi Perfil Académico", icon: Award },
+        ],
+        mentor: [
+            { id: "mentorias", label: "Mentorías Asignadas", icon: BookOpen },
+            { id: "acompanamiento", label: "Sesiones de Asesoría", icon: Users },
+            { id: "perfil", label: "Mi Perfil Profesional", icon: Award },
         ],
         evaluador: [
             { id: "evaluaciones", label: "Iniciativas por Evaluar", icon: ClipboardCheck },
@@ -77,6 +97,16 @@ export default function MainLayout({ children, activeModule = "parametros" }) {
             { id: "mi-iniciativa", label: "Mi Emprendimiento", icon: Lightbulb },
             { id: "postulaciones", label: "Convocatorias Abiertas", icon: FileText },
         ],
+        direccion_del_programa: [
+            { id: "dashboard", label: "Panel de Dirección", icon: Award },
+            { id: "iniciativas", label: "Banco de Iniciativas", icon: Lightbulb },
+            { id: "indicadores", label: "Métricas e Indicadores", icon: FileText },
+        ],
+        direccion: [
+            { id: "dashboard", label: "Panel de Dirección", icon: Award },
+            { id: "iniciativas", label: "Banco de Iniciativas", icon: Lightbulb },
+            { id: "indicadores", label: "Métricas e Indicadores", icon: FileText },
+        ],
     }
 
     const currentMenuItems = menuConfigByRole[activeRole] || menuConfigByRole.admin
@@ -84,6 +114,12 @@ export default function MainLayout({ children, activeModule = "parametros" }) {
     const handleRoleSwitch = (roleId) => {
         setActiveRole(roleId)
         setProfileMenuOpen(false)
+        if (onRoleChange) {
+            onRoleChange(roleId)
+        }
+        if (switchRole) {
+            switchRole(roleId)
+        }
     }
 
     const activeRoleLabel = ROLE_LABELS[activeRole] || activeRole.replace(/_/g, " ").toUpperCase()
@@ -118,9 +154,10 @@ export default function MainLayout({ children, activeModule = "parametros" }) {
                                     )}
                                     <button
                                         type="button"
+                                        onClick={() => onModuleChange && onModuleChange(item.id)}
                                         className={`flex w-full items-center gap-3 px-6 py-3.5 text-left text-sm transition-colors ${isActive
-                                                ? "bg-red-50/40 font-semibold text-slate-900"
-                                                : "font-medium text-slate-600 hover:bg-slate-50"
+                                            ? "bg-red-50/40 font-semibold text-slate-900"
+                                            : "font-medium text-slate-600 hover:bg-slate-50"
                                             }`}
                                     >
                                         <Icon
@@ -204,8 +241,8 @@ export default function MainLayout({ children, activeModule = "parametros" }) {
                                                 type="button"
                                                 onClick={() => handleRoleSwitch(role.id)}
                                                 className={`w-full flex items-center justify-between px-4 py-2 text-xs text-left transition-colors ${isSelected
-                                                        ? "bg-red-50 text-red-700 font-semibold"
-                                                        : "text-slate-700 hover:bg-slate-50"
+                                                    ? "bg-red-50 text-red-700 font-semibold"
+                                                    : "text-slate-700 hover:bg-slate-50"
                                                     }`}
                                             >
                                                 <span>{role.label}</span>

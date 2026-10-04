@@ -36,6 +36,18 @@ export function AuthProvider({ children }) {
     return rolActivo === rolesRequeridos;
   }
 
+  function switchRole(newRole) {
+    if (usuario && newRole) {
+      const updatedUser = { ...usuario, rol: newRole };
+      setUsuario(updatedUser);
+      try {
+        localStorage.setItem("usuario", JSON.stringify(updatedUser));
+      } catch {
+        // Ignora si localStorage no está disponible
+      }
+    }
+  }
+
   return (
     <AuthContext.Provider
       value={{
@@ -46,6 +58,7 @@ export function AuthProvider({ children }) {
         rolesAsignados,
         hasRole,
         refreshSession,
+        switchRole,
         logout,
       }}
     >
