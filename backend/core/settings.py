@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'gestion_administrativa',
     'gestion_acompaniamiento',
+    'gestion_emprendimiento_2',
     'gestion_convocatorias',
     'django.contrib.sites',
     'allauth',
