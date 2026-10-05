@@ -1,6 +1,6 @@
 FROM node:20-alpine
 WORKDIR /app
 COPY package*.json ./
-RUN npm install
+RUN npm ci --include=dev
 COPY . .
 CMD ["npm", "run", "dev", "--", "--host"]
