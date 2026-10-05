@@ -1,11 +1,14 @@
 import { apiClient } from "../../../services/apiClient";
 
-// TODO: confirmar el endpoint exacto con el compañero de backend (gestion_emprendimiento_2)
 export async function fetchEstudiantes() {
-  return apiClient.get("/estudiantes/");
+  const estudiantes = await apiClient.get("/estudiantes-disponibles/");
+  return estudiantes.map(({ id_usuario, nombre, correo }) => ({
+    id: id_usuario,
+    nombre,
+    correo,
+  }));
 }
 
-// TODO: confirmar el endpoint y la forma exacta del payload
 export async function registerEquipo(equipo) {
-  return apiClient.post("/equipos/", equipo);
+  return apiClient.post("/equipos/crear/", equipo);
 }

@@ -96,7 +96,8 @@ function EquipoForm() {
     try {
       await registerEquipo({
         nombre_equipo: nombreEquipo,
-        integrantes: miembros.map((m) => m.id),
+        id_usuario_lider: usuario.id_usuario,
+        id_usuarios: miembros.map((m) => m.id),
       });
       setStatus("success");
     } catch (err) {
@@ -240,7 +241,11 @@ function EquipoForm() {
               ) : errorEstudiantes ? (
                 <p className="equipo-table-msg equipo-table-msg--error">{errorEstudiantes}</p>
               ) : estudiantesFiltrados.length === 0 ? (
-                <p className="equipo-table-msg">No hay estudiantes que coincidan con la búsqueda.</p>
+                <p className="equipo-table-msg">
+                  {busqueda.trim()
+                    ? "No hay estudiantes que coincidan con la búsqueda."
+                    : "No hay estudiantes activos disponibles para agregar."}
+                </p>
               ) : (
                 <table className="equipo-table">
                   <thead>
@@ -271,9 +276,9 @@ function EquipoForm() {
               )}
             </div>
             <p className="equipo-table-hint">
-              Lista cargada desde la tabla de estudiantes registrados en la
-              plataforma. Al presionar "Agregar", el estudiante pasa
-              directamente a la lista de integrantes de arriba.
+              Se muestran estudiantes con rol activo que todavía no pertenecen
+              a otro equipo. Al presionar "Agregar", pasan a la lista de
+              integrantes de arriba.
             </p>
 
             <div className="equipo-actions">
