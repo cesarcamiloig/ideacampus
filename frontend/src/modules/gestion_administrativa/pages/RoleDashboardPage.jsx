@@ -14,38 +14,39 @@ import {
 import MainLayout from "../components/layout/MainLayout";
 import { useAuth } from "../../../context/AuthContext";
 import TutorProfileForm from "../../gestion_acompaniamiento/pages/TutorProfileForm";
+import EstudianteIniciativasPage from "../../gestion_convocatorias/pages/EstudianteIniciativasPage";
 
 const ROLE_CONFIG = {
   estudiante: {
     roleName: "Estudiante Emprendedor",
-    defaultModule: "mi-iniciativa",
+    defaultModule: "postulaciones",
     icon: GraduationCap,
     badgeColor: "bg-blue-100 text-blue-800 border-blue-200",
     subtitle:
       "Plataforma de postulación, seguimiento y madurez tecnológica de tus iniciativas de innovación.",
     description:
-      "Bienvenido a tu espacio de trabajo en GENNOVA. Desde aquí puedes registrar tu emprendimiento, dar seguimiento a la evolución de tus prototipos y postularte a las convocatorias de la UFPS.",
+      "Bienvenido a tu espacio de trabajo en GENNOVA. Desde aquí puedes postularte a las convocatorias abiertas de la UFPS, declarar el origen académico de tu proyecto y dar seguimiento a su trazabilidad.",
     modules: {
-      "mi-iniciativa": {
-        title: "Expediente de Mi Emprendimiento",
-        tag: "HU-04",
-        desc: "Registra los datos de tu iniciativa, integrantes de equipo y monitorea el nivel de madurez tecnológica (M0 a M9 / TRL).",
-        details:
-          "Permite documentar el origen académico (asignaturas, semilleros, proyectos de grado), integrantes y estado de la solución.",
-        actionLabel: "Preparar expediente",
-      },
       postulaciones: {
         title: "Convocatorias Abiertas",
-        tag: "HU-02",
-        desc: "Consulta los ciclos de postulación activos publicados por la coordinación institucional y presenta tu proyecto.",
+        tag: "HU-03",
+        desc: "Consulta los ciclos de postulación activos publicados por la coordinación y radica tu iniciativa adjuntando documentación y declarando su origen académico.",
         details:
-          "Revisa requisitos mínimos, fechas límite de entrega y rúbricas de evaluación aplicables.",
+          "Revisa requisitos mínimos, fechas límite de entrega, rúbricas de evaluación aplicables y postula tu propuesta.",
         actionLabel: "Ver convocatorias vigentes",
+      },
+      "mi-iniciativa": {
+        title: "Mis Iniciativas y Expedientes",
+        tag: "HU-03 / HU-04",
+        desc: "Consulta el historial de iniciativas radicadas, número de radicado, documentos y el nivel de madurez tecnológica (TRL).",
+        details:
+          "Trazabilidad longitudinal del origen académico (asignaturas, semilleros, proyectos de grado), integrantes y estado de la solución.",
+        actionLabel: "Ver mis radicados",
       },
     },
     stats: [
-      { label: "Nivel de Madurez", value: "M0 - M1", subtext: "Fase de Ideación / Concepto" },
-      { label: "Convocatorias", value: "Activas", subtext: "Periodo 2026-1" },
+      { label: "Nivel de Madurez", value: "M0 - M3", subtext: "Ideación a Prototipo" },
+      { label: "Convocatorias", value: "Abiertas", subtext: "Periodo 2026-1" },
       { label: "Cuenta UFPS", value: "Validada", subtext: "Acceso institucional activo" },
     ],
   },
@@ -413,64 +414,74 @@ export default function RoleDashboardPage({ role }) {
           </div>
         </div>
 
-        {/* DETALLE DEL MÓDULO SELECCIONADO */}
-        <section className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-red-600">
-                  Módulo Seleccionado
-                </span>
-                <span className="text-slate-300">•</span>
-                <span className="text-xs text-slate-500 font-medium">
-                  {currentModuleData.tag}
-                </span>
-              </div>
-              <h3 className="text-xl font-bold text-slate-900">
-                {currentModuleData.title}
-              </h3>
-            </div>
-
-            {(normalizedRole === "tutor" || normalizedRole === "mentor") && (
-              <button
-                type="button"
-                onClick={() => setShowProfileForm(true)}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700 transition-colors"
-              >
-                <User className="h-4 w-4" />
-                Actualizar Mi Perfil (HU-16)
-              </button>
-            )}
-          </div>
-
-          <div className="mt-5 space-y-4">
-            <p className="text-sm text-slate-700 leading-relaxed">
-              {currentModuleData.details}
-            </p>
-
-            <div className="rounded-xl bg-amber-50/70 border border-amber-200/70 p-4 text-xs text-amber-900 flex items-start gap-3">
-              <Clock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+        {/* CONTENIDO ESPECÍFICO SEGÚN ROL */}
+        {normalizedRole === "estudiante" ? (
+          <EstudianteIniciativasPage
+            key={activeModule}
+            initialTab={
+              activeModule === "postulaciones" ? "convocatorias" : "mis_postulaciones"
+            }
+          />
+        ) : (
+          /* DETALLE DEL MÓDULO SELECCIONADO (PARA OTROS ROLES) */
+          <section className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
               <div>
-                <p className="font-semibold">Módulo en etapa de integración continua</p>
-                <p className="mt-0.5 text-amber-800">
-                  La estructura institucional, la navegación y la sesión para el rol de{" "}
-                  <strong>{roleConfig.roleName}</strong> se encuentran 100% operativas.
-                  Los componentes específicos de este módulo se cargarán automáticamente
-                  conforme avancen las historias de usuario del equipo.
-                </p>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-red-600">
+                    Módulo Seleccionado
+                  </span>
+                  <span className="text-slate-300">•</span>
+                  <span className="text-xs text-slate-500 font-medium">
+                    {currentModuleData.tag}
+                  </span>
+                </div>
+                <h3 className="text-xl font-bold text-slate-900">
+                  {currentModuleData.title}
+                </h3>
               </div>
+
+              {(normalizedRole === "tutor" || normalizedRole === "mentor") && (
+                <button
+                  type="button"
+                  onClick={() => setShowProfileForm(true)}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700 transition-colors"
+                >
+                  <User className="h-4 w-4" />
+                  Actualizar Mi Perfil (HU-16)
+                </button>
+              )}
             </div>
 
-            <div className="flex items-center gap-4 text-xs text-slate-500 pt-2">
-              <span className="flex items-center gap-1.5">
-                <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                Validado con Google Workspace UFPS
-              </span>
-              <span>•</span>
-              <span>Base de Datos MySQL Railway conectada</span>
+            <div className="mt-5 space-y-4">
+              <p className="text-sm text-slate-700 leading-relaxed">
+                {currentModuleData.details}
+              </p>
+
+              <div className="rounded-xl bg-amber-50/70 border border-amber-200/70 p-4 text-xs text-amber-900 flex items-start gap-3">
+                <Clock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold">Módulo en etapa de integración continua</p>
+                  <p className="mt-0.5 text-amber-800">
+                    La estructura institucional, la navegación y la sesión para el rol de{" "}
+                    <strong>{roleConfig.roleName}</strong> se encuentran 100% operativas.
+                    Los componentes específicos de este módulo se cargarán automáticamente
+                    conforme avancen las historias de usuario del equipo.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 text-xs text-slate-500 pt-2">
+                <span className="flex items-center gap-1.5">
+                  <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                  Validado con Google Workspace UFPS
+                </span>
+                <span>•</span>
+                <span>Base de Datos MySQL Railway conectada</span>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
       </div>
     </MainLayout>
   );
