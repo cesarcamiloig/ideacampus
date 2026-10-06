@@ -96,3 +96,75 @@ class CrearEquipoView(APIView):
             "miembros": [ee.usuario_id for ee in estudiantes_emprendedores],
             "message": "Equipo creado exitosamente"
         }, status=status.HTTP_201_CREATED)
+
+class EquipoDetalleView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [EsEstudiante]
+
+    def _obtener_equipo_y_validar_lider(self, request, id_equipo):
+        try:
+            equipo = EquipoEmprendedor.objects.select_related('estudiante_lider').get(id_equipo=id_equipo)
+        except EquipoEmprendedor.DoesNotExist:
+            return None, Response({"error": "Equipo no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+
+        if equipo.estudiante_lider.usuario_id != request.user.id_usuario:
+            return None, Response(
+                {"error": "Solo el líder del equipo puede modificarlo"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        return equipo, None
+
+    def patch(self, request, id_equipo):
+        equipo, error_response = self._obtener_equipo_y_validar_lider(request, id_equipo)
+        if error_response:
+            return error_response
+
+        serializer = ActualizarEquipoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        nombre_nuevo = serializer.validated_data.get('nombre_equipo')
+        if nombre_nuevo:
+            equipo.nombre_equipo = nombre_nuevo
+            equipo.save(update_fields=['nombre_equipo'])
+
+        return Response({
+            "id_equipo": equipo.id_equipo,
+            "nombre_equipo": equipo.nombre_equipo,
+            "message": "Equipo actualizado exitosamente"
+        }, status=status.HTTP_200_OK)
+
+
+class EquipoMiembroView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [EsEstudiante]
+
+    def delete(self, request, id_equipo, id_usuario):
+        try:
+            equipo = EquipoEmprendedor.objects.select_related('estudiante_lider').get(id_equipo=id_equipo)
+        except EquipoEmprendedor.DoesNotExist:
+            return Response({"error": "Equipo no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+
+        if equipo.estudiante_lider.usuario_id != request.user.id_usuario:
+            return Response(
+                {"error": "Solo el líder del equipo puede eliminar miembros"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if equipo.estudiante_lider.usuario_id == id_usuario:
+            return Response(
+                {"error": "El líder no puede eliminarse a sí mismo del equipo"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            miembro = EstudianteEmprendedor.objects.get(usuario_id=id_usuario, equipo=equipo)
+        except EstudianteEmprendedor.DoesNotExist:
+            return Response(
+                {"error": "Ese usuario no pertenece a este equipo"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        miembro.equipo = None
+        miembro.save(update_fields=['equipo'])
+
+        return Response({"message": "Miembro eliminado del equipo"}, status=status.HTTP_200_OK)

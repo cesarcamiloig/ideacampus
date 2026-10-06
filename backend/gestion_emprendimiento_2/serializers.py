@@ -8,6 +8,10 @@ class EstudianteDisponibleSerializer(serializers.ModelSerializer):
         fields = ['id_usuario', 'nombre', 'correo']
 
 
+class ActualizarEquipoSerializer(serializers.Serializer):
+    nombre_equipo = serializers.CharField(max_length=150, required=False)
+
+
 class CrearEquipoSerializer(serializers.Serializer):
     nombre_equipo = serializers.CharField(max_length=150)
     id_usuario_lider = serializers.IntegerField()
