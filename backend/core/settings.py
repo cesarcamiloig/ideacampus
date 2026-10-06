@@ -21,7 +21,7 @@ DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() in ('true', '1', 'yes')
 
 ALLOWED_HOSTS = [
     host.strip()
-    for host in os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+    for host in os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver,backend').split(',')
     if host.strip()
 ]
 
@@ -66,7 +66,7 @@ SOCIALACCOUNT_PROVIDERS = {
 }
 
 # JWT SETTINGS
-JWT_SECRET = os.getenv("JWT_KEY")
+JWT_SECRET = os.getenv("JWT_KEY") or "ideacampus-dev-jwt-insecure-secret-key-32b"
 JWT_ALGORITHM = "HS256"
 JWT_EXP_DELTA_HOURS = 24
 
@@ -92,7 +92,9 @@ ROOT_URLCONF = 'core.urls'
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
-    "http://localhost:5000",  
+    "http://localhost:5000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5000",
 ]
 
 TEMPLATES = [
