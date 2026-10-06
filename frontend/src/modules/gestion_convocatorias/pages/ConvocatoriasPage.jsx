@@ -38,9 +38,10 @@ import { NotificacionesModal } from "../components/NotificacionesModal";
 export default function ConvocatoriasPage({ onNavigate }) {
   const { rolActivo, hasRole } = useAuth();
   const isGestor =
-    hasRole(["admin", "coordinador"]) ||
-    rolActivo === "admin" ||
-    rolActivo === "coordinador";
+    hasRole(["admin", "coordinador", "direccion_del_programa", "direccion"]) ||
+    ["admin", "coordinador", "direccion_del_programa", "direccion"].includes(
+      rolActivo,
+    );
 
   // Estado de convocatorias y filtros
   const [convocatorias, setConvocatorias] = useState([]);

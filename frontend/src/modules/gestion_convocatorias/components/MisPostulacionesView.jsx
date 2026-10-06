@@ -17,6 +17,7 @@ export default function MisPostulacionesView({ onNuevaPostulacion }) {
   const { usuario } = useAuth();
   const [postulaciones, setPostulaciones] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPostulacion, setSelectedPostulacion] = useState(null);
   const [selectedComprobante, setSelectedComprobante] = useState(null);
@@ -26,8 +27,15 @@ export default function MisPostulacionesView({ onNuevaPostulacion }) {
     async function load() {
       setLoading(true);
       try {
-        const data = await getMisPostulaciones(usuario?.id_usuario);
-        if (isMounted) setPostulaciones(data);
+        const data = await getMisPostulaciones(usuario);
+        if (isMounted) {
+          setPostulaciones(data);
+          setLoadError("");
+        }
+      } catch (error) {
+        if (isMounted) {
+          setLoadError(error.message || "No se pudieron cargar tus iniciativas.");
+        }
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -141,6 +149,10 @@ export default function MisPostulacionesView({ onNuevaPostulacion }) {
             Cargando tus postulaciones registradas...
           </span>
         </div>
+      ) : loadError ? (
+        <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700">
+          {loadError}
+        </div>
       ) : filtradas.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 p-8">
           <FileText className="mx-auto h-12 w-12 text-slate-300" />
@@ -213,15 +225,13 @@ export default function MisPostulacionesView({ onNuevaPostulacion }) {
                       <span className="text-slate-400">Origen: </span>
                       <span className="font-medium text-slate-800 capitalize">
                         {post.origen_academico?.tipo?.replace(/_/g, " ")}
-                        {post.origen_academico?.asignatura_nombre &&
-                          ` (${post.origen_academico.asignatura_nombre})`}
-                        {post.origen_academico?.semillero_nombre &&
-                          ` (${post.origen_academico.semillero_nombre})`}
+                        {post.origen_academico?.detalle_origen &&
+                          ` (${post.origen_academico.detalle_origen})`}
                       </span>
                     </div>
 
                     <div>
-                      <span className="text-slate-400">Madurez: </span>
+                      <span className="text-slate-400">Etapa: </span>
                       <span className="font-bold text-red-600">
                         {post.iniciativa?.trl_inicial}
                       </span>

@@ -1,0 +1,78 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 1614 >>
+stream
+BT
+50 790 Td
+16 TL
+/F2 16 Tf
+T* (Resumen Ejecutivo \227 GENNOVA Sprint 1) Tj
+/F1 10 Tf
+14 TL
+T*
+T* (Sprint: GENNOVA Sprint 1) Tj
+T* (Fechas: 15 de septiembre \226 5 de octubre de 2026) Tj
+T* (Objetivo del sprint: no se defini\363 un objetivo formal.) Tj
+T* (Resultado: sprint completado \227 7 de 7 incidencias entregadas \(100%\).) Tj
+T* (Velocidad: 31 puntos de historia entregados en 3 semanas.) Tj
+T*
+/F2 12 Tf
+T* (Logros clave) Tj
+/F1 10 Tf
+T* (\225 Fundamentos del sistema: HU-01 Autenticaci\363n y Control de Acceso \(GENNOVA-10\)) Tj
+T* (  y Creaci\363n de la Base de Datos \(GENNOVA-35\), resueltas en los primeros 10 d\355as.) Tj
+T* (\225 Convocatorias y registro: HU-02 Configuraci\363n y Publicaci\363n de Convocatorias) Tj
+T* (  \(GENNOVA-11, 8 pts\) y HU-03 Postulaci\363n y Registro de Iniciativa \(GENNOVA-12, 5 pts\).) Tj
+T*
+/F2 12 Tf
+T* (Obst\341culos y riesgos) Tj
+/F1 10 Tf
+T* (\225 Entregas concentradas al final: 3 de 7 incidencias se cerraron el \372ltimo d\355a.) Tj
+T* (\225 Sin objetivo de sprint documentado, lo que dificulta medir el alineamiento.) Tj
+T* (\225 Impacto: no se registraron bloqueos formales ni retrasos en el cronograma.) Tj
+T*
+/F2 12 Tf
+T* (Cambio de alcance) Tj
+/F1 10 Tf
+T* (\225 A\361adido: ninguno. Eliminado: ninguno. Mantenido: las 7 incidencias planificadas.) Tj
+T*
+/F2 12 Tf
+T* (Recomendaciones para el Sprint 2) Tj
+/F1 10 Tf
+T* (1. Definir un objetivo de sprint claro y medible antes de iniciar el Sprint 2.) Tj
+T* (2. Hacer una revisi\363n a mitad de sprint para detectar bloqueos a tiempo.) Tj
+T*
+/F1 9 Tf
+T* (Generado por Rovo el 5 de octubre de 2026.) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000001917 00000 n 
+0000002014 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+2116
+%%EOF

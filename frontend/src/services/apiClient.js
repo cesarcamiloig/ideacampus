@@ -2,7 +2,10 @@ export const BASE_API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:8000/api"
 ).replace(/\/$/, "");
 
-export async function apiRequest(endpoint, { method = "GET", body, headers = {}, auth = true } = {}) {
+export async function apiRequest(
+  endpoint,
+  { method = "GET", body, headers = {}, auth = true, responseType = "json" } = {},
+) {
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   const url = `${BASE_API_URL}${cleanEndpoint}`;
 
@@ -27,6 +30,10 @@ export async function apiRequest(endpoint, { method = "GET", body, headers = {},
     body: payload,
   });
 
+  if (responseType === "blob" && response.ok) {
+    return response.blob();
+  }
+
   let data = null;
   const contentType = response.headers.get("content-type") || "";
   if (contentType.includes("application/json")) {
@@ -50,6 +57,8 @@ export async function apiRequest(endpoint, { method = "GET", body, headers = {},
 
 export const apiClient = {
   get: (endpoint, options) => apiRequest(endpoint, { ...options, method: "GET" }),
+  download: (endpoint, options) =>
+    apiRequest(endpoint, { ...options, method: "GET", responseType: "blob" }),
   post: (endpoint, body, options) => apiRequest(endpoint, { ...options, method: "POST", body }),
   put: (endpoint, body, options) => apiRequest(endpoint, { ...options, method: "PUT", body }),
   patch: (endpoint, body, options) => apiRequest(endpoint, { ...options, method: "PATCH", body }),

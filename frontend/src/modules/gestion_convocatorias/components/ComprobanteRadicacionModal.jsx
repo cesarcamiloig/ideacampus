@@ -102,10 +102,8 @@ export default function ComprobanteRadicacionModal({
               <span className="text-slate-500 font-medium">Origen Académico:</span>
               <span className="font-semibold text-slate-800 capitalize">
                 {postulacion.origen_academico?.tipo?.replace(/_/g, " ")}{" "}
-                {postulacion.origen_academico?.asignatura_nombre &&
-                  `(${postulacion.origen_academico.asignatura_nombre})`}
-                {postulacion.origen_academico?.semillero_nombre &&
-                  `(${postulacion.origen_academico.semillero_nombre})`}
+                {postulacion.origen_academico?.detalle_origen &&
+                  `(${postulacion.origen_academico.detalle_origen})`}
               </span>
             </div>
 

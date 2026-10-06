@@ -1,14 +1,40 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   X,
   FileText,
   GraduationCap,
   Users,
-  ExternalLink,
+  Download,
 } from "lucide-react";
+import { descargarDocumentoIniciativa } from "../services/postulacionService";
 
 export default function DetalleExpedienteModal({ postulacion, onCerrar }) {
+  const [descargando, setDescargando] = useState(false);
+  const [errorDescarga, setErrorDescarga] = useState("");
+
   if (!postulacion) return null;
+
+  const descargarDocumento = async (archivo) => {
+    setDescargando(true);
+    setErrorDescarga("");
+    try {
+      const documento = await descargarDocumentoIniciativa(
+        postulacion.id_iniciativa,
+      );
+      const url = URL.createObjectURL(documento);
+      const enlace = document.createElement("a");
+      enlace.href = url;
+      enlace.download = archivo.nombre;
+      document.body.appendChild(enlace);
+      enlace.click();
+      enlace.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      setErrorDescarga(error.message || "No se pudo descargar el documento.");
+    } finally {
+      setDescargando(false);
+    }
+  };
 
   const getEstadoBadge = (estado) => {
     switch (estado) {
@@ -81,7 +107,7 @@ export default function DetalleExpedienteModal({ postulacion, onCerrar }) {
                 Datos de la Iniciativa
               </span>
               <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold text-[10px]">
-                {postulacion.iniciativa?.categoria}
+                {postulacion.iniciativa?.tipo}
               </span>
             </div>
 
@@ -90,34 +116,25 @@ export default function DetalleExpedienteModal({ postulacion, onCerrar }) {
             </h4>
 
             <div>
-              <span className="font-semibold text-slate-700">Resumen Ejecutivo:</span>
+              <span className="font-semibold text-slate-700">Descripción:</span>
               <p className="text-slate-600 mt-0.5 leading-relaxed">
                 {postulacion.iniciativa?.resumen_ejecutivo}
               </p>
             </div>
 
-            <div>
-              <span className="font-semibold text-slate-700">Problema y Solución:</span>
-              <p className="text-slate-600 mt-0.5 leading-relaxed">
-                {postulacion.iniciativa?.problema_solucion}
-              </p>
-            </div>
-
-            <div className="flex items-center gap-4 pt-1">
-              <div className="flex items-center gap-1.5">
-                <span className="text-slate-500">Madurez Tecnológica:</span>
-                <span className="font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded">
-                  {postulacion.iniciativa?.trl_inicial}
-                </span>
+            <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2">
+              <div>
+                <span className="text-slate-500">Sector tecnológico:</span>
+                <p className="font-semibold text-slate-800">
+                  {postulacion.iniciativa?.sector_tecnologico || "—"}
+                </p>
               </div>
-              {postulacion.iniciativa?.impacto_esperado && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-slate-500">Impacto:</span>
-                  <span className="text-slate-700 italic">
-                    {postulacion.iniciativa.impacto_esperado}
-                  </span>
-                </div>
-              )}
+              <div>
+                <span className="text-slate-500">Etapa actual:</span>
+                <p className="font-semibold text-slate-800">
+                  {postulacion.iniciativa?.etapa_actual || "—"}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -136,52 +153,12 @@ export default function DetalleExpedienteModal({ postulacion, onCerrar }) {
                 </p>
               </div>
 
-              {postulacion.origen_academico?.tipo === "asignatura" && (
-                <>
-                  <div>
-                    <span className="text-slate-500 font-medium">Asignatura:</span>
-                    <p className="font-bold text-slate-800 mt-0.5">
-                      {postulacion.origen_academico.asignatura_nombre}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 font-medium">Docente Titular:</span>
-                    <p className="font-semibold text-slate-800 mt-0.5">
-                      {postulacion.origen_academico.docente_titular}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 font-medium">Semestre Cursado:</span>
-                    <p className="font-semibold text-slate-800 mt-0.5">
-                      {postulacion.origen_academico.asignatura_semestre || "2025-2"}
-                    </p>
-                  </div>
-                </>
-              )}
-
-              {postulacion.origen_academico?.tipo === "semillero" && (
-                <>
-                  <div>
-                    <span className="text-slate-500 font-medium">Semillero:</span>
-                    <p className="font-bold text-slate-800 mt-0.5">
-                      {postulacion.origen_academico.semillero_nombre}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 font-medium">Tutor / Coordinador:</span>
-                    <p className="font-semibold text-slate-800 mt-0.5">
-                      {postulacion.origen_academico.tutor_semillero}
-                    </p>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="pt-2 border-t border-slate-200">
-              <span className="text-slate-500 font-medium">Descripción de la Trayectoria Previa:</span>
-              <p className="text-slate-700 mt-1 italic leading-relaxed">
-                "{postulacion.origen_academico?.descripcion_origen}"
-              </p>
+              <div>
+                <span className="text-slate-500 font-medium">Detalle del origen:</span>
+                <p className="font-bold text-slate-800 mt-0.5">
+                  {postulacion.origen_academico?.detalle_origen || "—"}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -207,11 +184,11 @@ export default function DetalleExpedienteModal({ postulacion, onCerrar }) {
             </div>
           </div>
 
-          {/* DOCUMENTACIÓN ADJUNTA Y ENLACES */}
+          {/* DOCUMENTO ADJUNTO */}
           <div className="rounded-xl border border-slate-200 p-4 space-y-3 bg-slate-50/50">
             <div className="flex items-center gap-2 text-slate-800 font-bold uppercase tracking-wider text-[11px]">
               <FileText className="h-4 w-4 text-red-600" />
-              <span>Documentación y Soportes Adjuntos</span>
+              <span>Documento adjunto</span>
             </div>
 
             <div className="space-y-2">
@@ -220,32 +197,32 @@ export default function DetalleExpedienteModal({ postulacion, onCerrar }) {
                   key={file.id}
                   className="flex items-center justify-between p-2.5 rounded-lg bg-white border border-slate-200"
                 >
-                  <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => descargarDocumento(file)}
+                    disabled={descargando}
+                    className="flex min-w-0 items-center gap-2 text-left text-red-700 transition-colors hover:text-red-800 disabled:cursor-wait disabled:opacity-60"
+                    title="Descargar PDF"
+                  >
                     <FileText className="h-4 w-4 text-red-600" />
-                    <span className="font-medium text-slate-800">{file.nombre}</span>
+                    <span className="truncate font-medium underline decoration-red-200 underline-offset-2">
+                      {file.nombre}
+                    </span>
                     <span className="text-slate-400">({file.tamanio})</span>
-                  </div>
-                  <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-                    Cargado
+                    <Download className="h-4 w-4 shrink-0" />
+                  </button>
+                  <span className="ml-2 shrink-0 text-[10px] font-semibold text-emerald-700">
+                    {descargando ? "Descargando..." : "PDF"}
                   </span>
                 </div>
               ))}
             </div>
-
-            {postulacion.documentacion?.repositorio_url && (
-              <div className="pt-2 flex items-center gap-2">
-                <span className="text-slate-500 font-medium">Repositorio:</span>
-                <a
-                  href={postulacion.documentacion.repositorio_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-red-600 hover:underline flex items-center gap-1 font-mono"
-                >
-                  <span>{postulacion.documentacion.repositorio_url}</span>
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-              </div>
+            {errorDescarga && (
+              <p role="alert" className="text-xs font-medium text-red-600">
+                {errorDescarga}
+              </p>
             )}
+
           </div>
         </div>
 

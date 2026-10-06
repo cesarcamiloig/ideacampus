@@ -1,5 +1,5 @@
 import { apiClient } from "../../../services/apiClient";
-import { getConvocatorias } from "./convocatoriaService";
+import { getConvocatorias, getConvocatoriaById } from "./convocatoriaService";
 
 const STORAGE_PREFIX = "ideacampus:postulaciones:";
 
@@ -98,8 +98,9 @@ export async function getConvocatoriasAbiertas(params = {}) {
 /**
  * Obtiene las postulaciones realizadas por el estudiante actual desde el backend.
  */
-export async function getMisPostulaciones(usuarioId) {
-  const key = `${STORAGE_PREFIX}${usuarioId || "default"}`;
+export async function getMisPostulaciones(usuario) {
+  const usuarioId = usuario?.id_usuario || (typeof usuario === "string" || typeof usuario === "number" ? usuario : "default");
+  const key = `${STORAGE_PREFIX}${usuarioId}`;
 
   try {
     const remoteData = await apiClient.get("/iniciativas/");
@@ -155,82 +156,51 @@ export async function cambiarEstadoIniciativa(idIniciativa, nuevoEstado) {
  * Registra una nueva postulación de iniciativa a una convocatoria abierta (HU-03).
  * Soporta carga real de archivo PDF mediante multipart/form-data.
  */
-export async function registrarPostulacion(postulacionData, usuario) {
-  const usuarioId = usuario?.id_usuario || "default";
-
-  // Preparar payload para backend /iniciativas/
+export async function registrarPostulacion(postulacionData, usuario, convocatoria) {
   const formData = new FormData();
-  formData.append("convocatoria", postulacionData.id_convocatoria);
-  formData.append("nombre", (postulacionData.titulo || "Iniciativa de Innovación").slice(0, 150));
-  
-  const descripcionCompleta = [
-    postulacionData.resumen_ejecutivo,
-    postulacionData.problema_solucion ? `Problema/Solución: ${postulacionData.problema_solucion}` : null
-  ].filter(Boolean).join(" | ").slice(0, 1000);
-  
-  formData.append("descripcion", descripcionCompleta || "Iniciativa registrada");
-  
-  const tipoNorm = (postulacionData.categoria || "").toLowerCase().includes("innovación")
-    ? "innovacion"
-    : "emprendimiento";
-  formData.append("tipo", tipoNorm);
+  if (postulacionData instanceof FormData) {
+    for (const [campo, valor] of postulacionData.entries()) {
+      formData.append(campo, valor);
+    }
+  } else {
+    formData.append("convocatoria", postulacionData.convocatoria || postulacionData.id_convocatoria);
+    formData.append("nombre", (postulacionData.nombre || postulacionData.titulo || "Iniciativa de Innovación").slice(0, 150));
+    formData.append("descripcion", postulacionData.descripcion || postulacionData.resumen_ejecutivo || "Iniciativa registrada");
+    formData.append("tipo", postulacionData.tipo || "emprendimiento");
+    formData.append("origen_academico", postulacionData.origen_academico || "asignatura");
+    formData.append("detalle_origen", (postulacionData.detalle_origen || postulacionData.asignatura_nombre || "Origen UFPS").slice(0, 150));
+    formData.append("sector_tecnologico", (postulacionData.sector_tecnologico || postulacionData.categoria || "Software").slice(0, 100));
+    formData.append("etapa_actual", (postulacionData.etapa_actual || postulacionData.trl_inicial || "M1").slice(0, 50));
 
-  const origenValido = [
-    "asignatura",
-    "proyecto_aula",
-    "integrador",
-    "semillero",
-    "practica",
-    "trabajo_grado",
-  ].includes(postulacionData.origen_tipo)
-    ? postulacionData.origen_tipo
-    : "asignatura";
-  formData.append("origen_academico", origenValido);
-
-  const detalleOrigen = [
-    postulacionData.asignatura_nombre,
-    postulacionData.semillero_nombre,
-    postulacionData.docente_titular ? `Docente: ${postulacionData.docente_titular}` : null,
-    postulacionData.descripcion_origen,
-  ].filter(Boolean).join(" - ").slice(0, 150);
-  formData.append("detalle_origen", detalleOrigen || "Origen UFPS declarado");
-
-  formData.append("sector_tecnologico", (postulacionData.categoria || "Software").slice(0, 100));
-  formData.append("etapa_actual", (postulacionData.trl_inicial || "M1").slice(0, 50));
-
-  // Archivo PDF adjunto
-  if (postulacionData.archivo_file instanceof File) {
-    formData.append("documento_adjunto", postulacionData.archivo_file);
-  } else if (Array.isArray(postulacionData.archivos)) {
-    const rawFileObj = postulacionData.archivos.find((a) => a.file instanceof File);
-    if (rawFileObj) {
-      formData.append("documento_adjunto", rawFileObj.file);
+    if (postulacionData.documento_adjunto instanceof File) {
+      formData.append("documento_adjunto", postulacionData.documento_adjunto);
+    } else if (postulacionData.archivo_file instanceof File) {
+      formData.append("documento_adjunto", postulacionData.archivo_file);
+    } else if (Array.isArray(postulacionData.archivos)) {
+      const rawFileObj = postulacionData.archivos.find((a) => a.file instanceof File);
+      if (rawFileObj) {
+        formData.append("documento_adjunto", rawFileObj.file);
+      }
     }
   }
 
-  let createdIni = null;
-  try {
-    createdIni = await apiClient.post("/iniciativas/", formData);
-  } catch (err) {
-    console.error("Error al registrar iniciativa en backend:", err);
-    throw err;
-  }
-
+  const createdIni = await apiClient.post("/iniciativas/", formData);
   const uiPostulacion = normalizarIniciativaParaUI(createdIni);
 
-  // Actualizar caché local del estudiante
+  const usuarioId = usuario?.id_usuario || "default";
   const key = `${STORAGE_PREFIX}${usuarioId}`;
-  let lista = [];
   try {
-    const actual = localStorage.getItem(key);
-    lista = actual ? JSON.parse(actual) : [];
-  } catch {
-    lista = [];
+    const anteriores = JSON.parse(localStorage.getItem(key) || "[]");
+    localStorage.setItem(key, JSON.stringify([uiPostulacion, ...anteriores]));
+  } catch (error) {
+    console.error("No se pudo guardar el comprobante de la iniciativa localmente:", error);
   }
-  lista.unshift(uiPostulacion);
-  localStorage.setItem(key, JSON.stringify(lista));
 
   return uiPostulacion;
+}
+
+export async function descargarDocumentoIniciativa(idIniciativa) {
+  return apiClient.download(`/iniciativas/${idIniciativa}/documento/`);
 }
 
 /**

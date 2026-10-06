@@ -1,4 +1,5 @@
 from django.db.models import Q
+from django.http import FileResponse
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -30,7 +31,12 @@ class ConvocatoriaViewSet(viewsets.ModelViewSet):
     """
     authentication_classes = [JWTAuthentication]
     serializer_class = ConvocatoriaSerializer
-    roles_permitidos = ["coordinador", "admin"]
+    roles_permitidos = [
+        "admin",
+        "coordinador",
+        "direccion_del_programa",
+        "direccion",
+    ]
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -44,8 +50,15 @@ class ConvocatoriaViewSet(viewsets.ModelViewSet):
         usuario = self.request.user
         roles_usuario = getattr(usuario, 'roles_asignados', [])
         rol_activo = getattr(usuario, 'rol_activo', '')
-        es_gestor = ('admin' in roles_usuario or 'coordinador' in roles_usuario or
-                     rol_activo in ['admin', 'coordinador'])
+        roles_gestores = [
+            'admin',
+            'coordinador',
+            'direccion_del_programa',
+            'direccion',
+        ]
+        es_gestor = any(rol in roles_usuario for rol in roles_gestores) or (
+            rol_activo in roles_gestores
+        )
 
         if es_gestor:
             qs = Convocatoria.objects.all()
@@ -344,3 +357,24 @@ class IniciativaViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(iniciativas, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'])
+    def documento(self, request, pk=None):
+        iniciativa = self.get_object()
+        documento = iniciativa.documentos.first()
+        if (
+            not documento
+            or not documento.archivo
+            or not documento.archivo.storage.exists(documento.archivo.name)
+        ):
+            return Response(
+                {'error': 'La iniciativa no tiene un documento adjunto.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return FileResponse(
+            documento.archivo.open('rb'),
+            as_attachment=True,
+            filename=documento.nombre_original,
+            content_type='application/pdf',
+        )

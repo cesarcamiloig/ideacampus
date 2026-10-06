@@ -158,6 +158,15 @@ class IniciativaSerializer(serializers.ModelSerializer):
         # 3. Regla: La convocatoria debe estar abierta al postular
         if self.instance is None and value.estado.lower() != 'abierta':
             raise serializers.ValidationError("No se pueden enviar iniciativas a una convocatoria que no esté abierta.")
+
+        request = self.context.get('request')
+        usuario = getattr(request, 'user', None)
+        if (getattr(usuario, 'rol_activo', None) == 'estudiante' and
+                Iniciativa.objects.filter(usuario=usuario, convocatoria=value).exists()):
+            raise serializers.ValidationError(
+                "Ya tienes una iniciativa postulada en esta convocatoria."
+            )
+
         return value
 
     def create(self, validated_data):
