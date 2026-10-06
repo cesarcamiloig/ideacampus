@@ -21,9 +21,13 @@ DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() in ('true', '1', 'yes')
 
 ALLOWED_HOSTS = [
     host.strip()
-    for host in os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver,backend').split(',')
+    for host in os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver,backend,.onrender.com').split(',')
     if host.strip()
 ]
+if '*' not in ALLOWED_HOSTS:
+    for default_h in ['.onrender.com', 'ideacampus-backend.onrender.com']:
+        if default_h not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(default_h)
 
 
 INSTALLED_APPS = [
