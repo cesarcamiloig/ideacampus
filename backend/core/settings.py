@@ -1,12 +1,16 @@
-from pathlib import Path
-
-
 import os
+from pathlib import Path
 from dotenv import load_dotenv
+
+try:
+    import dj_database_url
+except ImportError:
+    dj_database_url = None
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / '../.env')
+load_dotenv()
 
 SECRET_KEY = os.getenv(
     'DJANGO_SECRET_KEY',
@@ -114,16 +118,22 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 import sys
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': os.getenv('DB_NAME'),
-        'USER': os.getenv('DB_USER'),
-        'PASSWORD': os.getenv('DB_PASSWORD'),
-        'HOST': os.getenv('DB_HOST'),
-        'PORT': os.getenv('DB_PORT'),
+DATABASE_URL = os.getenv('DATABASE_URL')
+if DATABASE_URL and dj_database_url:
+    DATABASES = {
+        'default': dj_database_url.config(default=DATABASE_URL)
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': os.getenv('DB_NAME'),
+            'USER': os.getenv('DB_USER'),
+            'PASSWORD': os.getenv('DB_PASSWORD'),
+            'HOST': os.getenv('DB_HOST'),
+            'PORT': os.getenv('DB_PORT'),
+        }
+    }
 
 if 'test' in sys.argv:
     DATABASES['default'] = {
