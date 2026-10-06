@@ -6,7 +6,6 @@ import {
   Printer,
   ArrowRight,
   ShieldCheck,
-  X,
 } from "lucide-react";
 
 export default function ComprobanteRadicacionModal({

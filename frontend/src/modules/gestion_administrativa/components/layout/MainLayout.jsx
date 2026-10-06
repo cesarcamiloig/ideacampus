@@ -29,7 +29,6 @@ export default function MainLayout({
     onModuleChange,
     onNavigate,
     activeRole: propActiveRole,
-    onRoleChange,
 }) {
     // Estado del menú desplegable de perfil
     const [profileMenuOpen, setProfileMenuOpen] = useState(false)

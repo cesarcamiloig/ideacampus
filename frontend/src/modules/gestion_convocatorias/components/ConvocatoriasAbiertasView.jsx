@@ -33,7 +33,7 @@ export default function ConvocatoriasAbiertasView({ onSelectConvocatoria, onVerM
           setConvocatorias(data);
           setError(null);
         }
-      } catch (err) {
+      } catch {
         if (isMounted) {
           setError("No fue posible cargar las convocatorias abiertas.");
         }
