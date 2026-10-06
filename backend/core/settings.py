@@ -106,6 +106,14 @@ CORS_ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 
+for default_frontend in ['https://ideacampus.pages.dev']:
+    if default_frontend not in CORS_ALLOWED_ORIGINS:
+        CORS_ALLOWED_ORIGINS.append(default_frontend)
+
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.pages\.dev$",
+]
+
 CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'False').lower() in ('true', '1', 'yes')
 
 CSRF_TRUSTED_ORIGINS = [
@@ -116,6 +124,10 @@ CSRF_TRUSTED_ORIGINS = [
     ).split(',')
     if origin.strip()
 ]
+
+for default_csrf in ['https://ideacampus.pages.dev', 'https://*.pages.dev']:
+    if default_csrf not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(default_csrf)
 
 TEMPLATES = [
     {
