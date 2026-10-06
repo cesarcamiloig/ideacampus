@@ -5,7 +5,7 @@ import PeriodosTab from "../components/PeriodosTab"
 import RolesTab from "../components/RolesTab"
 import { getPeriodos } from "../services/parametroService"
 
-export default function AdminParametrosPage() {
+export default function AdminParametrosPage({ onNavigate }) {
   const [activeTab, setActiveTab] = useState("variables")
   const [activePeriodos, setActivePeriodos] = useState([])
 
@@ -24,7 +24,7 @@ export default function AdminParametrosPage() {
   }, [activeTab])
 
   return (
-    <MainLayout activeModule="parametros">
+    <MainLayout activeModule="parametros" onNavigate={onNavigate}>
       <div className="mx-auto w-full max-w-5xl">
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mb-6">
           Módulo de Administración Paramétrica
