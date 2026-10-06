@@ -15,6 +15,7 @@ import { useAuth } from "../../../context/AuthContext";
 import TutorProfileForm from "../../gestion_acompaniamiento/pages/TutorProfileForm";
 import EstudianteIniciativasPage from "../../gestion_convocatorias/pages/EstudianteIniciativasPage";
 import EquipoPage from "../../gestion_emprendimiento_2/pages/EquipoPage";
+import BancoIniciativasView from "../../gestion_convocatorias/components/BancoIniciativasView";
 
 const ROLE_CONFIG = {
   estudiante: {
@@ -257,14 +258,14 @@ const ROLE_CONFIG = {
   },
 };
 
-export default function RoleDashboardPage({ role, onNavigate }) {
+export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
   const { usuario } = useAuth();
   const normalizedRole = (role || usuario?.rol || "estudiante").trim().toLowerCase();
   const roleConfig =
     ROLE_CONFIG[normalizedRole] ||
     ROLE_CONFIG.estudiante;
 
-  const [activeModule, setActiveModule] = useState(roleConfig.defaultModule);
+  const [activeModule, setActiveModule] = useState(defaultModule || roleConfig.defaultModule);
   const [showProfileForm, setShowProfileForm] = useState(false);
 
   // Si es tutor o mentor y seleccionó el módulo 'perfil' o activó el flag
@@ -385,6 +386,8 @@ export default function RoleDashboardPage({ role, onNavigate }) {
               }
             />
           )
+        ) : activeModule === "emprendimientos" || activeModule === "iniciativas" ? (
+          <BancoIniciativasView key="banco-iniciativas" />
         ) : (
           /* DETALLE DEL MÓDULO SELECCIONADO (PARA OTROS ROLES) */
           <section className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">

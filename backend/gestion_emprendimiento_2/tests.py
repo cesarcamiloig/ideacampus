@@ -62,6 +62,27 @@ class GestionEquiposEmprendedoresTests(APITestCase):
         UsuarioRol.objects.create(usuario=self.coordinador, rol=self.rol_coordinador, estado="activo")
         self.token_coordinador = generar_token(self.coordinador, "coordinador")
 
+        # 3. Convocatoria e Iniciativa aprobada perteneciente al líder
+        from datetime import timedelta
+        from django.utils import timezone
+        from gestion_convocatorias.models import Convocatoria, Iniciativa
+
+        now = timezone.now()
+        self.convocatoria = Convocatoria.objects.create(
+            nombre="Convocatoria 2026",
+            fecha_apertura=now - timedelta(days=1),
+            fecha_cierre=now + timedelta(days=20),
+            estado="abierta",
+        )
+        self.iniciativa_aprobada = Iniciativa.objects.create(
+            convocatoria=self.convocatoria,
+            usuario=self.lider,
+            nombre="Plataforma de Innovación",
+            tipo="emprendimiento",
+            origen_academico="asignatura",
+            estado="aprobada"
+        )
+
     def test_estudiantes_disponibles(self):
         """Verifica que solo liste estudiantes activos sin equipo, excluyendo al usuario solicitante."""
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_lider}")
@@ -250,3 +271,86 @@ class GestionEquiposEmprendedoresTests(APITestCase):
         # Verificar en base de datos
         estudiante_libre = Estudiante.objects.get(usuario=self.estudiante_libre)
         self.assertEqual(estudiante_libre.equipo_id, id_equipo)
+
+    def test_crear_equipo_con_iniciativa_no_aprobada_falla(self):
+        """Un estudiante NO puede registrar un equipo si su iniciativa está pendiente o rechazada."""
+        from gestion_convocatorias.models import Iniciativa
+        iniciativa_pendiente = Iniciativa.objects.create(
+            convocatoria=self.convocatoria,
+            usuario=self.lider,
+            nombre="Iniciativa En Espera",
+            tipo="emprendimiento",
+            origen_academico="asignatura",
+            estado="pendiente"
+        )
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_lider}")
+        payload = {
+            "nombre_equipo": "Equipo No Permitido",
+            "id_usuario_lider": self.lider.id_usuario,
+            "id_iniciativa": iniciativa_pendiente.id_iniciativa,
+            "id_usuarios": [self.lider.id_usuario, self.miembro1.id_usuario],
+        }
+        res = self.client.post("/api/equipos/crear/", payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("aprobada", res.data["error"])
+
+    def test_crear_equipo_con_iniciativa_de_otro_estudiante_falla(self):
+        """Un estudiante NO puede crear un equipo usando la iniciativa de otro estudiante."""
+        from gestion_convocatorias.models import Iniciativa
+        iniciativa_ajena = Iniciativa.objects.create(
+            convocatoria=self.convocatoria,
+            usuario=self.miembro1,
+            nombre="Iniciativa de Daniel",
+            tipo="emprendimiento",
+            origen_academico="asignatura",
+            estado="aprobada"
+        )
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_lider}")
+        payload = {
+            "nombre_equipo": "Equipo Con Iniciativa Ajena",
+            "id_usuario_lider": self.lider.id_usuario,
+            "id_iniciativa": iniciativa_ajena.id_iniciativa,
+            "id_usuarios": [self.lider.id_usuario, self.miembro1.id_usuario],
+        }
+        res = self.client.post("/api/equipos/crear/", payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("tú mismo", res.data["error"])
+
+    def test_eliminar_equipo_por_lider_exitoso(self):
+        """El líder puede eliminar su equipo y liberar a los integrantes."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_lider}")
+        res_crear = self.client.post("/api/equipos/crear/", {
+            "nombre_equipo": "Equipo Para Eliminar",
+            "id_usuario_lider": self.lider.id_usuario,
+            "id_iniciativa": self.iniciativa_aprobada.id_iniciativa,
+            "id_usuarios": [self.lider.id_usuario, self.miembro1.id_usuario],
+        }, format="json")
+        id_equipo = res_crear.data["id_equipo"]
+
+        # Líder elimina su equipo vía /api/equipos/<id>/
+        res_del = self.client.delete(f"/api/equipos/{id_equipo}/")
+        self.assertEqual(res_del.status_code, status.HTTP_200_OK)
+        self.assertFalse(EquipoEmprendedor.objects.filter(id_equipo=id_equipo).exists())
+
+        # Los estudiantes quedan sin equipo
+        self.assertIsNone(Estudiante.objects.get(usuario=self.lider).equipo)
+        self.assertIsNone(Estudiante.objects.get(usuario=self.miembro1).equipo)
+
+    def test_eliminar_equipo_por_miembro_no_lider_falla(self):
+        """Un integrante que no es líder NO puede eliminar el equipo."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_lider}")
+        res_crear = self.client.post("/api/equipos/crear/", {
+            "nombre_equipo": "Equipo Fuerte",
+            "id_usuario_lider": self.lider.id_usuario,
+            "id_iniciativa": self.iniciativa_aprobada.id_iniciativa,
+            "id_usuarios": [self.lider.id_usuario, self.miembro1.id_usuario],
+        }, format="json")
+        id_equipo = res_crear.data["id_equipo"]
+
+        # Miembro intenta eliminar
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_miembro1}")
+        res_del = self.client.delete(f"/api/equipos/{id_equipo}/")
+        self.assertEqual(res_del.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(EquipoEmprendedor.objects.filter(id_equipo=id_equipo).exists())

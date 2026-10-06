@@ -11,19 +11,24 @@ import {
   Search,
   Calendar,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
+  FileText,
+  ExternalLink,
 } from "lucide-react";
 import {
   actualizarEquipo,
   eliminarMiembro,
   agregarMiembro,
   fetchEstudiantes,
+  eliminarEquipo,
 } from "../services/equipoService";
 
 export default function MiEquipoView({ equipo, onActualizarEquipo }) {
   const [editandoNombre, setEditandoNombre] = useState(false);
   const [nuevoNombre, setNuevoNombre] = useState(equipo.nombre_equipo || "");
   const [guardandoNombre, setGuardandoNombre] = useState(false);
+  const [eliminandoEquipo, setEliminandoEquipo] = useState(false);
 
   // Búsqueda y agregar estudiantes
   const [busqueda, setBusqueda] = useState("");
@@ -37,6 +42,31 @@ export default function MiEquipoView({ equipo, onActualizarEquipo }) {
   const [mensajeError, setMensajeError] = useState("");
 
   const esLider = Boolean(equipo.es_lider);
+
+  const handleEliminarEquipo = async () => {
+    if (
+      !window.confirm(
+        "¿Estás seguro de que deseas disolver y eliminar este equipo? Se desvincularán todos los integrantes y podrás registrar un nuevo equipo para tu iniciativa aprobada cuando lo requieras."
+      )
+    ) {
+      return;
+    }
+    setEliminandoEquipo(true);
+    setMensajeError("");
+    setMensajeExito("");
+    try {
+      await eliminarEquipo(equipo.id_equipo);
+      setMensajeExito("Equipo disuelto y eliminado exitosamente.");
+      if (onActualizarEquipo) {
+        setTimeout(() => {
+          onActualizarEquipo();
+        }, 600);
+      }
+    } catch (err) {
+      setMensajeError(err.message || "Error al eliminar el equipo.");
+      setEliminandoEquipo(false);
+    }
+  };
 
   // Cargar estudiantes disponibles si es líder
   useEffect(() => {
@@ -255,6 +285,52 @@ export default function MiEquipoView({ equipo, onActualizarEquipo }) {
           </div>
         </div>
 
+        {/* INICIATIVA APROBADA ASOCIADA (HU-03 / HU-04) */}
+        {equipo.iniciativa ? (
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-200 px-2.5 py-0.5 text-xs font-bold text-emerald-800">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                    Iniciativa Aprobada Vinculada
+                  </span>
+                  {equipo.iniciativa.radicado && (
+                    <span className="text-xs font-mono font-medium text-slate-500">
+                      Radicado: {equipo.iniciativa.radicado}
+                    </span>
+                  )}
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  {equipo.iniciativa.titulo}
+                </h4>
+                {equipo.iniciativa.convocatoria_nombre && (
+                  <p className="text-xs text-slate-500">
+                    Convocatoria: <span className="font-semibold text-slate-700">{equipo.iniciativa.convocatoria_nombre}</span>
+                  </p>
+                )}
+                {equipo.iniciativa.descripcion && (
+                  <p className="text-xs text-slate-600 line-clamp-2 mt-0.5">
+                    {equipo.iniciativa.descripcion}
+                  </p>
+                )}
+              </div>
+              {equipo.iniciativa.documento_url && (
+                <a
+                  href={equipo.iniciativa.documento_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 self-start sm:self-center shrink-0 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors shadow-sm"
+                >
+                  <FileText className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>Ver Documento</span>
+                  <ExternalLink className="h-3 w-3 text-slate-400" />
+                </a>
+              )}
+            </div>
+          </div>
+        ) : null}
+
         {/* MENSAJE DE PERMISOS */}
         <div className="mt-4 rounded-xl bg-slate-50 p-4 text-xs text-slate-600 border border-slate-100">
           {esLider ? (
@@ -420,6 +496,32 @@ export default function MiEquipoView({ equipo, onActualizarEquipo }) {
                   </tbody>
                 </table>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* ZONA DE GESTIÓN AVANZADA / DISOLUCIÓN (SOLO LÍDER) */}
+        {esLider && (
+          <div className="mt-8 rounded-xl border border-red-200 bg-red-50/40 p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-red-800 flex items-center gap-1.5">
+                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                  Disolver este Equipo Emprendedor
+                </h4>
+                <p className="text-xs text-slate-600 mt-1">
+                  Si eliminas este equipo, todos los integrantes quedarán libres y podrás volver a conformar un nuevo equipo para tu iniciativa aprobada cuando lo requieras.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleEliminarEquipo}
+                disabled={eliminandoEquipo}
+                className="inline-flex items-center gap-1.5 self-start sm:self-center shrink-0 rounded-lg bg-red-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-red-700 transition-colors disabled:opacity-50 shadow-sm"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>{eliminandoEquipo ? "Disolviendo..." : "Eliminar Equipo"}</span>
+              </button>
             </div>
           </div>
         )}

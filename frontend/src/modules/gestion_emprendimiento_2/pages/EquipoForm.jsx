@@ -1,14 +1,19 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../../context/AuthContext";
-import { fetchEstudiantes, registerEquipo } from "../services/equipoService";
+import { CheckCircle2, ShieldCheck } from "lucide-react";
+import { fetchEstudiantes, registerEquipo, obtenerMisIniciativasAprobadas } from "../services/equipoService";
 import "./EquipoForm.css";
 
 const MIN_INTEGRANTES = 2;
 
-function EquipoForm({ onEquipoCreado, onCancelar, showHeader = false }) {
+function EquipoForm({ onEquipoCreado, onCancelar, showHeader = false, iniciativasAprobadas = [] }) {
   const { usuario } = useAuth();
 
   const [nombreEquipo, setNombreEquipo] = useState("");
+  const [iniciativas, setIniciativas] = useState(iniciativasAprobadas);
+  const [idIniciativa, setIdIniciativa] = useState(
+    iniciativasAprobadas[0]?.id_iniciativa || null
+  );
   const [miembros, setMiembros] = useState(() =>
     usuario
       ? [
@@ -30,6 +35,22 @@ function EquipoForm({ onEquipoCreado, onCancelar, showHeader = false }) {
   const [errors, setErrors] = useState({});
   const [status, setStatus] = useState("idle"); // idle | loading | success | error
   const [serverError, setServerError] = useState("");
+
+  useEffect(() => {
+    if (iniciativasAprobadas.length > 0) {
+      setIniciativas(iniciativasAprobadas);
+      if (!idIniciativa) {
+        setIdIniciativa(iniciativasAprobadas[0].id_iniciativa);
+      }
+    } else {
+      obtenerMisIniciativasAprobadas().then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setIniciativas(data);
+          setIdIniciativa(data[0].id_iniciativa);
+        }
+      });
+    }
+  }, [iniciativasAprobadas]);
 
   useEffect(() => {
     let activo = true;
@@ -75,6 +96,9 @@ function EquipoForm({ onEquipoCreado, onCancelar, showHeader = false }) {
 
   function validar() {
     const nuevosErrores = {};
+    if (!idIniciativa) {
+      nuevosErrores.idIniciativa = "Debes seleccionar una iniciativa aprobada para formalizar el equipo.";
+    }
     if (!nombreEquipo.trim()) {
       nuevosErrores.nombreEquipo = "Indica el nombre del equipo.";
     } else if (nombreEquipo.trim().length < 3) {
@@ -100,6 +124,7 @@ function EquipoForm({ onEquipoCreado, onCancelar, showHeader = false }) {
       const response = await registerEquipo({
         nombre_equipo: nombreEquipo.trim(),
         id_usuario_lider: usuario?.id_usuario,
+        id_iniciativa: idIniciativa,
         id_usuarios: miembros.map((m) => m.id),
       });
       setStatus("success");
@@ -143,29 +168,29 @@ function EquipoForm({ onEquipoCreado, onCancelar, showHeader = false }) {
           <h1>Registra tu equipo</h1>
           <p className="equipo-aside-text">
             Como líder, agrega a cada integrante para formalizar la
-            participación colectiva de tu iniciativa de innovación.
+            participación colectiva de tu iniciativa de innovación aprobada.
           </p>
 
           <div className="equipo-steps">
             <div className="equipo-step">
               <span className="equipo-step-number">1</span>
               <div>
-                <div className="equipo-step-title">Datos del equipo</div>
-                <div className="equipo-step-desc">Nombre del equipo y verificación institucional.</div>
+                <div className="equipo-step-title">Iniciativa Aprobada</div>
+                <div className="equipo-step-desc">Asociada directamente a tu postulación aprobada.</div>
               </div>
             </div>
             <div className="equipo-step">
               <span className="equipo-step-number">2</span>
               <div>
-                <div className="equipo-step-title">Integrantes</div>
-                <div className="equipo-step-desc">Busca y agrega estudiantes ya registrados en la plataforma.</div>
+                <div className="equipo-step-title">Datos del equipo</div>
+                <div className="equipo-step-desc">Nombre y verificación institucional.</div>
               </div>
             </div>
-            <div className="equipo-step equipo-step-last">
+            <div className="equipo-step">
               <span className="equipo-step-number">3</span>
               <div>
-                <div className="equipo-step-title">Confirmación</div>
-                <div className="equipo-step-desc">Revisa la lista y guarda tu equipo formalizado.</div>
+                <div className="equipo-step-title">Integrantes</div>
+                <div className="equipo-step-desc">Busca y agrega estudiantes registrados.</div>
               </div>
             </div>
           </div>
@@ -177,6 +202,53 @@ function EquipoForm({ onEquipoCreado, onCancelar, showHeader = false }) {
 
         <section className="equipo-card">
           <form onSubmit={handleSubmit} noValidate>
+            <div className="equipo-section-label">Iniciativa Aprobada Vinculada</div>
+            <div style={{ marginBottom: 20, padding: 14, background: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0" }}>
+              {iniciativas.length > 1 ? (
+                <div className="equipo-field">
+                  <label htmlFor="selectIniciativa">
+                    Selecciona tu iniciativa aprobada <span className="required">*</span>
+                  </label>
+                  <select
+                    id="selectIniciativa"
+                    value={idIniciativa || ""}
+                    onChange={(e) => setIdIniciativa(Number(e.target.value))}
+                    style={{ width: "100%", padding: "10px", borderRadius: 8, border: "1px solid #cbd5e1", fontSize: "0.875rem" }}
+                  >
+                    {iniciativas.map((ini) => (
+                      <option key={ini.id_iniciativa} value={ini.id_iniciativa}>
+                        {ini.titulo} {ini.radicado ? `(${ini.radicado})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : iniciativas.length === 1 ? (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontWeight: 600, color: "#1e293b", fontSize: "0.95rem" }}>
+                      {iniciativas[0].titulo}
+                    </div>
+                    <div style={{ fontSize: "0.8rem", color: "#64748b", marginTop: 2 }}>
+                      {iniciativas[0].radicado ? `Radicado: ${iniciativas[0].radicado} • ` : ""}
+                      {iniciativas[0].convocatoria_nombre ? `Convocatoria: ${iniciativas[0].convocatoria_nombre}` : ""}
+                    </div>
+                  </div>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", background: "#dcfce7", color: "#15803d", borderRadius: 9999, fontSize: "0.75rem", fontWeight: 700 }}>
+                    <CheckCircle2 size={13} /> Aprobada
+                  </span>
+                </div>
+              ) : (
+                <div style={{ color: "#b91c1c", fontSize: "0.875rem" }}>
+                  No tienes iniciativas aprobadas disponibles para crear un equipo.
+                </div>
+              )}
+              {errors.idIniciativa && (
+                <span className="equipo-error" role="alert" style={{ marginTop: 6, display: "block" }}>
+                  {errors.idIniciativa}
+                </span>
+              )}
+            </div>
+
             <div className="equipo-section-label">Datos del equipo</div>
             <div className="equipo-field-grid">
               <div className="equipo-field">

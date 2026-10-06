@@ -98,6 +98,7 @@ class Iniciativa(models.Model):
     ESTADO_CHOICES = (
         ('pendiente', 'Pendiente'),
         ('en_revision', 'En Revisión'),
+        ('aprobada', 'Aprobada'),
         ('aceptada', 'Aceptada'),
         ('rechazada', 'Rechazada'),
     )

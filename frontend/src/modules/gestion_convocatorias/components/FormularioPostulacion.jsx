@@ -121,6 +121,7 @@ export default function FormularioPostulacion({
       tamanio: (file.size / (1024 * 1024)).toFixed(2) + " MB",
       tipo: file.type || "application/pdf",
       fechaSubida: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      file: file,
     }));
 
     setForm((prev) => ({

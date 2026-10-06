@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import {
     FileText,
     Lightbulb,
@@ -9,8 +9,11 @@ import {
     ClipboardCheck,
     BookOpen,
     Award,
+    Bell,
 } from "lucide-react"
 import { useAuth } from "../../../../context/AuthContext"
+import { NotificacionesModal } from "../../../gestion_convocatorias/components/NotificacionesModal"
+import { getResumenNotificaciones } from "../../../gestion_convocatorias/services/convocatoriaService"
 
 const ROLE_LABELS = {
     admin: "Administrador del Sistema",
@@ -44,6 +47,29 @@ export default function MainLayout({
             setActiveRole(rolActivo)
         }
     }, [propActiveRole, rolActivo])
+
+    // Gestión de notificaciones institucionales
+    const [notificacionesOpen, setNotificacionesOpen] = useState(false)
+    const [unreadNotifCount, setUnreadNotifCount] = useState(0)
+
+    const fetchResumenNotificaciones = useCallback(async () => {
+        try {
+            const data = await getResumenNotificaciones()
+            if (data && typeof data.no_leidas === "number") {
+                setUnreadNotifCount(data.no_leidas)
+            }
+        } catch {
+            // Silencioso
+        }
+    }, [])
+
+    useEffect(() => {
+        if (usuario) {
+            fetchResumenNotificaciones()
+            const timer = setInterval(fetchResumenNotificaciones, 45000)
+            return () => clearInterval(timer)
+        }
+    }, [usuario, fetchResumenNotificaciones])
 
     const userName = usuario?.nombre || "Usuario Institucional"
     const userEmail = usuario?.correo || ""
@@ -187,51 +213,69 @@ export default function MainLayout({
                         Programa de Ingeniería de Sistemas
                     </span>
 
-                    {/* Menú de Perfil y Conmutador de Roles */}
-                    <div className="relative">
+                    {/* Zona derecha: Notificaciones y Perfil */}
+                    <div className="flex items-center gap-3">
+                        {/* Campana de Notificaciones Institucionales */}
                         <button
                             type="button"
-                            onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-                            className="flex items-center gap-3 rounded-lg p-1.5 hover:bg-slate-50 transition-colors select-none focus:outline-none"
+                            onClick={() => setNotificacionesOpen(true)}
+                            className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-red-300 hover:bg-red-50/50 hover:text-red-600 transition-all focus:outline-none shadow-sm"
+                            title="Notificaciones institucionales"
+                            aria-label="Notificaciones institucionales"
                         >
-                            <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-slate-200 text-xs font-bold text-slate-600">
-                                {initials}
-                            </div>
-                            <div className="text-left hidden sm:block">
-                                <span className="block text-xs font-bold text-slate-800 leading-tight">
-                                    {activeRoleLabel}
+                            <Bell className="h-4 w-4" />
+                            {unreadNotifCount > 0 && (
+                                <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white shadow-sm animate-pulse">
+                                    {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
                                 </span>
-                                <span className="block text-[10px] text-slate-500">
-                                    {userName}
-                                </span>
-                            </div>
-                            <ChevronDown className="h-4 w-4 text-slate-500" />
+                            )}
                         </button>
 
-                        {/* Dropdown contextual */}
-                        {profileMenuOpen && (
-                            <div className="absolute right-0 mt-2 w-60 rounded-xl border border-slate-200 bg-white shadow-lg py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100">
-                                <div className="px-4 py-2.5 border-b border-slate-100">
-                                    <p className="text-xs font-bold text-slate-900 truncate">{userName}</p>
-                                    <p className="text-[11px] text-slate-500 truncate">{userEmail}</p>
+                        {/* Menú de Perfil y Conmutador de Roles */}
+                        <div className="relative">
+                            <button
+                                type="button"
+                                onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+                                className="flex items-center gap-3 rounded-lg p-1.5 hover:bg-slate-50 transition-colors select-none focus:outline-none"
+                            >
+                                <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-slate-200 text-xs font-bold text-slate-600">
+                                    {initials}
                                 </div>
+                                <div className="text-left hidden sm:block">
+                                    <span className="block text-xs font-bold text-slate-800 leading-tight">
+                                        {activeRoleLabel}
+                                    </span>
+                                    <span className="block text-[10px] text-slate-500">
+                                        {userName}
+                                    </span>
+                                </div>
+                                <ChevronDown className="h-4 w-4 text-slate-500" />
+                            </button>
 
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setProfileMenuOpen(false)
-                                        if (logout) {
-                                            logout()
-                                        }
-                                    }}
-                                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-left text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors"
-                                >
-                                    <LogOut className="h-4 w-4" />
-                                    <span>Cerrar Sesión</span>
-                                </button>
-                            </div>
-                        )}
+                            {/* Dropdown contextual */}
+                            {profileMenuOpen && (
+                                <div className="absolute right-0 mt-2 w-60 rounded-xl border border-slate-200 bg-white shadow-lg py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100">
+                                    <div className="px-4 py-2.5 border-b border-slate-100">
+                                        <p className="text-xs font-bold text-slate-900 truncate">{userName}</p>
+                                        <p className="text-[11px] text-slate-500 truncate">{userEmail}</p>
+                                    </div>
 
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setProfileMenuOpen(false)
+                                            if (logout) {
+                                                logout()
+                                            }
+                                        }}
+                                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-left text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors"
+                                    >
+                                        <LogOut className="h-4 w-4" />
+                                        <span>Cerrar Sesión</span>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </header>
 
@@ -240,6 +284,13 @@ export default function MainLayout({
                     {children}
                 </main>
             </div>
+
+            {/* Modal de Notificaciones Institucionales */}
+            <NotificacionesModal
+                open={notificacionesOpen}
+                onOpenChange={setNotificacionesOpen}
+                onNotificationRead={fetchResumenNotificaciones}
+            />
         </div>
     )
 }

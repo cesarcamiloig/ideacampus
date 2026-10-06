@@ -195,3 +195,119 @@ class GestionConvocatoriasTests(APITestCase):
         self.assertEqual(res_close.status_code, status.HTTP_200_OK)
         convocatoria.refresh_from_db()
         self.assertEqual(convocatoria.estado, "cerrada")
+
+    def test_estudiante_radica_iniciativa_exitosa(self):
+        """Verifica que un estudiante pueda postular una iniciativa en convocatoria abierta (HU-03)."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_estudiante}")
+        now = timezone.now()
+        conv = Convocatoria.objects.create(
+            nombre="Convocatoria 2026 Abierta",
+            fecha_apertura=now - timedelta(days=2),
+            fecha_cierre=now + timedelta(days=10),
+            estado="abierta",
+        )
+
+        payload = {
+            "convocatoria": conv.id_convocatoria,
+            "nombre": "Sistema IoT de Monitoreo",
+            "descripcion": "Monitoreo inteligente para laboratorios",
+            "tipo": "innovacion",
+            "origen_academico": "semillero",
+            "etapa_actual": "M2",
+        }
+
+        res = self.client.post("/api/iniciativas/", payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data["nombre"], "Sistema IoT de Monitoreo")
+        self.assertEqual(res.data["estado"], "pendiente")
+        self.assertTrue(res.data["radicado"].startswith("UFPS-POST-"))
+
+        # Verificar notificación generada
+        notif = NotificacionConvocatoria.objects.filter(usuario=self.estudiante).first()
+        self.assertIsNotNone(notif)
+        self.assertIn("Radicada", notif.titulo)
+
+    def test_estudiante_no_puede_postular_a_convocatoria_no_abierta(self):
+        """Verifica que no se permita postular a una convocatoria cerrada o en borrador."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_estudiante}")
+        now = timezone.now()
+        conv_cerrada = Convocatoria.objects.create(
+            nombre="Convocatoria Cerrada",
+            fecha_apertura=now - timedelta(days=20),
+            fecha_cierre=now - timedelta(days=5),
+            estado="cerrada",
+        )
+
+        payload = {
+            "convocatoria": conv_cerrada.id_convocatoria,
+            "nombre": "Iniciativa Tardía",
+            "tipo": "emprendimiento",
+            "origen_academico": "asignatura",
+        }
+
+        res = self.client.post("/api/iniciativas/", payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_coordinador_aprueba_iniciativa_y_notifica_estudiante(self):
+        """El coordinador puede evaluar y aprobar una iniciativa (HU-03)."""
+        from .models import Iniciativa
+        now = timezone.now()
+        conv = Convocatoria.objects.create(
+            nombre="Convocatoria Abierta",
+            fecha_apertura=now - timedelta(days=2),
+            fecha_cierre=now + timedelta(days=10),
+            estado="abierta",
+        )
+        iniciativa = Iniciativa.objects.create(
+            convocatoria=conv,
+            usuario=self.estudiante,
+            nombre="Plataforma de IA",
+            tipo="innovacion",
+            origen_academico="asignatura",
+            estado="pendiente"
+        )
+
+        # Coordinador aprueba iniciativa vía cambiar-estado
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+        res = self.client.patch(
+            f"/api/iniciativas/{iniciativa.id_iniciativa}/cambiar-estado/",
+            {"estado": "aprobada"},
+            format="json"
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["estado"], "aprobada")
+
+        iniciativa.refresh_from_db()
+        self.assertEqual(iniciativa.estado, "aprobada")
+
+        # Verificar notificación de felicitación al estudiante
+        notif = NotificacionConvocatoria.objects.filter(usuario=self.estudiante, tipo="apertura").first()
+        self.assertIsNotNone(notif)
+        self.assertIn("Aprobada", notif.titulo)
+
+    def test_estudiante_no_puede_autoaprobar_iniciativa(self):
+        """Un estudiante NO tiene permiso para aprobar su propia iniciativa."""
+        from .models import Iniciativa
+        now = timezone.now()
+        conv = Convocatoria.objects.create(
+            nombre="Convocatoria Abierta",
+            fecha_apertura=now - timedelta(days=2),
+            fecha_cierre=now + timedelta(days=10),
+            estado="abierta",
+        )
+        iniciativa = Iniciativa.objects.create(
+            convocatoria=conv,
+            usuario=self.estudiante,
+            nombre="Proyecto Tramposo",
+            tipo="emprendimiento",
+            origen_academico="asignatura",
+            estado="pendiente"
+        )
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_estudiante}")
+        res = self.client.patch(
+            f"/api/iniciativas/{iniciativa.id_iniciativa}/cambiar-estado/",
+            {"estado": "aprobada"},
+            format="json"
+        )
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)

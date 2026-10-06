@@ -29,3 +29,28 @@ export async function eliminarMiembro(idEquipo, idUsuario) {
 export async function agregarMiembro(idEquipo, idUsuario) {
   return apiClient.post(`/equipos/${idEquipo}/miembros/`, { id_usuario: idUsuario });
 }
+
+export async function eliminarEquipo(idEquipo) {
+  if (idEquipo) {
+    return apiClient.delete(`/equipos/${idEquipo}/`);
+  }
+  return apiClient.delete("/equipos/mi-equipo/");
+}
+
+export async function obtenerMisIniciativasAprobadas() {
+  try {
+    const data = await apiClient.get("/iniciativas/mis-aprobadas/");
+    return Array.isArray(data) ? data : data?.results || [];
+  } catch (err) {
+    try {
+      const data = await apiClient.get("/iniciativas/");
+      const lista = Array.isArray(data) ? data : data?.results || [];
+      const estadosAprobados = ["aprobada", "aprobado", "aceptada", "aceptado", "validada", "validado"];
+      return lista.filter(
+        (i) => estadosAprobados.includes((i.estado || "").toLowerCase().trim()) && !i.tiene_equipo
+      );
+    } catch {
+      return [];
+    }
+  }
+}

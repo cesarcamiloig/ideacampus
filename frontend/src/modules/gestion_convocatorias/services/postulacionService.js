@@ -6,7 +6,7 @@ const STORAGE_PREFIX = "ideacampus:postulaciones:";
 const CONVOCATORIAS_FALLBACK = [
   {
     id_convocatoria: 1,
-    nombre: "prueba",
+    nombre: "Convocatoria Institucional de Proyectos UFPS 2026",
     descripcion:
       "Convocatoria abierta para postulación y registro de iniciativas con declaración de origen académico del Programa de Ingeniería de Sistemas UFPS.",
     categoria: "Software & Innovación",
@@ -22,6 +22,64 @@ const CONVOCATORIAS_FALLBACK = [
 ];
 
 /**
+ * Normaliza un objeto devuelto por el backend /iniciativas/ al formato
+ * consumido por la interfaz de usuario de expedientes y postulaciones.
+ */
+function normalizarIniciativaParaUI(item) {
+  const anio = item.fecha_postulacion ? new Date(item.fecha_postulacion).getFullYear() : 2026;
+  const radicado = item.radicado || `UFPS-POST-${anio}-${String(item.id_iniciativa || 1).padStart(4, "0")}`;
+
+  return {
+    id: `ini-${item.id_iniciativa}`,
+    id_iniciativa: item.id_iniciativa,
+    radicado,
+    fecha_radicacion: item.fecha_postulacion || new Date().toISOString(),
+    estado: item.estado || "pendiente", // 'pendiente' | 'en_revision' | 'aprobada' | 'aceptada' | 'rechazada'
+    tiene_equipo: Boolean(item.tiene_equipo),
+    equipo_id: item.equipo_id || null,
+    equipo_nombre: item.equipo_nombre || null,
+    convocatoria: {
+      id_convocatoria: item.convocatoria,
+      nombre: item.convocatoria_nombre || "Convocatoria Institucional UFPS",
+      categoria: item.convocatoria_categoria || "Innovación Tecnológica",
+      periodo_nombre: "Periodo Académico 2026",
+    },
+    iniciativa: {
+      titulo: item.nombre,
+      categoria: item.sector_tecnologico || (item.tipo === "innovacion" ? "Innovación Tecnológica" : "Emprendimiento"),
+      resumen_ejecutivo: item.descripcion || "Sin resumen registrado",
+      problema_solucion: item.descripcion || "Definido en expediente institucional",
+      trl_inicial: item.etapa_actual || "M1",
+      impacto_esperado: item.sector_tecnologico || "Programa de Ingeniería de Sistemas UFPS",
+    },
+    origen_academico: {
+      tipo: item.origen_academico || "asignatura",
+      asignatura_nombre: item.detalle_origen || "",
+      descripcion_origen: item.detalle_origen || "Declaración formativa institucional UFPS",
+    },
+    equipo: {
+      lider: {
+        id_usuario: item.usuario,
+        nombre: item.usuario_nombre || "Estudiante Postulante",
+        correo: item.usuario_correo || "",
+        rol: "Líder de Iniciativa",
+      },
+      integrantes: [],
+    },
+    documentacion: {
+      archivos: (item.documentos || []).map((doc) => ({
+        id: doc.id_documento,
+        nombre: doc.nombre_original || "documento_adjunto.pdf",
+        tamanio: doc.tamano_bytes ? `${(doc.tamano_bytes / (1024 * 1024)).toFixed(2)} MB` : "PDF",
+        url: doc.url_archivo,
+      })),
+    },
+    declaracion_veracidad: true,
+    declaracion_autor: true,
+  };
+}
+
+/**
  * Obtiene las convocatorias abiertas disponibles para que los estudiantes postulen.
  */
 export async function getConvocatoriasAbiertas(params = {}) {
@@ -30,7 +88,6 @@ export async function getConvocatoriasAbiertas(params = {}) {
     if (Array.isArray(data) && data.length > 0) {
       return data;
     }
-    // Si la lista remota está vacía, retornar convocatorias fallback institucionales
     return CONVOCATORIAS_FALLBACK;
   } catch (err) {
     console.warn("Usando catálogo de convocatorias institucionales fallback:", err.message);
@@ -39,22 +96,24 @@ export async function getConvocatoriasAbiertas(params = {}) {
 }
 
 /**
- * Obtiene las postulaciones realizadas por el estudiante actual.
+ * Obtiene las postulaciones realizadas por el estudiante actual desde el backend.
  */
 export async function getMisPostulaciones(usuarioId) {
   const key = `${STORAGE_PREFIX}${usuarioId || "default"}`;
-  
-  // Intento de lectura desde backend si existiera el endpoint
+
   try {
-    const remoteData = await apiClient.get("/postulaciones/");
-    if (Array.isArray(remoteData) && remoteData.length > 0) {
-      localStorage.setItem(key, JSON.stringify(remoteData));
-      return remoteData;
+    const remoteData = await apiClient.get("/iniciativas/");
+    const lista = Array.isArray(remoteData) ? remoteData : remoteData?.results || [];
+    if (lista.length > 0) {
+      const normalizadas = lista.map(normalizarIniciativaParaUI);
+      localStorage.setItem(key, JSON.stringify(normalizadas));
+      return normalizadas;
     }
-  } catch {
-    // Si no existe el endpoint en backend, continúa con almacenamiento local persistente
+  } catch (err) {
+    console.warn("No se pudo conectar a /iniciativas/, verificando caché local:", err?.message);
   }
 
+  // Fallback a almacenamiento local si estuviera sin conexión
   try {
     const local = localStorage.getItem(key);
     if (local) {
@@ -64,93 +123,102 @@ export async function getMisPostulaciones(usuarioId) {
     console.error("Error leyendo postulaciones locales:", err);
   }
 
-  // Si no hay postulaciones previas, inicializar con array vacío
   return [];
 }
 
 /**
- * Genera un código de radicado único institucional (formato UFPS-POST-AAAA-XXXX).
+ * Obtiene todas las iniciativas registradas (para uso de coordinadores y administradores).
  */
-function generarNumeroRadicado() {
-  const anio = new Date().getFullYear();
-  const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-  return `UFPS-POST-${anio}-${randomSuffix}`;
+export async function getTodasLasIniciativas() {
+  try {
+    const remoteData = await apiClient.get("/iniciativas/");
+    const lista = Array.isArray(remoteData) ? remoteData : remoteData?.results || [];
+    return lista.map(normalizarIniciativaParaUI);
+  } catch (err) {
+    console.error("Error al obtener todas las iniciativas:", err);
+    throw err;
+  }
+}
+
+/**
+ * Cambia el estado de una iniciativa (aprobada, rechazada, etc.) por parte del coordinador o admin.
+ */
+export async function cambiarEstadoIniciativa(idIniciativa, nuevoEstado) {
+  const id = String(idIniciativa).replace(/^ini-/, "");
+  const response = await apiClient.patch(`/iniciativas/${id}/cambiar-estado/`, {
+    estado: nuevoEstado,
+  });
+  return normalizarIniciativaParaUI(response);
 }
 
 /**
  * Registra una nueva postulación de iniciativa a una convocatoria abierta (HU-03).
+ * Soporta carga real de archivo PDF mediante multipart/form-data.
  */
 export async function registrarPostulacion(postulacionData, usuario) {
   const usuarioId = usuario?.id_usuario || "default";
-  const radicado = generarNumeroRadicado();
-  const fechaActual = new Date().toISOString();
 
-  const nuevaPostulacion = {
-    id: `post-${Date.now()}`,
-    radicado,
-    fecha_radicacion: fechaActual,
-    estado: "radicada", // radicada | en_revision | en_evaluacion | aceptada | rechazada
-    convocatoria: {
-      id_convocatoria: postulacionData.id_convocatoria,
-      nombre: postulacionData.convocatoria_nombre,
-      categoria: postulacionData.convocatoria_categoria,
-      periodo_nombre: postulacionData.convocatoria_periodo,
-    },
-    iniciativa: {
-      titulo: postulacionData.titulo,
-      categoria: postulacionData.categoria,
-      resumen_ejecutivo: postulacionData.resumen_ejecutivo,
-      problema_solucion: postulacionData.problema_solucion,
-      trl_inicial: postulacionData.trl_inicial || "M0", // M0, M1, M2, M3
-      impacto_esperado: postulacionData.impacto_esperado || "",
-    },
-    origen_academico: {
-      tipo: postulacionData.origen_tipo, // 'asignatura' | 'semillero' | 'proyecto_grado' | 'extracurricular'
-      // Si fue asignatura
-      asignatura_nombre: postulacionData.asignatura_nombre || "",
-      asignatura_semestre: postulacionData.asignatura_semestre || "",
-      docente_titular: postulacionData.docente_titular || "",
-      codigo_grupo: postulacionData.codigo_grupo || "",
-      entregable_previo: postulacionData.entregable_previo || "",
-      // Si fue semillero
-      semillero_nombre: postulacionData.semillero_nombre || "",
-      tutor_semillero: postulacionData.tutor_semillero || "",
-      linea_investigacion: postulacionData.linea_investigacion || "",
-      // Si fue proyecto de grado
-      modalidad_grado: postulacionData.modalidad_grado || "",
-      director_proyecto: postulacionData.director_proyecto || "",
-      // Si fue extracurricular
-      justificacion_extracurricular: postulacionData.justificacion_extracurricular || "",
-      descripcion_origen: postulacionData.descripcion_origen || "",
-    },
-    equipo: {
-      lider: {
-        id_usuario: usuario?.id_usuario,
-        nombre: usuario?.nombre || postulacionData.lider_nombre,
-        correo: usuario?.correo || postulacionData.lider_correo,
-        codigo_estudiantil: postulacionData.lider_codigo || "",
-        rol: "Líder de Iniciativa",
-      },
-      integrantes: postulacionData.integrantes || [],
-    },
-    documentacion: {
-      archivos: postulacionData.archivos || [],
-      repositorio_url: postulacionData.repositorio_url || "",
-      demo_url: postulacionData.demo_url || "",
-      observaciones_adjuntos: postulacionData.observaciones_adjuntos || "",
-    },
-    declaracion_veracidad: true,
-    declaracion_autor: true,
-  };
+  // Preparar payload para backend /iniciativas/
+  const formData = new FormData();
+  formData.append("convocatoria", postulacionData.id_convocatoria);
+  formData.append("nombre", (postulacionData.titulo || "Iniciativa de Innovación").slice(0, 150));
+  
+  const descripcionCompleta = [
+    postulacionData.resumen_ejecutivo,
+    postulacionData.problema_solucion ? `Problema/Solución: ${postulacionData.problema_solucion}` : null
+  ].filter(Boolean).join(" | ").slice(0, 1000);
+  
+  formData.append("descripcion", descripcionCompleta || "Iniciativa registrada");
+  
+  const tipoNorm = (postulacionData.categoria || "").toLowerCase().includes("innovación")
+    ? "innovacion"
+    : "emprendimiento";
+  formData.append("tipo", tipoNorm);
 
-  // Intentar sincronizar con backend si existe endpoint
-  try {
-    await apiClient.post("/postulaciones/", nuevaPostulacion);
-  } catch {
-    // Si el endpoint remoto aún no está disponible en este sprint, se persiste localmente
+  const origenValido = [
+    "asignatura",
+    "proyecto_aula",
+    "integrador",
+    "semillero",
+    "practica",
+    "trabajo_grado",
+  ].includes(postulacionData.origen_tipo)
+    ? postulacionData.origen_tipo
+    : "asignatura";
+  formData.append("origen_academico", origenValido);
+
+  const detalleOrigen = [
+    postulacionData.asignatura_nombre,
+    postulacionData.semillero_nombre,
+    postulacionData.docente_titular ? `Docente: ${postulacionData.docente_titular}` : null,
+    postulacionData.descripcion_origen,
+  ].filter(Boolean).join(" - ").slice(0, 150);
+  formData.append("detalle_origen", detalleOrigen || "Origen UFPS declarado");
+
+  formData.append("sector_tecnologico", (postulacionData.categoria || "Software").slice(0, 100));
+  formData.append("etapa_actual", (postulacionData.trl_inicial || "M1").slice(0, 50));
+
+  // Archivo PDF adjunto
+  if (postulacionData.archivo_file instanceof File) {
+    formData.append("documento_adjunto", postulacionData.archivo_file);
+  } else if (Array.isArray(postulacionData.archivos)) {
+    const rawFileObj = postulacionData.archivos.find((a) => a.file instanceof File);
+    if (rawFileObj) {
+      formData.append("documento_adjunto", rawFileObj.file);
+    }
   }
 
-  // Persistir en storage del estudiante
+  let createdIni = null;
+  try {
+    createdIni = await apiClient.post("/iniciativas/", formData);
+  } catch (err) {
+    console.error("Error al registrar iniciativa en backend:", err);
+    throw err;
+  }
+
+  const uiPostulacion = normalizarIniciativaParaUI(createdIni);
+
+  // Actualizar caché local del estudiante
   const key = `${STORAGE_PREFIX}${usuarioId}`;
   let lista = [];
   try {
@@ -159,15 +227,14 @@ export async function registrarPostulacion(postulacionData, usuario) {
   } catch {
     lista = [];
   }
-
-  lista.unshift(nuevaPostulacion);
+  lista.unshift(uiPostulacion);
   localStorage.setItem(key, JSON.stringify(lista));
 
-  return nuevaPostulacion;
+  return uiPostulacion;
 }
 
 /**
- * Cancela una postulación previa (si aún se encuentra en estado inicial).
+ * Cancela una postulación previa local si está en estado inicial.
  */
 export async function cancelarPostulacion(radicado, usuarioId) {
   const key = `${STORAGE_PREFIX}${usuarioId || "default"}`;
@@ -182,3 +249,4 @@ export async function cancelarPostulacion(radicado, usuarioId) {
     return false;
   }
 }
+

@@ -19,6 +19,7 @@ class AgregarMiembroSerializer(serializers.Serializer):
 class CrearEquipoSerializer(serializers.Serializer):
     nombre_equipo = serializers.CharField(max_length=150, min_length=3, trim_whitespace=True)
     id_usuario_lider = serializers.IntegerField()
+    id_iniciativa = serializers.IntegerField(required=False, allow_null=True)
     id_usuarios = serializers.ListField(
         child=serializers.IntegerField(),
         allow_empty=False
@@ -67,4 +68,5 @@ class EquipoDetalleSerializer(serializers.Serializer):
     fecha_creacion = serializers.DateTimeField()
     es_lider = serializers.BooleanField()
     lider = serializers.DictField()
+    iniciativa = serializers.DictField(allow_null=True, required=False)
     miembros = MiembroEquipoSerializer(many=True)

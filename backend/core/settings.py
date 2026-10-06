@@ -225,6 +225,11 @@ MAILERS = {
     },
 }
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
 """ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('gestion_administrativa.urls')),

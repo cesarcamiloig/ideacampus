@@ -19,6 +19,9 @@ function AppContent() {
     if (currentModule === "convocatorias") {
       return <ConvocatoriasPage onNavigate={setCurrentModule} activeModule="convocatorias" />;
     }
+    if (currentModule === "emprendimientos") {
+      return <RoleDashboardPage role="coordinador" onNavigate={setCurrentModule} defaultModule="emprendimientos" />;
+    }
     return <AdminParametrosPage onNavigate={setCurrentModule} />;
   }
 
@@ -28,7 +31,7 @@ function AppContent() {
     if (activeModule === "convocatorias") {
       return <ConvocatoriasPage onNavigate={setCurrentModule} activeModule="convocatorias" />;
     }
-    return <RoleDashboardPage role={rolActivo} onNavigate={setCurrentModule} />;
+    return <RoleDashboardPage role={rolActivo} onNavigate={setCurrentModule} defaultModule={activeModule} />;
   }
 
   // 3. Estudiante Emprendedor (HU-03) y otros roles institucionales

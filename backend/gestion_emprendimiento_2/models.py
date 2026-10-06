@@ -38,6 +38,14 @@ class EquipoEmprendedor(models.Model):
     )
     nombre_equipo = models.CharField(max_length=150)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
+    iniciativa = models.OneToOneField(
+        'gestion_convocatorias.Iniciativa',
+        on_delete=models.SET_NULL,
+        db_column='id_iniciativa',
+        null=True,
+        blank=True,
+        related_name='equipo'
+    )
 
     class Meta:
         db_table = 'equipo_emprendedor'

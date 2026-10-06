@@ -83,14 +83,26 @@ class DocumentoPostulacionSerializer(serializers.ModelSerializer):
 
 class IniciativaSerializer(serializers.ModelSerializer):
     documentos = DocumentoPostulacionSerializer(many=True, read_only=True)
-    documento_adjunto = serializers.FileField(write_only=True, required=True)
+    documento_adjunto = serializers.FileField(write_only=True, required=False, allow_null=True)
+    usuario_nombre = serializers.CharField(source='usuario.nombre', read_only=True)
+    usuario_correo = serializers.CharField(source='usuario.correo', read_only=True)
+    convocatoria_nombre = serializers.CharField(source='convocatoria.nombre', read_only=True)
+    convocatoria_categoria = serializers.CharField(source='convocatoria.categoria', read_only=True)
+    tiene_equipo = serializers.SerializerMethodField()
+    equipo_id = serializers.SerializerMethodField()
+    equipo_nombre = serializers.SerializerMethodField()
+    radicado = serializers.SerializerMethodField()
 
     class Meta:
         model = Iniciativa
         fields = [
             'id_iniciativa',
             'convocatoria',
+            'convocatoria_nombre',
+            'convocatoria_categoria',
             'usuario',
+            'usuario_nombre',
+            'usuario_correo',
             'nombre',
             'descripcion',
             'tipo',
@@ -99,14 +111,38 @@ class IniciativaSerializer(serializers.ModelSerializer):
             'sector_tecnologico',
             'etapa_actual',
             'estado',
+            'radicado',
+            'tiene_equipo',
+            'equipo_id',
+            'equipo_nombre',
             'fecha_postulacion',
             'fecha_actualizacion',
             'documentos',
             'documento_adjunto',
         ]
-        read_only_fields = ['id_iniciativa', 'usuario', 'estado', 'fecha_postulacion', 'fecha_actualizacion']
+        read_only_fields = [
+            'id_iniciativa',
+            'usuario',
+            'fecha_postulacion',
+            'fecha_actualizacion',
+        ]
+
+    def get_radicado(self, obj):
+        anio = obj.fecha_postulacion.year if obj.fecha_postulacion else 2026
+        return f"UFPS-POST-{anio}-{obj.id_iniciativa:04d}"
+
+    def get_tiene_equipo(self, obj):
+        return hasattr(obj, 'equipo') and obj.equipo is not None
+
+    def get_equipo_id(self, obj):
+        return obj.equipo.id_equipo if (hasattr(obj, 'equipo') and obj.equipo) else None
+
+    def get_equipo_nombre(self, obj):
+        return obj.equipo.nombre_equipo if (hasattr(obj, 'equipo') and obj.equipo) else None
 
     def validate_documento_adjunto(self, value):
+        if not value:
+            return value
         ext = os.path.splitext(value.name)[1].lower()
         # 1. Regla: Solo archivos PDF
         if ext != '.pdf':
@@ -119,25 +155,28 @@ class IniciativaSerializer(serializers.ModelSerializer):
         return value
 
     def validate_convocatoria(self, value):
-        # 3. Regla: La convocatoria debe estar abierta
-        if value.estado.lower() != 'abierta':
+        # 3. Regla: La convocatoria debe estar abierta al postular
+        if self.instance is None and value.estado.lower() != 'abierta':
             raise serializers.ValidationError("No se pueden enviar iniciativas a una convocatoria que no esté abierta.")
         return value
 
     def create(self, validated_data):
-        archivo = validated_data.pop('documento_adjunto')
+        archivo = validated_data.pop('documento_adjunto', None)
+        # Siempre inicia en estado pendiente por defecto al postularse
+        validated_data['estado'] = 'pendiente'
         iniciativa = Iniciativa.objects.create(**validated_data)
         
-        nombre_original = archivo.name
-        ext = os.path.splitext(nombre_original)[1].lower().replace('.', '')
-        tamano_bytes = archivo.size
+        if archivo:
+            nombre_original = archivo.name
+            ext = os.path.splitext(nombre_original)[1].lower().replace('.', '')
+            tamano_bytes = archivo.size
 
-        DocumentoPostulacion.objects.create(
-            iniciativa=iniciativa,
-            nombre_original=nombre_original,
-            extension=ext,
-            tamano_bytes=tamano_bytes,
-            archivo=archivo
-        )
+            DocumentoPostulacion.objects.create(
+                iniciativa=iniciativa,
+                nombre_original=nombre_original,
+                extension=ext,
+                tamano_bytes=tamano_bytes,
+                archivo=archivo
+            )
 
         return iniciativa

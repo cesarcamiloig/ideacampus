@@ -66,5 +66,57 @@ docker-compose up --build -d
 ### Paso 5: Verificación de Servicios
 Una vez que la terminal indique que los contenedores están "Running", puedes verificar que los servicios estén activos accediendo a las siguientes rutas en tu navegador:
 * **Backend API (Django):** `http://localhost:8000`
-* **Frontend (React):** `http://localhost:5173`
+* **Frontend (React + Vite):** `http://localhost:5173`
 * **Base de Datos (MySQL):** Activa en el puerto `3306` de tu localhost.
+
+---
+
+## 📌 Historias de Usuario Integradas
+
+### HU-02 · Gestión de Convocatorias Institucionales
+* Apertura, edición, cronograma y cierre automatizado de ciclos de postulación.
+* Clasificación por categorías y asociación con periodos académicos activos.
+* Emisión de notificaciones institucionales de apertura y cierre próximo.
+
+### HU-03 · Banco de Iniciativas y Postulación Estudiantil
+* Formulario multi-paso de radicación técnica de iniciativas.
+* Declaración formal del origen académico (asignaturas, semilleros, proyectos integradores, proyectos de grado).
+* Carga de documentación soporte en formato PDF validado (hasta 10 MB).
+* Generación de código radicado institucional único (`UFPS-POST-YYYY-ID`).
+* Panel de administración para coordinación con aprobación o rechazo fundamentado.
+
+### HU-04 · Registro y Gestión de Equipo Emprendedor
+* Formalización colectiva de iniciativas aprobadas.
+* Reglas de negocio estrictas validadas tanto en frontend como en backend:
+  1. **Aprobación previa obligatoria:** Un estudiante únicamente puede registrar un equipo cuando la iniciativa correspondiente haya sido aprobada por la coordinación.
+  2. **Autoría de la iniciativa:** El líder que crea el equipo debe ser el autor original que postuló la iniciativa.
+  3. **Vínculo unívoco:** Cada iniciativa aprobada puede tener como máximo un equipo emprendedor activo.
+  4. **Exclusividad de miembros:** Ningún estudiante activo puede pertenecer a más de un equipo en paralelo.
+  5. **Mínimo de integrantes:** Requiere al menos un integrante adicional además del estudiante líder.
+  6. **Ciclo de vida y disolución:** El líder puede retirar integrantes o disolver el equipo por completo, liberando a los miembros y permitiendo volver a conformar un equipo para la iniciativa cuando lo requiera.
+
+---
+
+## 🔔 Sistema Global de Notificaciones
+* Campana de notificaciones institucional en la barra de navegación superior con contador de mensajes no leídos en tiempo real.
+* Notificaciones generadas automáticamente ante eventos clave:
+  - Radicación exitosa de iniciativa.
+  - Aprobación o rechazo por la coordinación.
+  - Creación de equipo emprendedor (notificación al líder e integrantes).
+  - Incorporación o retiro de un estudiante de un equipo.
+  - Disolución de equipo emprendedor.
+
+---
+
+## 🧪 Pruebas y Control de Calidad
+
+### Ejecutar Pruebas Automatizadas del Backend
+```bash
+docker exec ideacampus_backend python manage.py test
+```
+*Cubre 38 pruebas unitarias y de integración que validan permisos, reglas de negocio Estudiante-Iniciativa-Equipo, autenticación JWT y endpoints REST.*
+
+### Compilación y Verificación de Tipos del Frontend
+```bash
+docker exec ideacampus_frontend npm run build
+```

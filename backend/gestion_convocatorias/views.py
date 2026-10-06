@@ -204,25 +204,143 @@ class NotificacionConvocatoriaViewSet(viewsets.ReadOnlyModelViewSet):
 class IniciativaViewSet(viewsets.ModelViewSet):
     """
     Gestión de postulaciones e iniciativas de estudiantes (HU-03).
-    - Los estudiantes solo pueden consultar sus propias postulaciones.
-    - Los coordinadores y administradores pueden ver todas las iniciativas recibidas.
-    - Asigna automáticamente el usuario autenticado al crear una postulación.
+    - Los estudiantes solo pueden consultar sus propias postulaciones y radicar si son estudiantes activos.
+    - Los coordinadores y administradores pueden ver todas las iniciativas y aprobarlas/rechazarlas.
+    - Notifica automáticamente al estudiante tras radicar o tras cambio de estado.
     """
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     serializer_class = IniciativaSerializer
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
-    def get_queryset(self):
-        usuario = self.request.user
+    def _es_gestor(self, usuario):
         roles_usuario = getattr(usuario, 'roles_asignados', [])
         rol_activo = getattr(usuario, 'rol_activo', '')
-        es_gestor = ('admin' in roles_usuario or 'coordinador' in roles_usuario or
-                     rol_activo in ['admin', 'coordinador'])
+        return ('admin' in roles_usuario or 'coordinador' in roles_usuario or
+                rol_activo in ['admin', 'coordinador'])
 
-        if es_gestor:
-            return Iniciativa.objects.all().order_by('-fecha_postulacion')
-        return Iniciativa.objects.filter(usuario=usuario).order_by('-fecha_postulacion')
+    def get_queryset(self):
+        usuario = self.request.user
+        if self._es_gestor(usuario):
+            return Iniciativa.objects.all().select_related('convocatoria', 'usuario').prefetch_related('documentos').order_by('-fecha_postulacion')
+        return Iniciativa.objects.filter(usuario=usuario).select_related('convocatoria', 'usuario').prefetch_related('documentos').order_by('-fecha_postulacion')
 
     def perform_create(self, serializer):
-        serializer.save(usuario=self.request.user)
+        usuario = self.request.user
+        from gestion_administrativa.models import UsuarioRol
+        roles_usuario = getattr(usuario, 'roles_asignados', [])
+        rol_activo = getattr(usuario, 'rol_activo', '')
+        
+        es_estudiante = ('estudiante' in roles_usuario or rol_activo == 'estudiante' or
+                         UsuarioRol.objects.filter(usuario=usuario, rol__nombre_rol='estudiante', estado='activo').exists())
+        
+        if not es_estudiante:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Solo los estudiantes con rol activo pueden postular y registrar iniciativas.")
+
+        iniciativa = serializer.save(usuario=usuario, estado='pendiente')
+
+        # Notificación institucional al estudiante
+        NotificacionConvocatoria.objects.create(
+            convocatoria=iniciativa.convocatoria,
+            usuario=usuario,
+            titulo="Iniciativa Radicada Exitosamente",
+            mensaje=f"Tu iniciativa '{iniciativa.nombre}' ha sido radicada correctamente con radicado UFPS-POST-{iniciativa.fecha_postulacion.year}-{iniciativa.id_iniciativa:04d}.",
+            tipo="actualizacion"
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        es_gestor = self._es_gestor(request.user)
+
+        # Si el usuario NO es gestor y pretende cambiar el estado, se rechaza
+        if 'estado' in request.data and not es_gestor:
+            return Response(
+                {"error": "Solo un coordinador o administrador puede modificar el estado de evaluación de una iniciativa."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        estado_anterior = instance.estado
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        iniciativa = serializer.save()
+
+        # Si cambió el estado, notificar al estudiante
+        if es_gestor and 'estado' in request.data and iniciativa.estado != estado_anterior:
+            self._notificar_cambio_estado(iniciativa, estado_anterior, iniciativa.estado)
+
+        return Response(serializer.data)
+
+    def _notificar_cambio_estado(self, iniciativa, anterior, nuevo):
+        nuevo_norm = nuevo.lower().strip()
+        if nuevo_norm in ['aprobada', 'aprobado', 'aceptada', 'aceptado', 'validada', 'validado']:
+            titulo = "¡Iniciativa Aprobada!"
+            mensaje = f"¡Felicitaciones! Tu iniciativa '{iniciativa.nombre}' ha sido aprobada por la Coordinación. Ya puedes proceder a conformar y registrar tu Equipo Emprendedor."
+            tipo = "apertura"
+        elif nuevo_norm in ['rechazada', 'rechazado']:
+            titulo = "Iniciativa No Seleccionada"
+            mensaje = f"Tu iniciativa '{iniciativa.nombre}' ha sido evaluada y marcada como no seleccionada en esta convocatoria."
+            tipo = "cerrada"
+        else:
+            titulo = f"Actualización de Iniciativa: {nuevo.capitalize()}"
+            mensaje = f"El estado de tu iniciativa '{iniciativa.nombre}' ha cambiado a '{nuevo}'."
+            tipo = "actualizacion"
+
+        NotificacionConvocatoria.objects.create(
+            convocatoria=iniciativa.convocatoria,
+            usuario=iniciativa.usuario,
+            titulo=titulo,
+            mensaje=mensaje,
+            tipo=tipo
+        )
+
+    @action(detail=True, methods=['patch', 'post'], url_path='cambiar-estado')
+    def cambiar_estado(self, request, pk=None):
+        iniciativa = self.get_object()
+        if not self._es_gestor(request.user):
+            return Response(
+                {"error": "Solo un coordinador o administrador puede modificar el estado de una iniciativa."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        nuevo_estado = request.data.get('estado', '').strip().lower()
+        if nuevo_estado in ['aprobada', 'aprobado', 'aceptada', 'aceptado', 'validada']:
+            nuevo_estado = 'aprobada'
+        elif nuevo_estado in ['rechazada', 'rechazado']:
+            nuevo_estado = 'rechazada'
+        elif nuevo_estado in ['en_revision', 'revision']:
+            nuevo_estado = 'en_revision'
+        elif nuevo_estado in ['pendiente']:
+            nuevo_estado = 'pendiente'
+        else:
+            return Response(
+                {"error": f"Estado no válido: '{nuevo_estado}'. Debe ser 'pendiente', 'en_revision', 'aprobada' o 'rechazada'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        estado_anterior = iniciativa.estado
+        iniciativa.estado = nuevo_estado
+        iniciativa.save(update_fields=['estado', 'fecha_actualizacion'])
+
+        self._notificar_cambio_estado(iniciativa, estado_anterior, nuevo_estado)
+
+        return Response(self.get_serializer(iniciativa).data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'], url_path='mis-aprobadas')
+    def mis_aprobadas(self, request):
+        """
+        Retorna las iniciativas aprobadas del estudiante que aún NO tienen un equipo asociado,
+        habilitadas para crear equipo emprendedor (HU-04).
+        """
+        usuario = request.user
+        estados_aprobados = ['aprobada', 'aprobado', 'aceptada', 'aceptado', 'validada', 'validado']
+        
+        iniciativas = Iniciativa.objects.filter(
+            usuario=usuario,
+            estado__in=estados_aprobados,
+            equipo__isnull=True
+        ).order_by('-fecha_postulacion')
+        
+        serializer = self.get_serializer(iniciativas, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

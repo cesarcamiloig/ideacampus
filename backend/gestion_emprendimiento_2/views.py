@@ -62,6 +62,11 @@ class CrearEquipoView(APIView):
     """
     Crea un nuevo equipo emprendedor asignando al usuario autenticado como líder
     y asociando a los miembros indicados.
+    Cumple con las reglas institucionales:
+    - Solo un estudiante activo puede crear un equipo.
+    - El estudiante solo puede crear un equipo para una iniciativa que él mismo haya creado/subido.
+    - La iniciativa debe haber sido aprobada por la coordinación.
+    - Cada iniciativa aprobada puede tener como máximo un equipo activo.
     """
     authentication_classes = [JWTAuthentication]
     permission_classes = [EsEstudiante]
@@ -69,7 +74,7 @@ class CrearEquipoView(APIView):
     def post(self, request):
         usuario = request.user
 
-        # Verificar si el usuario ya pertenece a un equipo
+        # 1. Verificar si el usuario ya pertenece a un equipo
         estudiante_actual = Estudiante.objects.filter(usuario=usuario, equipo__isnull=False).first()
         if estudiante_actual:
             return Response(
@@ -83,12 +88,69 @@ class CrearEquipoView(APIView):
         nombre_equipo = serializer.validated_data['nombre_equipo'].strip()
         lider_usuario_id = serializer.validated_data['id_usuario_lider']
         usuarios_miembros = serializer.validated_data['usuarios_obj']
+        id_iniciativa = serializer.validated_data.get('id_iniciativa')
 
         if usuario.id_usuario != lider_usuario_id:
             return Response(
                 {"error": "Solo puedes crear un equipo donde tú seas el líder"},
                 status=status.HTTP_403_FORBIDDEN
             )
+
+        # 2. Validar reglas de la Iniciativa
+        from gestion_convocatorias.models import Iniciativa, NotificacionConvocatoria
+
+        def esta_aprobada(est):
+            return str(est).strip().lower() in ['aprobada', 'aprobado', 'aceptada', 'aceptado', 'validada', 'validado']
+
+        iniciativa = None
+        if id_iniciativa:
+            try:
+                iniciativa = Iniciativa.objects.select_related('convocatoria').get(id_iniciativa=id_iniciativa)
+            except Iniciativa.DoesNotExist:
+                return Response(
+                    {"error": "La iniciativa especificada no existe."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # Regla: Un estudiante únicamente puede registrar un equipo para una iniciativa que él mismo haya creado/subido
+            if iniciativa.usuario_id != usuario.id_usuario:
+                return Response(
+                    {"error": "Solo puedes registrar un equipo para una iniciativa que tú mismo hayas creado/subido."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            # Regla: Un estudiante únicamente puede registrar un equipo cuando la iniciativa correspondiente haya sido aprobada
+            if not esta_aprobada(iniciativa.estado):
+                return Response(
+                    {"error": f"La iniciativa '{iniciativa.nombre}' se encuentra en estado '{iniciativa.estado}'. Un estudiante únicamente puede registrar un equipo cuando la iniciativa correspondiente haya sido aprobada."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Regla: La iniciativa no puede tener ya otro equipo
+            if hasattr(iniciativa, 'equipo') and iniciativa.equipo is not None:
+                return Response(
+                    {"error": f"La iniciativa '{iniciativa.nombre}' ya tiene un equipo asignado ('{iniciativa.equipo.nombre_equipo}')."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        else:
+            # Si no se pasó id_iniciativa explícito, buscar si tiene alguna iniciativa aprobada disponible
+            candidatas = [
+                i for i in Iniciativa.objects.filter(usuario=usuario).select_related('convocatoria')
+                if esta_aprobada(i.estado) and (not hasattr(i, 'equipo') or i.equipo is None)
+            ]
+            if not candidatas:
+                tiene_iniciativas = Iniciativa.objects.filter(usuario=usuario).exists()
+                if tiene_iniciativas:
+                    return Response(
+                        {"error": "Tus iniciativas aún no han sido aprobadas. Un estudiante únicamente puede registrar un equipo cuando la iniciativa correspondiente haya sido aprobada."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                else:
+                    return Response(
+                        {"error": "No tienes ninguna iniciativa registrada. Para crear un equipo debes contar con una iniciativa previa aprobada en una convocatoria abierta."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            iniciativa = candidatas[0]
 
         with transaction.atomic():
             estudiantes_emprendedores = []
@@ -108,16 +170,38 @@ class CrearEquipoView(APIView):
 
             equipo = EquipoEmprendedor.objects.create(
                 nombre_equipo=nombre_equipo,
-                estudiante_lider=lider_ee
+                estudiante_lider=lider_ee,
+                iniciativa=iniciativa
             )
 
             for ee in estudiantes_emprendedores:
                 ee.equipo = equipo
                 ee.save(update_fields=['equipo'])
 
+            # Notificaciones institucionales
+            if iniciativa and hasattr(iniciativa, 'convocatoria') and iniciativa.convocatoria:
+                NotificacionConvocatoria.objects.create(
+                    convocatoria=iniciativa.convocatoria,
+                    usuario=usuario,
+                    titulo="Equipo Emprendedor Registrado",
+                    mensaje=f"Has registrado exitosamente el equipo '{nombre_equipo}' para tu iniciativa aprobada '{iniciativa.nombre}'.",
+                    tipo="actualizacion"
+                )
+                for ee in estudiantes_emprendedores:
+                    if ee.usuario_id != usuario.id_usuario:
+                        NotificacionConvocatoria.objects.create(
+                            convocatoria=iniciativa.convocatoria,
+                            usuario=ee.usuario,
+                            titulo="Incorporación a Equipo Emprendedor",
+                            mensaje=f"Has sido vinculado como integrante del equipo '{nombre_equipo}' en la iniciativa '{iniciativa.nombre}'.",
+                            tipo="actualizacion"
+                        )
+
         return Response({
             "id_equipo": equipo.id_equipo,
             "nombre_equipo": equipo.nombre_equipo,
+            "id_iniciativa": iniciativa.id_iniciativa if iniciativa else None,
+            "iniciativa_nombre": iniciativa.nombre if iniciativa else None,
             "estudiante_lider": lider_usuario_id,
             "miembros": [ee.usuario_id for ee in estudiantes_emprendedores],
             "message": "Equipo creado exitosamente"
@@ -127,7 +211,8 @@ class CrearEquipoView(APIView):
 class MiEquipoView(APIView):
     """
     Retorna los datos del equipo al que pertenece el estudiante autenticado
-    (incluyendo nombre, líder, lista de miembros y si el usuario actual es el líder).
+    (incluyendo nombre, líder, lista de miembros, iniciativa vinculada y si el usuario actual es el líder).
+    Permite además eliminar el equipo completo si el solicitante es el líder.
     """
     authentication_classes = [JWTAuthentication]
     permission_classes = [EsEstudiante]
@@ -135,6 +220,7 @@ class MiEquipoView(APIView):
     def get(self, request):
         estudiante = Estudiante.objects.select_related(
             'equipo__estudiante_lider__usuario',
+            'equipo__iniciativa__convocatoria',
             'usuario'
         ).filter(usuario=request.user, equipo__isnull=False).first()
 
@@ -165,6 +251,18 @@ class MiEquipoView(APIView):
             for m in miembros_qs
         ]
 
+        iniciativa_data = None
+        if hasattr(equipo, 'iniciativa') and equipo.iniciativa:
+            ini = equipo.iniciativa
+            iniciativa_data = {
+                "id_iniciativa": ini.id_iniciativa,
+                "nombre": ini.nombre,
+                "tipo": ini.tipo,
+                "estado": ini.estado,
+                "convocatoria_nombre": ini.convocatoria.nombre if ini.convocatoria else None,
+                "radicado": f"UFPS-POST-{ini.fecha_postulacion.year}-{ini.id_iniciativa:04d}" if ini.fecha_postulacion else None,
+            }
+
         return Response({
             "tiene_equipo": True,
             "equipo": {
@@ -172,6 +270,7 @@ class MiEquipoView(APIView):
                 "nombre_equipo": equipo.nombre_equipo,
                 "fecha_creacion": equipo.fecha_creacion.isoformat() if equipo.fecha_creacion else None,
                 "es_lider": es_lider,
+                "iniciativa": iniciativa_data,
                 "lider": {
                     "id_usuario": lider_usuario.id_usuario,
                     "nombre": lider_usuario.nombre,
@@ -181,10 +280,37 @@ class MiEquipoView(APIView):
             }
         }, status=status.HTTP_200_OK)
 
+    def delete(self, request):
+        estudiante = Estudiante.objects.select_related('equipo__estudiante_lider').filter(
+            usuario=request.user, equipo__isnull=False
+        ).first()
+
+        if not estudiante or not estudiante.equipo:
+            return Response(
+                {"error": "No perteneces a ningún equipo para eliminar"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        equipo = estudiante.equipo
+        if equipo.estudiante_lider.usuario_id != request.user.id_usuario:
+            return Response(
+                {"error": "Solo el líder del equipo tiene permisos para eliminar el equipo"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        with transaction.atomic():
+            nombre_eliminado = equipo.nombre_equipo
+            Estudiante.objects.filter(equipo=equipo).update(equipo=None)
+            equipo.delete()
+
+        return Response({
+            "message": f"El equipo '{nombre_eliminado}' ha sido eliminado exitosamente. Los estudiantes ya están disponibles para conformar o unirse a nuevos equipos."
+        }, status=status.HTTP_200_OK)
+
 
 class EquipoDetalleView(APIView):
     """
-    Consulta o actualización del nombre de un equipo específico.
+    Consulta, actualización del nombre o eliminación de un equipo específico.
     """
     authentication_classes = [JWTAuthentication]
     permission_classes = [TieneRolPermitido]
@@ -193,7 +319,8 @@ class EquipoDetalleView(APIView):
     def _obtener_equipo(self, id_equipo):
         try:
             return EquipoEmprendedor.objects.select_related(
-                'estudiante_lider__usuario'
+                'estudiante_lider__usuario',
+                'iniciativa__convocatoria'
             ).get(id_equipo=id_equipo), None
         except EquipoEmprendedor.DoesNotExist:
             return None, Response({"error": "Equipo no encontrado"}, status=status.HTTP_404_NOT_FOUND)
@@ -223,11 +350,24 @@ class EquipoDetalleView(APIView):
             for m in miembros_qs
         ]
 
+        iniciativa_data = None
+        if hasattr(equipo, 'iniciativa') and equipo.iniciativa:
+            ini = equipo.iniciativa
+            iniciativa_data = {
+                "id_iniciativa": ini.id_iniciativa,
+                "nombre": ini.nombre,
+                "tipo": ini.tipo,
+                "estado": ini.estado,
+                "convocatoria_nombre": ini.convocatoria.nombre if ini.convocatoria else None,
+                "radicado": f"UFPS-POST-{ini.fecha_postulacion.year}-{ini.id_iniciativa:04d}" if ini.fecha_postulacion else None,
+            }
+
         return Response({
             "id_equipo": equipo.id_equipo,
             "nombre_equipo": equipo.nombre_equipo,
             "fecha_creacion": equipo.fecha_creacion.isoformat() if equipo.fecha_creacion else None,
             "es_lider": es_lider,
+            "iniciativa": iniciativa_data,
             "lider": {
                 "id_usuario": lider_usuario.id_usuario,
                 "nombre": lider_usuario.nombre,
@@ -261,6 +401,38 @@ class EquipoDetalleView(APIView):
             "message": "Equipo actualizado exitosamente"
         }, status=status.HTTP_200_OK)
 
+    def delete(self, request, id_equipo):
+        equipo, error_response = self._obtener_equipo(id_equipo)
+        if error_response:
+            return error_response
+
+        if equipo.estudiante_lider.usuario_id != request.user.id_usuario:
+            return Response(
+                {"error": "Solo el líder del equipo tiene permisos para eliminar el equipo"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        with transaction.atomic():
+            nombre_eliminado = equipo.nombre_equipo
+            miembros = list(Estudiante.objects.filter(equipo=equipo).select_related('usuario'))
+            Estudiante.objects.filter(equipo=equipo).update(equipo=None)
+            if hasattr(equipo, 'iniciativa') and equipo.iniciativa and equipo.iniciativa.convocatoria:
+                from gestion_convocatorias.models import NotificacionConvocatoria
+                for m in miembros:
+                    if m.usuario_id != request.user.id_usuario:
+                        NotificacionConvocatoria.objects.create(
+                            convocatoria=equipo.iniciativa.convocatoria,
+                            usuario=m.usuario,
+                            titulo="Disolución de Equipo Emprendedor",
+                            mensaje=f"El equipo '{nombre_eliminado}' ha sido disuelto por su líder. Ya te encuentras disponible para conformar o unirte a otro equipo.",
+                            tipo="actualizacion"
+                        )
+            equipo.delete()
+
+        return Response({
+            "message": f"El equipo '{nombre_eliminado}' ha sido eliminado exitosamente. Los estudiantes ya están disponibles para conformar o unirse a nuevos equipos."
+        }, status=status.HTTP_200_OK)
+
 
 class EquipoMiembroView(APIView):
     """
@@ -272,7 +444,7 @@ class EquipoMiembroView(APIView):
 
     def _obtener_equipo_y_validar_lider(self, request, id_equipo):
         try:
-            equipo = EquipoEmprendedor.objects.select_related('estudiante_lider').get(id_equipo=id_equipo)
+            equipo = EquipoEmprendedor.objects.select_related('estudiante_lider', 'iniciativa__convocatoria').get(id_equipo=id_equipo)
         except EquipoEmprendedor.DoesNotExist:
             return None, Response({"error": "Equipo no encontrado"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -325,6 +497,17 @@ class EquipoMiembroView(APIView):
         estudiante_target.equipo = equipo
         estudiante_target.save(update_fields=['equipo'])
 
+        # Notificación al nuevo integrante
+        if hasattr(equipo, 'iniciativa') and equipo.iniciativa and equipo.iniciativa.convocatoria:
+            from gestion_convocatorias.models import NotificacionConvocatoria
+            NotificacionConvocatoria.objects.create(
+                convocatoria=equipo.iniciativa.convocatoria,
+                usuario=target_user,
+                titulo="Incorporación a Equipo Emprendedor",
+                mensaje=f"Has sido incorporado(a) como integrante del equipo '{equipo.nombre_equipo}' para la iniciativa '{equipo.iniciativa.nombre}'.",
+                tipo="actualizacion"
+            )
+
         return Response({
             "message": "Miembro agregado exitosamente",
             "miembro": {
@@ -350,7 +533,7 @@ class EquipoMiembroView(APIView):
             )
 
         try:
-            miembro = Estudiante.objects.get(usuario_id=id_usuario, equipo=equipo)
+            miembro = Estudiante.objects.select_related('usuario').get(usuario_id=id_usuario, equipo=equipo)
         except Estudiante.DoesNotExist:
             return Response(
                 {"error": "Ese usuario no pertenece a este equipo"},
@@ -359,5 +542,16 @@ class EquipoMiembroView(APIView):
 
         miembro.equipo = None
         miembro.save(update_fields=['equipo'])
+
+        # Notificación al integrante retirado
+        if hasattr(equipo, 'iniciativa') and equipo.iniciativa and equipo.iniciativa.convocatoria:
+            from gestion_convocatorias.models import NotificacionConvocatoria
+            NotificacionConvocatoria.objects.create(
+                convocatoria=equipo.iniciativa.convocatoria,
+                usuario=miembro.usuario,
+                titulo="Retiro de Equipo Emprendedor",
+                mensaje=f"Has sido retirado(a) del equipo '{equipo.nombre_equipo}'. Ya te encuentras disponible para integrar otro equipo.",
+                tipo="actualizacion"
+            )
 
         return Response({"message": "Miembro eliminado del equipo exitosamente"}, status=status.HTTP_200_OK)
