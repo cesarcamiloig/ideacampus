@@ -12,3 +12,11 @@ export async function fetchEstudiantes() {
 export async function registerEquipo(equipo) {
   return apiClient.post("/equipos/crear/", equipo);
 }
+
+export async function fetchMiEquipo() {
+  return apiClient.get("/equipos/mi-equipo/");
+}
+
+export async function updateEquipo(equipo) {
+  return apiClient.put("/equipos/mi-equipo/", equipo);
+}

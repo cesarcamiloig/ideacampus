@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "../../../context/AuthContext";
 import { getUsuario } from "../../gestion_administrativa/services/authService";
-import { fetchEstudiantes, registerEquipo } from "../services/equipoService";
+import {
+  fetchEstudiantes,
+  fetchMiEquipo,
+  registerEquipo,
+  updateEquipo,
+} from "../services/equipoService";
 import "./EquipoForm.css";
 
 const MIN_INTEGRANTES = 2;
 
 function EquipoForm() {
+  const { logout } = useAuth();
   const usuario = getUsuario();
 
   const [nombreEquipo, setNombreEquipo] = useState("");
@@ -26,6 +33,10 @@ function EquipoForm() {
   const [cargandoEstudiantes, setCargandoEstudiantes] = useState(true);
   const [errorEstudiantes, setErrorEstudiantes] = useState("");
   const [busqueda, setBusqueda] = useState("");
+  const [equipoExistente, setEquipoExistente] = useState(null);
+  const [cargandoEquipo, setCargandoEquipo] = useState(true);
+  const [errorEquipo, setErrorEquipo] = useState("");
+  const [intentoEquipo, setIntentoEquipo] = useState(0);
 
   const [errors, setErrors] = useState({});
   const [status, setStatus] = useState("idle"); // idle | loading | success | error
@@ -51,6 +62,39 @@ function EquipoForm() {
     };
   }, []);
 
+  useEffect(() => {
+    let activo = true;
+    async function cargarEquipo() {
+      try {
+        const equipo = await fetchMiEquipo();
+        if (activo) {
+          setEquipoExistente(equipo);
+          if (equipo) {
+            setNombreEquipo(equipo.nombre_equipo);
+            setMiembros(
+              equipo.integrantes.map((integrante) => ({
+                id: integrante.id_usuario,
+                nombre: integrante.nombre,
+                correo: integrante.correo,
+                esLider: integrante.es_lider,
+              }))
+            );
+          }
+        }
+      } catch (err) {
+        if (activo) {
+          setErrorEquipo(err.message || "No pudimos consultar tu equipo.");
+        }
+      } finally {
+        if (activo) setCargandoEquipo(false);
+      }
+    }
+    cargarEquipo();
+    return () => {
+      activo = false;
+    };
+  }, [intentoEquipo]);
+
   const idsAgregados = useMemo(() => new Set(miembros.map((m) => m.id)), [miembros]);
 
   const estudiantesFiltrados = useMemo(() => {
@@ -67,10 +111,12 @@ function EquipoForm() {
 
   function agregarMiembro(estudiante) {
     setMiembros((prev) => [...prev, { ...estudiante, esLider: false }]);
+    setStatus("idle");
   }
 
   function quitarMiembro(id) {
     setMiembros((prev) => prev.filter((m) => m.id !== id));
+    setStatus("idle");
   }
 
   function validar() {
@@ -94,11 +140,31 @@ function EquipoForm() {
     setStatus("loading");
     setServerError("");
     try {
-      await registerEquipo({
+      const equipo = {
         nombre_equipo: nombreEquipo,
         id_usuario_lider: usuario.id_usuario,
         id_usuarios: miembros.map((m) => m.id),
-      });
+      };
+
+      if (equipoExistente) {
+        const actualizado = await updateEquipo(equipo);
+        setEquipoExistente(actualizado);
+        setMiembros(
+          actualizado.integrantes.map((integrante) => ({
+            id: integrante.id_usuario,
+            nombre: integrante.nombre,
+            correo: integrante.correo,
+            esLider: integrante.es_lider,
+          }))
+        );
+      } else {
+        const creado = await registerEquipo(equipo);
+        setEquipoExistente({
+          id_equipo: creado.id_equipo,
+          nombre_equipo: creado.nombre_equipo,
+          es_lider: true,
+        });
+      }
       setStatus("success");
     } catch (err) {
       setStatus("error");
@@ -125,12 +191,17 @@ function EquipoForm() {
             <div className="equipo-brand-sub">Universidad Francisco de Paula Santander</div>
           </div>
         </div>
-        <span className="equipo-breadcrumb">HU-04 · Equipo Emprendedor</span>
+        <div className="equipo-header-actions">
+          <span className="equipo-breadcrumb">HU-04 · Equipo Emprendedor</span>
+          <button type="button" className="equipo-logout" onClick={logout}>
+            Cerrar sesión
+          </button>
+        </div>
       </header>
 
       <main className="equipo-layout">
         <aside className="equipo-aside">
-          <h1>Registra tu equipo</h1>
+          <h1>{equipoExistente ? "Actualiza tu equipo" : "Registra tu equipo"}</h1>
           <p className="equipo-aside-text">
             Como líder, agrega a cada integrante para formalizar la
             participación colectiva de tu iniciativa.
@@ -167,6 +238,29 @@ function EquipoForm() {
         </aside>
 
         <section className="equipo-card">
+          {cargandoEquipo ? (
+            <p className="equipo-table-msg">Consultando tu equipo...</p>
+          ) : errorEquipo ? (
+            <div>
+              <p className="equipo-error-banner" role="alert">{errorEquipo}</p>
+              <button
+                type="button"
+                className="equipo-submit"
+                onClick={() => {
+                  setErrorEquipo("");
+                  setCargandoEquipo(true);
+                  setIntentoEquipo((intento) => intento + 1);
+                }}
+              >
+                Reintentar
+              </button>
+            </div>
+          ) : equipoExistente && !equipoExistente.es_lider ? (
+            <p className="equipo-table-msg">
+              Ya perteneces al equipo “{equipoExistente.nombre_equipo}”. Solo la
+              persona líder puede actualizar sus datos e integrantes.
+            </p>
+          ) : (
           <form onSubmit={handleSubmit} noValidate>
             <div className="equipo-section-label">Datos del equipo</div>
             <div className="equipo-field-grid">
@@ -179,7 +273,10 @@ function EquipoForm() {
                   type="text"
                   placeholder="Ej. EcoSoluciones UFPS"
                   value={nombreEquipo}
-                  onChange={(e) => setNombreEquipo(e.target.value)}
+                  onChange={(e) => {
+                    setNombreEquipo(e.target.value);
+                    setStatus("idle");
+                  }}
                   aria-invalid={Boolean(errors.nombreEquipo)}
                 />
                 {errors.nombreEquipo && (
@@ -284,7 +381,13 @@ function EquipoForm() {
             <div className="equipo-actions">
               <button type="button" className="equipo-cancel">Cancelar</button>
               <button type="submit" className="equipo-submit" disabled={status === "loading"}>
-                {status === "loading" ? "Guardando..." : "Guardar equipo"}
+                {status === "loading"
+                  ? equipoExistente
+                    ? "Actualizando..."
+                    : "Creando..."
+                  : equipoExistente
+                    ? "Actualizar equipo"
+                    : "Crear equipo"}
               </button>
             </div>
 
@@ -295,6 +398,7 @@ function EquipoForm() {
               <p className="equipo-error-banner" role="alert">{serverError}</p>
             )}
           </form>
+          )}
         </section>
       </main>
     </div>

@@ -27,7 +27,8 @@ a {
   min-height: 100dvh;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 40px 32px 64px;
   box-sizing: border-box;
   /* soft vignette that frames the card without obscuring the edges */
@@ -87,8 +88,8 @@ a {
   position: relative;
   z-index: 1;
   display: flex;
-  width: 430px;
-  height: 516px;
+  width: min(430px, 100%);
+  height: auto;
   flex-direction: column;
   align-items: center;
   box-sizing: border-box;
@@ -139,8 +140,7 @@ a {
 
 .tagline,
 .university,
-.institution-note p,
-.support p {
+.institution-note p {
   margin: 0;
 }
 
@@ -208,7 +208,6 @@ a {
 }
 
 .google-button:focus-visible,
-.support a:focus-visible,
 .role-select:focus-visible {
   outline: 3px solid rgb(255 255 255 / 0.65);
   outline-offset: 3px;
@@ -258,8 +257,7 @@ a {
   text-align: left;
 }
 
-.institution-note svg,
-.support svg {
+.institution-note svg {
   width: 23px;
   height: 23px;
   flex: 0 0 auto;
@@ -283,43 +281,6 @@ a {
   font-size: 13.5px;
   font-weight: 600;
   letter-spacing: 0.01em;
-}
-
-/* ─── Separator ──────────────────────────────────────────────── */
-
-.separator {
-  width: 100%;
-  height: 1px;
-  margin: 21px 0 18px;
-  background: rgb(255 255 255 / 0.28);
-}
-
-/* ─── Support ────────────────────────────────────────────────── */
-
-.support {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 11px;
-  text-align: left;
-}
-
-.support p,
-.support a {
-  font-size: 11.5px;
-  line-height: 1.5;
-}
-
-.support p {
-  opacity: 0.82;
-}
-
-.support a {
-  display: block;
-  width: fit-content;
-  color: #fff;
-  font-weight: 600;
-  text-underline-offset: 3px;
 }
 
 /* ─── Page footer ────────────────────────────────────────────── */
@@ -380,9 +341,7 @@ a {
   }
 
   .login-card {
-    width: min(88vw, 366px);
-    height: auto;
-    min-height: 530px;
+    width: min(100%, 366px);
     justify-content: flex-start;
     border-radius: 19px;
     padding: 29px 24px 25px;
@@ -420,10 +379,6 @@ a {
 
   .institution-note {
     margin-top: 20px;
-  }
-
-  .separator {
-    margin: 20px 0 18px;
   }
 
   .page-footer {
@@ -465,9 +420,6 @@ a {
     margin-top: 15px;
   }
 
-  .separator {
-    margin: 15px 0;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -486,6 +438,8 @@ a {
 }
 
 .google-button-container {
+  box-sizing: border-box;
+  width: 100%;
   margin-top: 24px;
   display: flex;
   justify-content: center;

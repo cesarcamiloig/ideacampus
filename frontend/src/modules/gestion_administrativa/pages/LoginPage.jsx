@@ -14,15 +14,6 @@ function InstitutionIcon() {
   );
 }
 
-function SupportIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 24 24">
-      <path d="M4 14v-2a8 8 0 0 1 16 0v2" />
-      <path d="M6.5 18H6a2 2 0 0 1-2-2v-2h2.5v4Zm11 0h.5a2 2 0 0 0 2-2v-2h-2.5v4ZM17.5 18c-.6 1.3-1.8 2-3.5 2" />
-    </svg>
-  );
-}
-
 function BgLeft() {
   return (
     <svg className="bg-panel bg-panel-left" viewBox="0 0 380 500" aria-hidden="true">
@@ -117,16 +108,6 @@ function LoginCard({ status, errorMessage, googleButtonRef, rolSeleccionado, set
           <strong>@ufps.edu.co</strong>
         </div>
       </section>
-
-      <div className="separator" />
-
-      <footer className="support">
-        <SupportIcon />
-        <div>
-          <p>¿Problemas para ingresar?</p>
-          <a href="mailto:soporte@ufps.edu.co">Contacta a soporte</a>
-        </div>
-      </footer>
     </main>
   );
 }
@@ -161,6 +142,9 @@ function LoginPage({ onLoginSuccess }) {
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
+    let active = true;
+    let resizeObserver;
+    let resizeHandler;
 
     async function handleCredentialResponse(response) {
       console.log("[Google] Callback ejecutado");
@@ -195,22 +179,53 @@ function LoginPage({ onLoginSuccess }) {
     script.src = "https://accounts.google.com/gsi/client";
     script.async = true;
     script.onload = () => {
+      if (!active) return;
+
       window.google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
         callback: handleCredentialResponse,
       });
-      window.google.accounts.id.renderButton(googleButtonRef.current, {
-        theme: "outline",
-        size: "large",
-        width: 340,
-        text: "continue_with",
-      });
+      const renderGoogleButton = () => {
+        if (!active) return;
+        const container = googleButtonRef.current;
+        if (!container) return;
+
+        const width = Math.min(400, Math.max(200, Math.floor(container.clientWidth)));
+        if (container.dataset.buttonWidth === String(width)) return;
+
+        container.dataset.buttonWidth = String(width);
+        container.replaceChildren();
+        window.google.accounts.id.renderButton(container, {
+          theme: "outline",
+          size: "large",
+          width,
+          text: "continue_with",
+        });
+      };
+
+      if (googleButtonRef.current && "ResizeObserver" in window) {
+        resizeObserver = new ResizeObserver(renderGoogleButton);
+        resizeObserver.observe(googleButtonRef.current);
+      } else {
+        resizeHandler = renderGoogleButton;
+        window.addEventListener("resize", resizeHandler);
+      }
+      renderGoogleButton();
     };
     script.onerror = () => {
+      if (!active) return;
       console.error("[Google] No se pudo cargar Google Identity Services");
       setStatus("error");
     };
     document.body.appendChild(script);
+
+    return () => {
+      active = false;
+      initialized.current = false;
+      resizeObserver?.disconnect();
+      if (resizeHandler) window.removeEventListener("resize", resizeHandler);
+      script.remove();
+    };
   }, []);
 
   return (

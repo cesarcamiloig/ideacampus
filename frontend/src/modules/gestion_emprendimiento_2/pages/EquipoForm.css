@@ -54,6 +54,28 @@
   letter-spacing: 0.08em;
 }
 
+.equipo-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.equipo-logout {
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #FFFFFF;
+  color: #374151;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.equipo-logout:hover {
+  background: #F3F4F6;
+}
+
 .equipo-layout {
   max-width: 1200px;
   margin: 0 auto;
@@ -65,6 +87,18 @@
 }
 
 @media (max-width: 900px) {
+  .equipo-header {
+    padding: 0 16px;
+  }
+
+  .equipo-header-actions {
+    gap: 8px;
+  }
+
+  .equipo-breadcrumb {
+    display: none;
+  }
+
   .equipo-layout {
     grid-template-columns: 1fr;
     padding: 24px;
