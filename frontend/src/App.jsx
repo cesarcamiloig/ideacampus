@@ -1,13 +1,12 @@
 import React, { useState } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import LoginPage from "./modules/gestion_administrativa/pages/LoginPage";
-import SuccessPage from "./modules/gestion_administrativa/pages/SuccessPage";
-import TutorProfileForm from "./modules/gestion_acompaniamiento/pages/TutorProfileForm";
 import AdminParametrosPage from "./modules/gestion_administrativa/pages/AdminParametrosPage";
 import ConvocatoriasPage from "./modules/gestion_convocatorias/pages/ConvocatoriasPage";
+import RoleDashboardPage from "./modules/gestion_administrativa/pages/RoleDashboardPage";
 
 function AppContent() {
-  const { isAuthenticated, usuario, refreshSession, logout } = useAuth();
+  const { isAuthenticated, usuario, refreshSession } = useAuth();
   const rolActivo = usuario?.rol?.trim().toLowerCase();
   const [currentModule, setCurrentModule] = useState(null);
 
@@ -15,31 +14,25 @@ function AppContent() {
     return <LoginPage onLoginSuccess={refreshSession} />;
   }
 
-  // Determinar el módulo activo según navegación o rol inicial
-  const activeModule = currentModule || (rolActivo === "admin" ? "parametros" : "convocatorias");
-
-  // Módulo de Convocatorias (o postulaciones)
-  if (activeModule === "convocatorias" || activeModule === "postulaciones") {
-    return <ConvocatoriasPage onNavigate={setCurrentModule} activeModule="convocatorias" />;
-  }
-
-  // Módulo de Administración Paramétrica
-  if (activeModule === "parametros" && rolActivo === "admin") {
+  // 1. Administrador del Sistema
+  if (rolActivo === "admin" || rolActivo === "administrador") {
+    if (currentModule === "convocatorias") {
+      return <ConvocatoriasPage onNavigate={setCurrentModule} activeModule="convocatorias" />;
+    }
     return <AdminParametrosPage onNavigate={setCurrentModule} />;
   }
 
-  // Perfiles de Tutor / Mentor (HU-16)
-  if (rolActivo === "tutor" || rolActivo === "mentor") {
-    return <TutorProfileForm />;
+  // 2. Coordinador de Emprendimiento (Gestión de convocatorias HU-02)
+  if (rolActivo === "coordinador") {
+    const activeModule = currentModule || "convocatorias";
+    if (activeModule === "convocatorias") {
+      return <ConvocatoriasPage onNavigate={setCurrentModule} activeModule="convocatorias" />;
+    }
+    return <RoleDashboardPage role={rolActivo} onNavigate={setCurrentModule} />;
   }
 
-  // Fallback para admin
-  if (rolActivo === "admin") {
-    return <AdminParametrosPage onNavigate={setCurrentModule} />;
-  }
-
-  // Para coordinador u otros roles institucionales
-  return <ConvocatoriasPage onNavigate={setCurrentModule} activeModule={activeModule} />;
+  // 3. Estudiante Emprendedor (HU-03) y otros roles institucionales
+  return <RoleDashboardPage role={rolActivo} onNavigate={setCurrentModule} />;
 }
 
 function App() {

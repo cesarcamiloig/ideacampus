@@ -4,7 +4,6 @@ import {
     Lightbulb,
     Settings,
     ChevronDown,
-    Check,
     LogOut,
     Users,
     ClipboardCheck,
@@ -24,13 +23,27 @@ const ROLE_LABELS = {
     direccion: "Dirección de Programa",
 }
 
-export default function MainLayout({ children, activeModule = "parametros", onNavigate }) {
+export default function MainLayout({
+    children,
+    activeModule = "parametros",
+    onModuleChange,
+    onNavigate,
+    activeRole: propActiveRole,
+}) {
     // Estado del menú desplegable de perfil
     const [profileMenuOpen, setProfileMenuOpen] = useState(false)
 
     // Conexión a la sesión real del usuario autenticado
-    const { usuario, rolActivo, rolesAsignados, logout } = useAuth()
-    const [activeRole, setActiveRole] = useState(rolActivo || "admin")
+    const { usuario, rolActivo, logout } = useAuth()
+    const [activeRole, setActiveRole] = useState(propActiveRole || rolActivo || "admin")
+
+    React.useEffect(() => {
+        if (propActiveRole) {
+            setActiveRole(propActiveRole)
+        } else if (rolActivo) {
+            setActiveRole(rolActivo)
+        }
+    }, [propActiveRole, rolActivo])
 
     const userName = usuario?.nombre || "Usuario Institucional"
     const userEmail = usuario?.correo || ""
@@ -43,15 +56,6 @@ export default function MainLayout({ children, activeModule = "parametros", onNa
             .join("")
             .toUpperCase() || "UI"
 
-    const rawRoles =
-        rolesAsignados && rolesAsignados.length > 0
-            ? rolesAsignados
-            : [rolActivo || "admin"]
-
-    const assignedRoles = rawRoles.map((rId) => ({
-        id: rId,
-        label: ROLE_LABELS[rId] || rId.replace(/_/g, " ").toUpperCase(),
-    }))
 
     // Menús de navegación según el rol seleccionado en la cabecera
     const menuConfigByRole = {
@@ -63,6 +67,12 @@ export default function MainLayout({ children, activeModule = "parametros", onNa
         tutor: [
             { id: "tutorias", label: "Mis Iniciativas Asignadas", icon: BookOpen },
             { id: "acompanamiento", label: "Registro de Tutorías", icon: Users },
+            { id: "perfil", label: "Mi Perfil Académico", icon: Award },
+        ],
+        mentor: [
+            { id: "mentorias", label: "Mentorías Asignadas", icon: BookOpen },
+            { id: "acompanamiento", label: "Sesiones de Asesoría", icon: Users },
+            { id: "perfil", label: "Mi Perfil Profesional", icon: Award },
         ],
         evaluador: [
             { id: "evaluaciones", label: "Iniciativas por Evaluar", icon: ClipboardCheck },
@@ -77,14 +87,20 @@ export default function MainLayout({ children, activeModule = "parametros", onNa
             { id: "mi-iniciativa", label: "Mi Emprendimiento", icon: Lightbulb },
             { id: "postulaciones", label: "Convocatorias Abiertas", icon: FileText },
         ],
+        direccion_del_programa: [
+            { id: "dashboard", label: "Panel de Dirección", icon: Award },
+            { id: "iniciativas", label: "Banco de Iniciativas", icon: Lightbulb },
+            { id: "indicadores", label: "Métricas e Indicadores", icon: FileText },
+        ],
+        direccion: [
+            { id: "dashboard", label: "Panel de Dirección", icon: Award },
+            { id: "iniciativas", label: "Banco de Iniciativas", icon: Lightbulb },
+            { id: "indicadores", label: "Métricas e Indicadores", icon: FileText },
+        ],
     }
 
     const currentMenuItems = menuConfigByRole[activeRole] || menuConfigByRole.admin
 
-    const handleRoleSwitch = (roleId) => {
-        setActiveRole(roleId)
-        setProfileMenuOpen(false)
-    }
 
     const activeRoleLabel = ROLE_LABELS[activeRole] || activeRole.replace(/_/g, " ").toUpperCase()
 
@@ -119,13 +135,16 @@ export default function MainLayout({ children, activeModule = "parametros", onNa
                                     <button
                                         type="button"
                                         onClick={() => {
+                                            if (onModuleChange) {
+                                                onModuleChange(item.id)
+                                            }
                                             if (onNavigate) {
                                                 onNavigate(item.id)
                                             }
                                         }}
                                         className={`flex w-full items-center gap-3 px-6 py-3.5 text-left text-sm transition-colors ${isActive
-                                                ? "bg-red-50/40 font-semibold text-slate-900"
-                                                : "font-medium text-slate-600 hover:bg-slate-50"
+                                            ? "bg-red-50/40 font-semibold text-slate-900"
+                                            : "font-medium text-slate-600 hover:bg-slate-50"
                                             }`}
                                     >
                                         <Icon
@@ -190,37 +209,11 @@ export default function MainLayout({ children, activeModule = "parametros", onNa
 
                         {/* Dropdown contextual */}
                         {profileMenuOpen && (
-                            <div className="absolute right-0 mt-2 w-64 rounded-xl border border-slate-200 bg-white shadow-lg py-2 z-50 animate-in fade-in zoom-in-95 duration-100">
-                                <div className="px-4 py-2 border-b border-slate-100">
-                                    <p className="text-xs font-bold text-slate-900">{userName}</p>
-                                    <p className="text-[11px] text-slate-500">{userEmail}</p>
+                            <div className="absolute right-0 mt-2 w-60 rounded-xl border border-slate-200 bg-white shadow-lg py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100">
+                                <div className="px-4 py-2.5 border-b border-slate-100">
+                                    <p className="text-xs font-bold text-slate-900 truncate">{userName}</p>
+                                    <p className="text-[11px] text-slate-500 truncate">{userEmail}</p>
                                 </div>
-
-                                <div className="px-4 pt-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                    Cambiar Vista de Rol
-                                </div>
-
-                                <div className="space-y-0.5">
-                                    {assignedRoles.map((role) => {
-                                        const isSelected = activeRole === role.id
-                                        return (
-                                            <button
-                                                key={role.id}
-                                                type="button"
-                                                onClick={() => handleRoleSwitch(role.id)}
-                                                className={`w-full flex items-center justify-between px-4 py-2 text-xs text-left transition-colors ${isSelected
-                                                        ? "bg-red-50 text-red-700 font-semibold"
-                                                        : "text-slate-700 hover:bg-slate-50"
-                                                    }`}
-                                            >
-                                                <span>{role.label}</span>
-                                                {isSelected && <Check className="h-3.5 w-3.5 text-red-600 shrink-0" />}
-                                            </button>
-                                        )
-                                    })}
-                                </div>
-
-                                <div className="my-1.5 border-t border-slate-100" />
 
                                 <button
                                     type="button"
@@ -230,9 +223,9 @@ export default function MainLayout({ children, activeModule = "parametros", onNa
                                             logout()
                                         }
                                     }}
-                                    className="w-full flex items-center gap-2 px-4 py-2 text-xs text-left text-slate-600 hover:bg-slate-50 hover:text-red-600 transition-colors"
+                                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-left text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors"
                                 >
-                                    <LogOut className="h-3.5 w-3.5" />
+                                    <LogOut className="h-4 w-4" />
                                     <span>Cerrar Sesión</span>
                                 </button>
                             </div>
