@@ -3,7 +3,6 @@ import {
   CheckCircle2,
   Clock,
   Sparkles,
-  ArrowRight,
   ShieldCheck,
   User,
   GraduationCap,
@@ -360,59 +359,6 @@ export default function RoleDashboardPage({ role }) {
           </div>
         </section>
 
-        {/* ACCESOS RÁPIDOS A LOS MÓDULOS DEL ROL */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500">
-              Módulos y Espacios de Trabajo
-            </h2>
-            <span className="text-xs text-slate-400">
-              Selecciona una opción para explorar
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Object.entries(roleConfig.modules).map(([modKey, mod]) => {
-              const isSelected = activeModule === modKey;
-              return (
-                <button
-                  key={modKey}
-                  type="button"
-                  onClick={() => {
-                    if (modKey === "perfil") {
-                      setShowProfileForm(true);
-                    }
-                    setActiveModule(modKey);
-                  }}
-                  className={`group relative text-left rounded-xl p-5 border transition-all ${
-                    isSelected
-                      ? "bg-white border-red-500 shadow-md ring-2 ring-red-500/10"
-                      : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm"
-                  }`}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700 font-mono">
-                      {mod.tag}
-                    </span>
-                    <ArrowRight
-                      className={`h-4 w-4 transition-transform ${
-                        isSelected
-                          ? "text-red-600 translate-x-1"
-                          : "text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5"
-                      }`}
-                    />
-                  </div>
-                  <h3 className="text-base font-bold text-slate-900 group-hover:text-red-600 transition-colors">
-                    {mod.title}
-                  </h3>
-                  <p className="mt-1.5 text-xs text-slate-500 leading-relaxed">
-                    {mod.desc}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-        </div>
 
         {/* CONTENIDO ESPECÍFICO SEGÚN ROL */}
         {normalizedRole === "estudiante" ? (

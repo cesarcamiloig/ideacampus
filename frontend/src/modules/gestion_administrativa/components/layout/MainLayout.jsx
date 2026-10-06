@@ -4,7 +4,6 @@ import {
     Lightbulb,
     Settings,
     ChevronDown,
-    Check,
     LogOut,
     Users,
     ClipboardCheck,
@@ -35,7 +34,7 @@ export default function MainLayout({
     const [profileMenuOpen, setProfileMenuOpen] = useState(false)
 
     // Conexión a la sesión real del usuario autenticado
-    const { usuario, rolActivo, rolesAsignados, logout, switchRole } = useAuth()
+    const { usuario, rolActivo, logout } = useAuth()
     const [activeRole, setActiveRole] = useState(propActiveRole || rolActivo || "admin")
 
     React.useEffect(() => {
@@ -57,15 +56,6 @@ export default function MainLayout({
             .join("")
             .toUpperCase() || "UI"
 
-    const rawRoles =
-        rolesAsignados && rolesAsignados.length > 0
-            ? rolesAsignados
-            : [rolActivo || "admin"]
-
-    const assignedRoles = rawRoles.map((rId) => ({
-        id: rId,
-        label: ROLE_LABELS[rId] || rId.replace(/_/g, " ").toUpperCase(),
-    }))
 
     // Menús de navegación según el rol seleccionado en la cabecera
     const menuConfigByRole = {
@@ -111,16 +101,6 @@ export default function MainLayout({
 
     const currentMenuItems = menuConfigByRole[activeRole] || menuConfigByRole.admin
 
-    const handleRoleSwitch = (roleId) => {
-        setActiveRole(roleId)
-        setProfileMenuOpen(false)
-        if (onRoleChange) {
-            onRoleChange(roleId)
-        }
-        if (switchRole) {
-            switchRole(roleId)
-        }
-    }
 
     const activeRoleLabel = ROLE_LABELS[activeRole] || activeRole.replace(/_/g, " ").toUpperCase()
 
@@ -222,37 +202,11 @@ export default function MainLayout({
 
                         {/* Dropdown contextual */}
                         {profileMenuOpen && (
-                            <div className="absolute right-0 mt-2 w-64 rounded-xl border border-slate-200 bg-white shadow-lg py-2 z-50 animate-in fade-in zoom-in-95 duration-100">
-                                <div className="px-4 py-2 border-b border-slate-100">
-                                    <p className="text-xs font-bold text-slate-900">{userName}</p>
-                                    <p className="text-[11px] text-slate-500">{userEmail}</p>
+                            <div className="absolute right-0 mt-2 w-60 rounded-xl border border-slate-200 bg-white shadow-lg py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100">
+                                <div className="px-4 py-2.5 border-b border-slate-100">
+                                    <p className="text-xs font-bold text-slate-900 truncate">{userName}</p>
+                                    <p className="text-[11px] text-slate-500 truncate">{userEmail}</p>
                                 </div>
-
-                                <div className="px-4 pt-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                    Cambiar Vista de Rol
-                                </div>
-
-                                <div className="space-y-0.5">
-                                    {assignedRoles.map((role) => {
-                                        const isSelected = activeRole === role.id
-                                        return (
-                                            <button
-                                                key={role.id}
-                                                type="button"
-                                                onClick={() => handleRoleSwitch(role.id)}
-                                                className={`w-full flex items-center justify-between px-4 py-2 text-xs text-left transition-colors ${isSelected
-                                                    ? "bg-red-50 text-red-700 font-semibold"
-                                                    : "text-slate-700 hover:bg-slate-50"
-                                                    }`}
-                                            >
-                                                <span>{role.label}</span>
-                                                {isSelected && <Check className="h-3.5 w-3.5 text-red-600 shrink-0" />}
-                                            </button>
-                                        )
-                                    })}
-                                </div>
-
-                                <div className="my-1.5 border-t border-slate-100" />
 
                                 <button
                                     type="button"
@@ -262,9 +216,9 @@ export default function MainLayout({
                                             logout()
                                         }
                                     }}
-                                    className="w-full flex items-center gap-2 px-4 py-2 text-xs text-left text-slate-600 hover:bg-slate-50 hover:text-red-600 transition-colors"
+                                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-left text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors"
                                 >
-                                    <LogOut className="h-3.5 w-3.5" />
+                                    <LogOut className="h-4 w-4" />
                                     <span>Cerrar Sesión</span>
                                 </button>
                             </div>
