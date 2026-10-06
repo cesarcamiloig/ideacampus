@@ -118,7 +118,7 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 import sys
 
-DATABASE_URL = os.getenv('DATABASE_URL')
+DATABASE_URL = os.getenv('DATABASE_URL', '').strip()
 if DATABASE_URL and dj_database_url:
     DATABASES = {
         'default': dj_database_url.config(default=DATABASE_URL)
