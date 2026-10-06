@@ -1,5 +1,5 @@
 import { apiClient } from "../../../services/apiClient";
-import { getConvocatorias } from "./convocatoriaService";
+import { getConvocatorias, getConvocatoriaById } from "./convocatoriaService";
 
 const STORAGE_PREFIX = "ideacampus:postulaciones:";
 
@@ -41,129 +41,124 @@ export async function getConvocatoriasAbiertas(params = {}) {
 /**
  * Obtiene las postulaciones realizadas por el estudiante actual.
  */
-export async function getMisPostulaciones(usuarioId) {
-  const key = `${STORAGE_PREFIX}${usuarioId || "default"}`;
-  
-  // Intento de lectura desde backend si existiera el endpoint
-  try {
-    const remoteData = await apiClient.get("/postulaciones/");
-    if (Array.isArray(remoteData) && remoteData.length > 0) {
-      localStorage.setItem(key, JSON.stringify(remoteData));
-      return remoteData;
-    }
-  } catch {
-    // Si no existe el endpoint en backend, continúa con almacenamiento local persistente
-  }
+export async function getMisPostulaciones(usuario) {
+  const iniciativas = await apiClient.get("/iniciativas/");
+  const convocatoriasIds = [...new Set(iniciativas.map((item) => item.convocatoria))];
+  const convocatorias = await Promise.all(
+    convocatoriasIds.map((id) => getConvocatoriaById(id)),
+  );
+  const convocatoriasPorId = new Map(
+    convocatorias.map((convocatoria) => [convocatoria.id_convocatoria, convocatoria]),
+  );
 
-  try {
-    const local = localStorage.getItem(key);
-    if (local) {
-      return JSON.parse(local);
-    }
-  } catch (err) {
-    console.error("Error leyendo postulaciones locales:", err);
-  }
-
-  // Si no hay postulaciones previas, inicializar con array vacío
-  return [];
+  return iniciativas.map((iniciativa) =>
+    normalizarIniciativa(
+      iniciativa,
+      convocatoriasPorId.get(iniciativa.convocatoria),
+      usuario,
+    ),
+  );
 }
 
-/**
- * Genera un código de radicado único institucional (formato UFPS-POST-AAAA-XXXX).
- */
-function generarNumeroRadicado() {
-  const anio = new Date().getFullYear();
-  const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-  return `UFPS-POST-${anio}-${randomSuffix}`;
+function normalizarIniciativa(iniciativa, convocatoria, usuario) {
+  const id = iniciativa.id_iniciativa;
+  const fecha = iniciativa.fecha_postulacion || new Date().toISOString();
+  const anio = new Date(fecha).getFullYear();
+  const adjuntos = (iniciativa.documentos || []).map((documento) => ({
+    id: documento.id_documento,
+    nombre: documento.nombre_original,
+    tamanio: documento.tamano_bytes
+      ? `${(documento.tamano_bytes / (1024 * 1024)).toFixed(2)} MB`
+      : "",
+    tipo: "application/pdf",
+    url: documento.url_archivo,
+  }));
+  const convocatoriaId =
+    typeof iniciativa.convocatoria === "object"
+      ? iniciativa.convocatoria.id_convocatoria
+      : iniciativa.convocatoria;
+  const convocatoriaInfo =
+    typeof iniciativa.convocatoria === "object"
+      ? iniciativa.convocatoria
+      : convocatoria;
+  const usuarioInfo =
+    typeof iniciativa.usuario === "object" ? iniciativa.usuario : usuario;
+
+  return {
+    id: id || `post-${Date.now()}`,
+    id_iniciativa: iniciativa.id_iniciativa,
+    radicado: `UFPS-POST-${anio}-${String(id || 0).padStart(4, "0")}`,
+    fecha_radicacion: fecha,
+    estado: iniciativa.estado || "pendiente",
+    convocatoria: {
+      id_convocatoria: convocatoriaId,
+      nombre: convocatoriaInfo?.nombre || `Convocatoria #${convocatoriaId}`,
+      categoria: convocatoriaInfo?.categoria || "",
+      periodo_nombre: convocatoriaInfo?.periodo_nombre || "",
+    },
+    iniciativa: {
+      titulo: iniciativa.nombre,
+      categoria: iniciativa.sector_tecnologico || "",
+      resumen_ejecutivo: iniciativa.descripcion || "",
+      problema_solucion: "",
+      trl_inicial: iniciativa.etapa_actual || "",
+      impacto_esperado: "",
+      tipo: iniciativa.tipo,
+      sector_tecnologico: iniciativa.sector_tecnologico || "",
+      etapa_actual: iniciativa.etapa_actual || "",
+    },
+    origen_academico: {
+      tipo: iniciativa.origen_academico,
+      detalle_origen: iniciativa.detalle_origen || "",
+      asignatura_nombre:
+        iniciativa.origen_academico === "asignatura"
+          ? iniciativa.detalle_origen || ""
+          : "",
+      semillero_nombre:
+        iniciativa.origen_academico === "semillero"
+          ? iniciativa.detalle_origen || ""
+          : "",
+    },
+    equipo: {
+      lider: {
+        id_usuario: usuarioInfo?.id_usuario,
+        nombre: usuarioInfo?.nombre || "",
+        correo: usuarioInfo?.correo || "",
+      },
+      integrantes: [],
+    },
+    documentacion: {
+      archivos: adjuntos,
+    },
+  };
 }
 
 /**
  * Registra una nueva postulación de iniciativa a una convocatoria abierta (HU-03).
  */
-export async function registrarPostulacion(postulacionData, usuario) {
+export async function registrarPostulacion(postulacionData, usuario, convocatoria) {
+  const payload = new FormData();
+  Object.entries(postulacionData).forEach(([campo, valor]) => {
+    if (valor !== null && valor !== undefined) payload.append(campo, valor);
+  });
+
+  const iniciativa = await apiClient.post("/iniciativas/", payload);
+  const resultado = normalizarIniciativa(iniciativa, convocatoria, usuario);
+
   const usuarioId = usuario?.id_usuario || "default";
-  const radicado = generarNumeroRadicado();
-  const fechaActual = new Date().toISOString();
-
-  const nuevaPostulacion = {
-    id: `post-${Date.now()}`,
-    radicado,
-    fecha_radicacion: fechaActual,
-    estado: "radicada", // radicada | en_revision | en_evaluacion | aceptada | rechazada
-    convocatoria: {
-      id_convocatoria: postulacionData.id_convocatoria,
-      nombre: postulacionData.convocatoria_nombre,
-      categoria: postulacionData.convocatoria_categoria,
-      periodo_nombre: postulacionData.convocatoria_periodo,
-    },
-    iniciativa: {
-      titulo: postulacionData.titulo,
-      categoria: postulacionData.categoria,
-      resumen_ejecutivo: postulacionData.resumen_ejecutivo,
-      problema_solucion: postulacionData.problema_solucion,
-      trl_inicial: postulacionData.trl_inicial || "M0", // M0, M1, M2, M3
-      impacto_esperado: postulacionData.impacto_esperado || "",
-    },
-    origen_academico: {
-      tipo: postulacionData.origen_tipo, // 'asignatura' | 'semillero' | 'proyecto_grado' | 'extracurricular'
-      // Si fue asignatura
-      asignatura_nombre: postulacionData.asignatura_nombre || "",
-      asignatura_semestre: postulacionData.asignatura_semestre || "",
-      docente_titular: postulacionData.docente_titular || "",
-      codigo_grupo: postulacionData.codigo_grupo || "",
-      entregable_previo: postulacionData.entregable_previo || "",
-      // Si fue semillero
-      semillero_nombre: postulacionData.semillero_nombre || "",
-      tutor_semillero: postulacionData.tutor_semillero || "",
-      linea_investigacion: postulacionData.linea_investigacion || "",
-      // Si fue proyecto de grado
-      modalidad_grado: postulacionData.modalidad_grado || "",
-      director_proyecto: postulacionData.director_proyecto || "",
-      // Si fue extracurricular
-      justificacion_extracurricular: postulacionData.justificacion_extracurricular || "",
-      descripcion_origen: postulacionData.descripcion_origen || "",
-    },
-    equipo: {
-      lider: {
-        id_usuario: usuario?.id_usuario,
-        nombre: usuario?.nombre || postulacionData.lider_nombre,
-        correo: usuario?.correo || postulacionData.lider_correo,
-        codigo_estudiantil: postulacionData.lider_codigo || "",
-        rol: "Líder de Iniciativa",
-      },
-      integrantes: postulacionData.integrantes || [],
-    },
-    documentacion: {
-      archivos: postulacionData.archivos || [],
-      repositorio_url: postulacionData.repositorio_url || "",
-      demo_url: postulacionData.demo_url || "",
-      observaciones_adjuntos: postulacionData.observaciones_adjuntos || "",
-    },
-    declaracion_veracidad: true,
-    declaracion_autor: true,
-  };
-
-  // Intentar sincronizar con backend si existe endpoint
-  try {
-    await apiClient.post("/postulaciones/", nuevaPostulacion);
-  } catch {
-    // Si el endpoint remoto aún no está disponible en este sprint, se persiste localmente
-  }
-
-  // Persistir en storage del estudiante
   const key = `${STORAGE_PREFIX}${usuarioId}`;
-  let lista = [];
   try {
-    const actual = localStorage.getItem(key);
-    lista = actual ? JSON.parse(actual) : [];
-  } catch {
-    lista = [];
+    const anteriores = JSON.parse(localStorage.getItem(key) || "[]");
+    localStorage.setItem(key, JSON.stringify([resultado, ...anteriores]));
+  } catch (error) {
+    console.error("No se pudo guardar el comprobante de la iniciativa localmente:", error);
   }
 
-  lista.unshift(nuevaPostulacion);
-  localStorage.setItem(key, JSON.stringify(lista));
+  return resultado;
+}
 
-  return nuevaPostulacion;
+export async function descargarDocumentoIniciativa(idIniciativa) {
+  return apiClient.download(`/iniciativas/${idIniciativa}/documento/`);
 }
 
 /**

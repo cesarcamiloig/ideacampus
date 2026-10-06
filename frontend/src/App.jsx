@@ -31,6 +31,14 @@ function AppContent() {
     return <RoleDashboardPage role={rolActivo} onNavigate={setCurrentModule} />;
   }
 
+  // Dirección del Programa administra convocatorias desde la misma interfaz.
+  if (
+    ["direccion_del_programa", "direccion"].includes(rolActivo) &&
+    currentModule === "convocatorias"
+  ) {
+    return <ConvocatoriasPage onNavigate={setCurrentModule} activeModule="convocatorias" />;
+  }
+
   // 3. Estudiante Emprendedor (HU-03) y otros roles institucionales
   return <RoleDashboardPage role={rolActivo} onNavigate={setCurrentModule} />;
 }

@@ -1,11 +1,17 @@
 from datetime import timedelta
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from gestion_administrativa.jwt_utils import generar_token
 from gestion_administrativa.models import Rol, Usuario, UsuarioRol
-from .models import Convocatoria, NotificacionConvocatoria
+from .models import (
+    Convocatoria,
+    DocumentoPostulacion,
+    Iniciativa,
+    NotificacionConvocatoria,
+)
 from .services import actualizar_estados_convocatorias, notificar_apertura
 
 
@@ -14,6 +20,10 @@ class GestionConvocatoriasTests(APITestCase):
         # 1. Configurar Roles institucionales
         self.rol_admin, _ = Rol.objects.get_or_create(nombre_rol="admin", defaults={"descripcion": "Admin"})
         self.rol_coordinador, _ = Rol.objects.get_or_create(nombre_rol="coordinador", defaults={"descripcion": "Coordinador"})
+        self.rol_direccion, _ = Rol.objects.get_or_create(
+            nombre_rol="direccion_del_programa",
+            defaults={"descripcion": "Dirección del Programa"},
+        )
         self.rol_estudiante, _ = Rol.objects.get_or_create(nombre_rol="estudiante", defaults={"descripcion": "Estudiante"})
 
         # 2. Configurar Usuarios
@@ -25,6 +35,22 @@ class GestionConvocatoriasTests(APITestCase):
         )
         UsuarioRol.objects.create(usuario=self.coordinador, rol=self.rol_coordinador, estado="activo")
         self.token_coordinador = generar_token(self.coordinador, "coordinador")
+
+        self.direccion = Usuario.objects.create(
+            nombre="Dirección de Programa",
+            correo="direccion@ufps.edu.co",
+            google_id="direccion-1",
+            estado="activo",
+        )
+        UsuarioRol.objects.create(
+            usuario=self.direccion,
+            rol=self.rol_direccion,
+            estado="activo",
+        )
+        self.token_direccion = generar_token(
+            self.direccion,
+            "direccion_del_programa",
+        )
 
         self.estudiante = Usuario.objects.create(
             nombre="Estudiante Pedro",
@@ -54,6 +80,31 @@ class GestionConvocatoriasTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
         self.assertEqual(res.data["nombre"], "Convocatoria Innovación 2026-I")
         self.assertEqual(res.data["creador_nombre"], "Coordinadora Claudia")
+
+    def test_creacion_convocatoria_por_direccion_del_programa(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self.token_direccion}"
+        )
+
+        now = timezone.now()
+        payload = {
+            "nombre": "Convocatoria Dirección de Programa",
+            "fecha_apertura": (now + timedelta(days=1)).isoformat(),
+            "fecha_cierre": (now + timedelta(days=30)).isoformat(),
+            "estado": "borrador",
+        }
+
+        respuesta = self.client.post(
+            "/api/convocatorias/",
+            payload,
+            format="json",
+        )
+
+        self.assertEqual(respuesta.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            respuesta.data["creador_nombre"],
+            "Dirección de Programa",
+        )
 
     def test_validacion_fechas_inconsistentes(self):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
@@ -195,3 +246,110 @@ class GestionConvocatoriasTests(APITestCase):
         self.assertEqual(res_close.status_code, status.HTTP_200_OK)
         convocatoria.refresh_from_db()
         self.assertEqual(convocatoria.estado, "cerrada")
+
+    def test_estudiante_solo_puede_postular_una_vez_por_convocatoria(self):
+        now = timezone.now()
+        convocatoria_1 = Convocatoria.objects.create(
+            nombre="Convocatoria 1",
+            fecha_apertura=now - timedelta(days=1),
+            fecha_cierre=now + timedelta(days=10),
+            estado="abierta",
+        )
+        convocatoria_2 = Convocatoria.objects.create(
+            nombre="Convocatoria 2",
+            fecha_apertura=now - timedelta(days=1),
+            fecha_cierre=now + timedelta(days=10),
+            estado="abierta",
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_estudiante}")
+
+        def payload(convocatoria):
+            return {
+                "convocatoria": convocatoria.id_convocatoria,
+                "nombre": "Mi iniciativa",
+                "descripcion": "Descripción de la iniciativa",
+                "tipo": "emprendimiento",
+                "origen_academico": "asignatura",
+                "documento_adjunto": SimpleUploadedFile(
+                    "documento.pdf",
+                    b"%PDF-1.4 contenido de prueba",
+                    content_type="application/pdf",
+                ),
+            }
+
+        primera_respuesta = self.client.post(
+            "/api/iniciativas/",
+            payload(convocatoria_1),
+            format="multipart",
+        )
+        self.assertEqual(
+            primera_respuesta.status_code,
+            status.HTTP_201_CREATED,
+            primera_respuesta.data,
+        )
+
+        duplicada_respuesta = self.client.post(
+            "/api/iniciativas/",
+            payload(convocatoria_1),
+            format="multipart",
+        )
+        self.assertEqual(duplicada_respuesta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("convocatoria", duplicada_respuesta.data)
+        self.assertEqual(
+            Iniciativa.objects.filter(
+                usuario=self.estudiante,
+                convocatoria=convocatoria_1,
+            ).count(),
+            1,
+        )
+
+        otra_convocatoria_respuesta = self.client.post(
+            "/api/iniciativas/",
+            payload(convocatoria_2),
+            format="multipart",
+        )
+        self.assertEqual(
+            otra_convocatoria_respuesta.status_code,
+            status.HTTP_201_CREATED,
+        )
+
+    def test_descarga_documento_de_iniciativa_como_adjunto(self):
+        convocatoria = Convocatoria.objects.create(
+            nombre="Convocatoria de prueba",
+            fecha_apertura=timezone.now() - timedelta(days=1),
+            fecha_cierre=timezone.now() + timedelta(days=10),
+            estado="abierta",
+        )
+        iniciativa = Iniciativa.objects.create(
+            convocatoria=convocatoria,
+            usuario=self.estudiante,
+            nombre="Iniciativa con PDF",
+            descripcion="Prueba de descarga",
+            tipo="innovacion",
+            origen_academico="asignatura",
+            detalle_origen="Sistemas Distribuidos",
+        )
+        DocumentoPostulacion.objects.create(
+            iniciativa=iniciativa,
+            nombre_original="propuesta.pdf",
+            extension="pdf",
+            tamano_bytes=15,
+            archivo=SimpleUploadedFile(
+                "propuesta.pdf",
+                b"%PDF-1.4 prueba",
+                content_type="application/pdf",
+            ),
+        )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self.token_estudiante}"
+        )
+
+        response = self.client.get(
+            f"/api/iniciativas/{iniciativa.id_iniciativa}/documento/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn("attachment", response["Content-Disposition"])
+        self.assertIn("propuesta.pdf", response["Content-Disposition"])
+        self.assertEqual(b"".join(response.streaming_content), b"%PDF-1.4 prueba")

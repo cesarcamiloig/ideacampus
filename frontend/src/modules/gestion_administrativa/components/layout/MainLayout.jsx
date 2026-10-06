@@ -89,11 +89,13 @@ export default function MainLayout({
         ],
         direccion_del_programa: [
             { id: "dashboard", label: "Panel de Dirección", icon: Award },
+            { id: "convocatorias", label: "Gestión de Convocatorias", icon: FileText },
             { id: "iniciativas", label: "Banco de Iniciativas", icon: Lightbulb },
             { id: "indicadores", label: "Métricas e Indicadores", icon: FileText },
         ],
         direccion: [
             { id: "dashboard", label: "Panel de Dirección", icon: Award },
+            { id: "convocatorias", label: "Gestión de Convocatorias", icon: FileText },
             { id: "iniciativas", label: "Banco de Iniciativas", icon: Lightbulb },
             { id: "indicadores", label: "Métricas e Indicadores", icon: FileText },
         ],
