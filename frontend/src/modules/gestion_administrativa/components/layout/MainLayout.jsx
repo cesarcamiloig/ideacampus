@@ -24,7 +24,7 @@ const ROLE_LABELS = {
     direccion: "Dirección de Programa",
 }
 
-export default function MainLayout({ children, activeModule = "parametros" }) {
+export default function MainLayout({ children, activeModule = "parametros", onNavigate }) {
     // Estado del menú desplegable de perfil
     const [profileMenuOpen, setProfileMenuOpen] = useState(false)
 
@@ -118,6 +118,11 @@ export default function MainLayout({ children, activeModule = "parametros" }) {
                                     )}
                                     <button
                                         type="button"
+                                        onClick={() => {
+                                            if (onNavigate) {
+                                                onNavigate(item.id)
+                                            }
+                                        }}
                                         className={`flex w-full items-center gap-3 px-6 py-3.5 text-left text-sm transition-colors ${isActive
                                                 ? "bg-red-50/40 font-semibold text-slate-900"
                                                 : "font-medium text-slate-600 hover:bg-slate-50"
