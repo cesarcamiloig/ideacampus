@@ -14,11 +14,12 @@ import MainLayout from "../components/layout/MainLayout";
 import { useAuth } from "../../../context/AuthContext";
 import TutorProfileForm from "../../gestion_acompaniamiento/pages/TutorProfileForm";
 import EstudianteIniciativasPage from "../../gestion_convocatorias/pages/EstudianteIniciativasPage";
+import EquipoPage from "../../gestion_emprendimiento_2/pages/EquipoPage";
 
 const ROLE_CONFIG = {
   estudiante: {
     roleName: "Estudiante Emprendedor",
-    defaultModule: "postulaciones",
+    defaultModule: "equipo",
     icon: GraduationCap,
     badgeColor: "bg-blue-100 text-blue-800 border-blue-200",
     subtitle:
@@ -26,6 +27,14 @@ const ROLE_CONFIG = {
     description:
       "Bienvenido a tu espacio de trabajo en GENNOVA. Desde aquí puedes postularte a las convocatorias abiertas de la UFPS, declarar el origen académico de tu proyecto y dar seguimiento a su trazabilidad.",
     modules: {
+      equipo: {
+        title: "Equipo Emprendedor",
+        tag: "HU-04",
+        desc: "Registra y gestiona tu equipo de trabajo, asigna al líder e incorpora a estudiantes activos para postular iniciativas.",
+        details:
+          "Formaliza la participación colectiva de tu iniciativa con integrantes registrados en la plataforma.",
+        actionLabel: "Gestionar equipo",
+      },
       postulaciones: {
         title: "Convocatorias Abiertas",
         tag: "HU-03",
@@ -366,12 +375,16 @@ export default function RoleDashboardPage({ role, onNavigate }) {
 
         {/* CONTENIDO ESPECÍFICO SEGÚN ROL */}
         {normalizedRole === "estudiante" ? (
-          <EstudianteIniciativasPage
-            key={activeModule}
-            initialTab={
-              activeModule === "postulaciones" ? "convocatorias" : "mis_postulaciones"
-            }
-          />
+          activeModule === "equipo" ? (
+            <EquipoPage key="equipo" />
+          ) : (
+            <EstudianteIniciativasPage
+              key={activeModule}
+              initialTab={
+                activeModule === "postulaciones" ? "convocatorias" : "mis_postulaciones"
+              }
+            />
+          )
         ) : (
           /* DETALLE DEL MÓDULO SELECCIONADO (PARA OTROS ROLES) */
           <section className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">

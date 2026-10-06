@@ -31,6 +31,10 @@ class Tutor(PerfilAcademicoBase):
     class Meta:
         db_table = "tutor"
 
+    def __str__(self):
+        nombre = self.usuario.nombre
+        return f"{nombre} " 
+
 
 class Mentor(PerfilAcademicoBase):
     id_mentor = models.AutoField(primary_key=True)
@@ -39,3 +43,7 @@ class Mentor(PerfilAcademicoBase):
 
     class Meta:
         db_table = "mentor"
+
+    def __str__(self):
+        nombre = self.usuario.nombre
+        return f"{nombre} " 
