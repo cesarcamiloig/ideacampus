@@ -19,6 +19,7 @@ services:
     build: 
       context: ./backend
     container_name: ideacampus_backend
+    command: python manage.py runserver 0.0.0.0:8000
     ports:
       - "8000:8000"
     environment:
