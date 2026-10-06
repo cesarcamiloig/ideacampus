@@ -2,13 +2,18 @@ from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from gestion_administrativa.authentication import JWTAuthentication
 from gestion_administrativa.permissions import TieneRolPermitido
-from .models import Convocatoria, NotificacionConvocatoria
-from .serializers import ConvocatoriaSerializer, NotificacionConvocatoriaSerializer
+from .models import Convocatoria, Iniciativa, NotificacionConvocatoria
+from .serializers import (
+    ConvocatoriaSerializer,
+    IniciativaSerializer,
+    NotificacionConvocatoriaSerializer,
+)
 from .services import (
     actualizar_estados_convocatorias,
     notificar_apertura,
@@ -31,7 +36,6 @@ class ConvocatoriaViewSet(viewsets.ModelViewSet):
         if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
         return [TieneRolPermitido()]
-
 
     def get_queryset(self):
         # Actualización de estados por ventana de tiempo en tiempo real
@@ -195,3 +199,30 @@ class NotificacionConvocatoriaViewSet(viewsets.ReadOnlyModelViewSet):
             'total': total,
             'no_leidas': no_leidas
         }, status=status.HTTP_200_OK)
+
+
+class IniciativaViewSet(viewsets.ModelViewSet):
+    """
+    Gestión de postulaciones e iniciativas de estudiantes (HU-03).
+    - Los estudiantes solo pueden consultar sus propias postulaciones.
+    - Los coordinadores y administradores pueden ver todas las iniciativas recibidas.
+    - Asigna automáticamente el usuario autenticado al crear una postulación.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+    serializer_class = IniciativaSerializer
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+    def get_queryset(self):
+        usuario = self.request.user
+        roles_usuario = getattr(usuario, 'roles_asignados', [])
+        rol_activo = getattr(usuario, 'rol_activo', '')
+        es_gestor = ('admin' in roles_usuario or 'coordinador' in roles_usuario or
+                     rol_activo in ['admin', 'coordinador'])
+
+        if es_gestor:
+            return Iniciativa.objects.all().order_by('-fecha_postulacion')
+        return Iniciativa.objects.filter(usuario=usuario).order_by('-fecha_postulacion')
+
+    def perform_create(self, serializer):
+        serializer.save(usuario=self.request.user)
