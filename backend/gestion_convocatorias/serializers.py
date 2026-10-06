@@ -1,5 +1,6 @@
+import os
 from rest_framework import serializers
-from .models import Convocatoria, NotificacionConvocatoria
+from .models import Convocatoria, NotificacionConvocatoria, Iniciativa, DocumentoPostulacion
 
 
 class ConvocatoriaSerializer(serializers.ModelSerializer):
@@ -70,3 +71,73 @@ class NotificacionConvocatoriaSerializer(serializers.ModelSerializer):
 
     def get_convocatoria_nombre(self, obj):
         return obj.convocatoria.nombre if obj.convocatoria else None
+
+
+class DocumentoPostulacionSerializer(serializers.ModelSerializer):
+    url_archivo = serializers.FileField(source='archivo', read_only=True)
+
+    class Meta:
+        model = DocumentoPostulacion
+        fields = ['id_documento', 'nombre_original', 'extension', 'tamano_bytes', 'url_archivo', 'fecha_carga']
+
+
+class IniciativaSerializer(serializers.ModelSerializer):
+    documentos = DocumentoPostulacionSerializer(many=True, read_only=True)
+    documento_adjunto = serializers.FileField(write_only=True, required=True)
+
+    class Meta:
+        model = Iniciativa
+        fields = [
+            'id_iniciativa',
+            'convocatoria',
+            'usuario',
+            'nombre',
+            'descripcion',
+            'tipo',
+            'origen_academico',
+            'detalle_origen',
+            'sector_tecnologico',
+            'etapa_actual',
+            'estado',
+            'fecha_postulacion',
+            'fecha_actualizacion',
+            'documentos',
+            'documento_adjunto',
+        ]
+        read_only_fields = ['id_iniciativa', 'usuario', 'estado', 'fecha_postulacion', 'fecha_actualizacion']
+
+    def validate_documento_adjunto(self, value):
+        ext = os.path.splitext(value.name)[1].lower()
+        # 1. Regla: Solo archivos PDF
+        if ext != '.pdf':
+            raise serializers.ValidationError("El documento adjunto debe ser estrictamente un archivo en formato PDF.")
+        
+        # 2. Regla: Tamaño máximo 10 MB
+        if value.size > 10 * 1024 * 1024:
+            raise serializers.ValidationError("El archivo supera el tamaño máximo permitido de 10MB.")
+        
+        return value
+
+    def validate_convocatoria(self, value):
+        # 3. Regla: La convocatoria debe estar abierta
+        if value.estado.lower() != 'abierta':
+            raise serializers.ValidationError("No se pueden enviar iniciativas a una convocatoria que no esté abierta.")
+        return value
+
+    def create(self, validated_data):
+        archivo = validated_data.pop('documento_adjunto')
+        iniciativa = Iniciativa.objects.create(**validated_data)
+        
+        nombre_original = archivo.name
+        ext = os.path.splitext(nombre_original)[1].lower().replace('.', '')
+        tamano_bytes = archivo.size
+
+        DocumentoPostulacion.objects.create(
+            iniciativa=iniciativa,
+            nombre_original=nombre_original,
+            extension=ext,
+            tamano_bytes=tamano_bytes,
+            archivo=archivo
+        )
+
+        return iniciativa
