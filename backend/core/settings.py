@@ -1,12 +1,16 @@
-from pathlib import Path
-
-
 import os
+from pathlib import Path
 from dotenv import load_dotenv
+
+try:
+    import dj_database_url
+except ImportError:
+    dj_database_url = None
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / '../.env')
+load_dotenv()
 
 SECRET_KEY = os.getenv(
     'DJANGO_SECRET_KEY',
@@ -17,7 +21,7 @@ DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() in ('true', '1', 'yes')
 
 ALLOWED_HOSTS = [
     host.strip()
-    for host in os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+    for host in os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver,backend').split(',')
     if host.strip()
 ]
 
@@ -62,7 +66,7 @@ SOCIALACCOUNT_PROVIDERS = {
 }
 
 # JWT SETTINGS
-JWT_SECRET = os.getenv("JWT_KEY")
+JWT_SECRET = os.getenv("JWT_KEY") or "ideacampus-dev-jwt-insecure-secret-key-32b"
 JWT_ALGORITHM = "HS256"
 JWT_EXP_DELTA_HOURS = 24
 
@@ -88,7 +92,9 @@ ROOT_URLCONF = 'core.urls'
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
-    "http://localhost:5000",  
+    "http://localhost:5000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5000",
 ]
 
 TEMPLATES = [
@@ -114,16 +120,22 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 import sys
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': os.getenv('DB_NAME'),
-        'USER': os.getenv('DB_USER'),
-        'PASSWORD': os.getenv('DB_PASSWORD'),
-        'HOST': os.getenv('DB_HOST'),
-        'PORT': os.getenv('DB_PORT'),
+DATABASE_URL = os.getenv('DATABASE_URL', '').strip()
+if DATABASE_URL and dj_database_url:
+    DATABASES = {
+        'default': dj_database_url.config(default=DATABASE_URL)
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': os.getenv('DB_NAME'),
+            'USER': os.getenv('DB_USER'),
+            'PASSWORD': os.getenv('DB_PASSWORD'),
+            'HOST': os.getenv('DB_HOST'),
+            'PORT': os.getenv('DB_PORT'),
+        }
+    }
 
 if 'test' in sys.argv:
     DATABASES['default'] = {

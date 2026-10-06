@@ -248,7 +248,7 @@ const ROLE_CONFIG = {
   },
 };
 
-export default function RoleDashboardPage({ role }) {
+export default function RoleDashboardPage({ role, onNavigate }) {
   const { usuario } = useAuth();
   const normalizedRole = (role || usuario?.rol || "estudiante").trim().toLowerCase();
   const roleConfig =
@@ -301,7 +301,11 @@ export default function RoleDashboardPage({ role }) {
           setShowProfileForm(false);
         }
         setActiveModule(modId);
+        if (onNavigate) {
+          onNavigate(modId);
+        }
       }}
+      onNavigate={onNavigate}
       activeRole={normalizedRole}
     >
       <div className="mx-auto w-full max-w-5xl space-y-6">

@@ -27,6 +27,7 @@ export default function MainLayout({
     children,
     activeModule = "parametros",
     onModuleChange,
+    onNavigate,
     activeRole: propActiveRole,
     onRoleChange,
 }) {
@@ -134,7 +135,14 @@ export default function MainLayout({
                                     )}
                                     <button
                                         type="button"
-                                        onClick={() => onModuleChange && onModuleChange(item.id)}
+                                        onClick={() => {
+                                            if (onModuleChange) {
+                                                onModuleChange(item.id)
+                                            }
+                                            if (onNavigate) {
+                                                onNavigate(item.id)
+                                            }
+                                        }}
                                         className={`flex w-full items-center gap-3 px-6 py-3.5 text-left text-sm transition-colors ${isActive
                                             ? "bg-red-50/40 font-semibold text-slate-900"
                                             : "font-medium text-slate-600 hover:bg-slate-50"
