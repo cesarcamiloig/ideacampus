@@ -84,8 +84,9 @@ export default function MainLayout({
             { id: "reportes", label: "Métricas e Impacto", icon: Award },
         ],
         estudiante: [
-            { id: "mi-iniciativa", label: "Mi Emprendimiento", icon: Lightbulb },
+            { id: "equipo", label: "Equipo Emprendedor", icon: Users },
             { id: "postulaciones", label: "Convocatorias Abiertas", icon: FileText },
+            { id: "mi-iniciativa", label: "Mis Iniciativas", icon: Lightbulb },
         ],
         direccion_del_programa: [
             { id: "dashboard", label: "Panel de Dirección", icon: Award },
