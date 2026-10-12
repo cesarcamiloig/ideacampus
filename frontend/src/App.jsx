@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import LoginPage from "./modules/gestion_administrativa/pages/LoginPage";
 import AdminParametrosPage from "./modules/gestion_administrativa/pages/AdminParametrosPage";
@@ -10,6 +10,11 @@ function AppContent() {
   const rolActivo = usuario?.rol?.trim().toLowerCase();
   const [currentModule, setCurrentModule] = useState(null);
 
+  // Al cambiar de rol con el conmutador, reiniciar el módulo activo para cargar la vista por defecto del nuevo rol
+  useEffect(() => {
+    setCurrentModule(null);
+  }, [rolActivo]);
+
   if (!isAuthenticated) {
     return <LoginPage onLoginSuccess={refreshSession} />;
   }
@@ -17,21 +22,21 @@ function AppContent() {
   // 1. Administrador del Sistema
   if (rolActivo === "admin" || rolActivo === "administrador") {
     if (currentModule === "convocatorias") {
-      return <ConvocatoriasPage onNavigate={setCurrentModule} activeModule="convocatorias" />;
+      return <ConvocatoriasPage key="admin-convocatorias" onNavigate={setCurrentModule} activeModule="convocatorias" />;
     }
     if (currentModule === "emprendimientos") {
-      return <RoleDashboardPage role="coordinador" onNavigate={setCurrentModule} defaultModule="emprendimientos" />;
+      return <RoleDashboardPage key="admin-emprendimientos" role="coordinador" onNavigate={setCurrentModule} defaultModule="emprendimientos" />;
     }
-    return <AdminParametrosPage onNavigate={setCurrentModule} />;
+    return <AdminParametrosPage key="admin-parametros" onNavigate={setCurrentModule} />;
   }
 
-  // 2. Coordinador de Emprendimiento (Gestión de convocatorias HU-02)
+  // 2. Coordinador de Emprendimiento (Gestión de convocatorias)
   if (rolActivo === "coordinador") {
     const activeModule = currentModule || "convocatorias";
     if (activeModule === "convocatorias") {
-      return <ConvocatoriasPage onNavigate={setCurrentModule} activeModule="convocatorias" />;
+      return <ConvocatoriasPage key="coord-convocatorias" onNavigate={setCurrentModule} activeModule="convocatorias" />;
     }
-    return <RoleDashboardPage role={rolActivo} onNavigate={setCurrentModule} defaultModule={activeModule} />;
+    return <RoleDashboardPage key={`coord-${activeModule}`} role={rolActivo} onNavigate={setCurrentModule} defaultModule={activeModule} />;
   }
 
   // Dirección del Programa administra convocatorias desde la misma interfaz.
@@ -39,11 +44,11 @@ function AppContent() {
     ["direccion_del_programa", "direccion"].includes(rolActivo) &&
     currentModule === "convocatorias"
   ) {
-    return <ConvocatoriasPage onNavigate={setCurrentModule} activeModule="convocatorias" />;
+    return <ConvocatoriasPage key="direccion-convocatorias" onNavigate={setCurrentModule} activeModule="convocatorias" />;
   }
 
-  // 3. Estudiante Emprendedor (HU-03) y otros roles institucionales
-  return <RoleDashboardPage role={rolActivo} onNavigate={setCurrentModule} />;
+  // 3. Estudiante Emprendedor y otros roles institucionales
+  return <RoleDashboardPage key={rolActivo} role={rolActivo} onNavigate={setCurrentModule} />;
 }
 
 function App() {

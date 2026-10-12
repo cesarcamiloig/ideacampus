@@ -39,7 +39,7 @@ export default function EstudianteIniciativasPage({ initialTab = "convocatorias"
             }`}
           >
             <FileText className="h-4 w-4" />
-            <span>Convocatorias Abiertas (HU-03)</span>
+            <span>Convocatorias Abiertas</span>
           </button>
 
           <button

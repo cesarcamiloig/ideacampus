@@ -153,7 +153,7 @@ export async function cambiarEstadoIniciativa(idIniciativa, nuevoEstado) {
 }
 
 /**
- * Registra una nueva postulación de iniciativa a una convocatoria abierta (HU-03).
+ * Registra una nueva postulación de iniciativa a una convocatoria abierta.
  * Soporta carga real de archivo PDF mediante multipart/form-data.
  */
 export async function registrarPostulacion(postulacionData, usuario, convocatoria) {

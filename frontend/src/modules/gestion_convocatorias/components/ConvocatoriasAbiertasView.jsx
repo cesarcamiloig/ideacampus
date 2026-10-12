@@ -92,7 +92,7 @@ export default function ConvocatoriasAbiertasView({ onSelectConvocatoria, onVerM
           <div className="flex items-center gap-2 mb-1.5">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 border border-red-200">
               <BookOpen className="h-3.5 w-3.5" />
-              HU-03: Postulación de Iniciativas
+              Postulación de Iniciativas
             </span>
             <span className="text-xs text-slate-500 font-medium">
               Periodo Académico 2026-1

@@ -153,7 +153,7 @@ export default function BancoIniciativasView() {
           <div>
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-bold uppercase tracking-wider text-red-600">
-                Coordinación de Emprendimiento · HU-03 / HU-04
+                Coordinación de Emprendimiento
               </span>
             </div>
             <h2 className="text-xl font-bold text-slate-900">
@@ -200,7 +200,7 @@ export default function BancoIniciativasView() {
 
         <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm">
           <span className="text-[11px] font-bold uppercase text-emerald-700">
-            Aprobadas (Habilitadas HU-04)
+            Aprobadas (Habilitadas para Equipo)
           </span>
           <div className="mt-1 text-2xl font-bold text-emerald-900">{conteoAprobadas}</div>
           <span className="text-[11px] text-emerald-600 mt-0.5 block">
@@ -467,7 +467,7 @@ export default function BancoIniciativasView() {
                 <>
                   Al <strong>aprobar</strong> la iniciativa{" "}
                   <em>"{accionConfirmacion.iniciativa.iniciativa?.titulo || accionConfirmacion.iniciativa.nombre}"</em>,
-                  el estudiante líder recibirá una notificación institucional y quedará <strong>autorizado para conformar su Equipo Emprendedor (HU-04)</strong>.
+                  el estudiante líder recibirá una notificación institucional y quedará <strong>autorizado para conformar su Equipo Emprendedor</strong>.
                 </>
               ) : (
                 <>

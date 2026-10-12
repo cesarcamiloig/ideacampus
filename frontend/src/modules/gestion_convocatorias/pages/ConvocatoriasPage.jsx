@@ -377,7 +377,7 @@ export default function ConvocatoriasPage({ onNavigate }) {
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <span className="inline-block rounded-md bg-red-100 px-2.5 py-0.5 text-[11px] font-bold text-red-700 font-mono">
-                HU-02 • GENNOVA
+                GENNOVA
               </span>
               <span className="text-xs text-slate-400">•</span>
               <span className="text-xs text-slate-500 font-medium">

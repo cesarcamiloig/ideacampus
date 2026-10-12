@@ -153,7 +153,7 @@ function TutorProfileForm() {
         </div>
         <div className="tutor-header-actions">
           <span className="tutor-breadcrumb">
-            HU-16 · Perfil de {esMentor ? "Mentor" : "Tutor"}
+            Perfil de {esMentor ? "Mentor" : "Tutor"}
           </span>
           <button type="button" className="tutor-logout" onClick={logout}>
             Cerrar sesión

@@ -1,7 +1,7 @@
 import { apiClient } from "../../../services/apiClient";
 
 // ==========================================
-// Convocatorias Institucionales (HU-02)
+// Convocatorias Institucionales
 // ==========================================
 
 export async function getConvocatorias(params = {}) {
@@ -42,7 +42,7 @@ export async function notificarConvocatoria(id, data = {}) {
 }
 
 // ==========================================
-// Notificaciones de Convocatoria (HU-02)
+// Notificaciones de Convocatoria
 // ==========================================
 
 export async function getNotificacionesConvocatoria(params = {}) {

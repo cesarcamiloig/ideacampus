@@ -159,7 +159,7 @@ function EquipoForm({ onEquipoCreado, onCancelar, showHeader = false, iniciativa
               <div className="equipo-brand-sub">Universidad Francisco de Paula Santander</div>
             </div>
           </div>
-          <span className="equipo-breadcrumb">HU-04 · Equipo Emprendedor</span>
+          <span className="equipo-breadcrumb">Equipo Emprendedor</span>
         </header>
       )}
 

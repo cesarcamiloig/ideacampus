@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   CheckCircle2,
   Clock,
@@ -30,7 +30,7 @@ const ROLE_CONFIG = {
     modules: {
       equipo: {
         title: "Equipo Emprendedor",
-        tag: "HU-04",
+        tag: "Emprendimiento",
         desc: "Registra y gestiona tu equipo de trabajo, asigna al líder e incorpora a estudiantes activos para postular iniciativas.",
         details:
           "Formaliza la participación colectiva de tu iniciativa con integrantes registrados en la plataforma.",
@@ -38,7 +38,7 @@ const ROLE_CONFIG = {
       },
       postulaciones: {
         title: "Convocatorias Abiertas",
-        tag: "HU-03",
+        tag: "Convocatorias",
         desc: "Consulta los ciclos de postulación activos publicados por la coordinación y radica tu iniciativa adjuntando documentación y declarando su origen académico.",
         details:
           "Revisa requisitos mínimos, fechas límite de entrega, rúbricas de evaluación aplicables y postula tu propuesta.",
@@ -46,7 +46,7 @@ const ROLE_CONFIG = {
       },
       "mi-iniciativa": {
         title: "Mis Iniciativas y Expedientes",
-        tag: "HU-03 / HU-04",
+        tag: "Iniciativas",
         desc: "Consulta el historial de iniciativas radicadas, número de radicado, documentos y el nivel de madurez tecnológica (TRL).",
         details:
           "Trazabilidad longitudinal del origen académico (asignaturas, semilleros, proyectos de grado), integrantes y estado de la solución.",
@@ -71,7 +71,7 @@ const ROLE_CONFIG = {
     modules: {
       convocatorias: {
         title: "Gestión de Convocatorias",
-        tag: "HU-02",
+        tag: "Convocatorias",
         desc: "Apertura, cronograma, cierre y publicación de resultados de los ciclos de postulación.",
         details:
           "Configuración de fechas de apertura, límite de postulación y cierre automático con notificación.",
@@ -79,7 +79,7 @@ const ROLE_CONFIG = {
       },
       emprendimientos: {
         title: "Banco de Emprendimientos",
-        tag: "HU-04 / HU-05",
+        tag: "Emprendimientos",
         desc: "Inventario centralizado de iniciativas estudiantiles registradas, clasificadas por TRL y área.",
         details:
           "Acceso a los expedientes digitales únicos de todos los equipos del programa.",
@@ -87,7 +87,7 @@ const ROLE_CONFIG = {
       },
       reportes: {
         title: "Métricas e Impacto",
-        tag: "HU-14",
+        tag: "Reportes",
         desc: "Generación de indicadores longitudinales y reportes estadísticos para procesos de acreditación.",
         details:
           "Consolidados de participación, tasa de avance tecnológico e impacto por cohorte.",
@@ -112,7 +112,7 @@ const ROLE_CONFIG = {
     modules: {
       tutorias: {
         title: "Mis Iniciativas Asignadas",
-        tag: "HU-16",
+        tag: "Tutorías",
         desc: "Equipos y proyectos que tienes bajo tu orientación durante el semestre académico actual.",
         details:
           "Seguimiento al cumplimiento de hitos, compromisos técnicos y validación de avance.",
@@ -120,7 +120,7 @@ const ROLE_CONFIG = {
       },
       acompanamiento: {
         title: "Registro de Tutorías",
-        tag: "HU-17",
+        tag: "Acompañamiento",
         desc: "Bitácora digital de reuniones, acuerdos, horas de acompañamiento y observaciones.",
         details:
           "Generación de actas y trazabilidad del acompañamiento docente brindado a cada equipo.",
@@ -128,7 +128,7 @@ const ROLE_CONFIG = {
       },
       perfil: {
         title: "Mi Perfil Académico",
-        tag: "HU-16",
+        tag: "Perfil",
         desc: "Información de especialidad, áreas de conocimiento y nivel académico para asignación de iniciativas.",
         details:
           "Formulario completo para actualizar tus áreas de experiencia y enlaces profesionales.",
@@ -137,7 +137,7 @@ const ROLE_CONFIG = {
     },
     stats: [
       { label: "Rol Institucional", value: "Tutor Académico", subtext: "Docente UFPS" },
-      { label: "Perfil Registrado", value: "HU-16", subtext: "Formulario disponible" },
+      { label: "Perfil Registrado", value: "Activo", subtext: "Formulario disponible" },
       { label: "Acompañamiento", value: "Activo", subtext: "Periodo vigente" },
     ],
   },
@@ -153,7 +153,7 @@ const ROLE_CONFIG = {
     modules: {
       mentorias: {
         title: "Mentorías Asignadas",
-        tag: "HU-16",
+        tag: "Mentorías",
         desc: "Iniciativas en fase de validación que requieren mentoría especializada en tu campo.",
         details:
           "Revisión de prototipos, propuesta de valor y retroalimentación técnica o de negocio.",
@@ -161,7 +161,7 @@ const ROLE_CONFIG = {
       },
       acompanamiento: {
         title: "Sesiones de Asesoría",
-        tag: "HU-17",
+        tag: "Asesorías",
         desc: "Agendamiento de sesiones especializadas y seguimiento a compromisos con los emprendedores.",
         details:
           "Registro del tiempo dedicado y recomendaciones para la maduración del producto.",
@@ -169,7 +169,7 @@ const ROLE_CONFIG = {
       },
       perfil: {
         title: "Mi Perfil Profesional",
-        tag: "HU-16",
+        tag: "Perfil",
         desc: "Área de especialización, disponibilidad horaria y enlaces de contacto profesional.",
         details:
           "Actualiza tu disponibilidad para la asignación de nuevas iniciativas.",
@@ -194,7 +194,7 @@ const ROLE_CONFIG = {
     modules: {
       evaluaciones: {
         title: "Iniciativas por Evaluar",
-        tag: "HU-06",
+        tag: "Evaluaciones",
         desc: "Listado de iniciativas asignadas pendientes de calificación en la convocatoria activa.",
         details:
           "Acceso a la documentación, resumen ejecutivo y rúbrica de ponderación por criterios.",
@@ -202,7 +202,7 @@ const ROLE_CONFIG = {
       },
       rubricas: {
         title: "Historial de Calificaciones",
-        tag: "HU-07",
+        tag: "Rúbricas",
         desc: "Consulta de evaluaciones emitidas, observaciones cuantitativas y cualitativas.",
         details:
           "Trazabilidad de dictámenes remitidos a la coordinación de convocatorias.",
@@ -227,7 +227,7 @@ const ROLE_CONFIG = {
     modules: {
       dashboard: {
         title: "Panel Estratégico",
-        tag: "HU-14",
+        tag: "Dirección",
         desc: "Consolidado gerencial de iniciativas activas, tasa de éxito y evolución del ecosistema.",
         details:
           "Monitoreo de la transición de niveles de madurez tecnológica (M0 a M9).",
@@ -235,7 +235,7 @@ const ROLE_CONFIG = {
       },
       iniciativas: {
         title: "Banco de Iniciativas del Programa",
-        tag: "HU-04",
+        tag: "Iniciativas",
         desc: "Trazabilidad completa de proyectos nacidos en asignaturas, semilleros y trabajos de grado.",
         details:
           "Historial acumulado de emprendimientos estudiantiles.",
@@ -268,6 +268,12 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
   const [activeModule, setActiveModule] = useState(defaultModule || roleConfig.defaultModule);
   const [showProfileForm, setShowProfileForm] = useState(false);
 
+  // Sincronizar el módulo activo si cambia el rol
+  useEffect(() => {
+    setActiveModule(defaultModule || roleConfig.defaultModule);
+    setShowProfileForm(false);
+  }, [normalizedRole, defaultModule, roleConfig.defaultModule]);
+
   // Si es tutor o mentor y seleccionó el módulo 'perfil' o activó el flag
   if (
     (normalizedRole === "tutor" || normalizedRole === "mentor") &&
@@ -287,7 +293,7 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
             ← Volver al Panel Principal ({roleConfig.roleName})
           </button>
           <span className="text-xs text-slate-500 font-medium">
-            Formulario de Perfil Académico · HU-16
+            Formulario de Perfil Académico
           </span>
         </div>
         <TutorProfileForm />
@@ -414,7 +420,7 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700 transition-colors"
                 >
                   <User className="h-4 w-4" />
-                  Actualizar Mi Perfil (HU-16)
+                  Actualizar Mi Perfil
                 </button>
               )}
             </div>
