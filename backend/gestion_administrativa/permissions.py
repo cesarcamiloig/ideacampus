@@ -4,13 +4,14 @@ from rest_framework.permissions import BasePermission
 class TieneRolPermitido(BasePermission):
     """
     Permiso reutilizable que verifica que el usuario esté autenticado con JWT
-    y que su rol activo coincida con alguno de los roles permitidos en la vista.
+    y que al menos uno de sus roles (dentro del token) esté en los roles
+    permitidos definidos en la vista.
 
     Uso en cualquier APIView o ViewSet:
         permission_classes = [TieneRolPermitido]
         roles_permitidos = ["admin", "coordinador"]
     """
-    message = "No tienes permisos con tu rol actual para realizar esta acción."
+    message = "No tienes permisos con ninguno de tus roles actuales para realizar esta acción."
     roles_permitidos = ()
 
     def has_permission(self, request, view):
@@ -18,15 +19,17 @@ class TieneRolPermitido(BasePermission):
         if not usuario or not getattr(usuario, "is_authenticated", False):
             return False
 
-        rol_activo = getattr(usuario, "rol_activo", None)
-        if not rol_activo and isinstance(getattr(request, "auth", None), dict):
-            rol_activo = request.auth.get("rol")
+        roles_usuario = getattr(usuario, "roles_activos", None)
+        if roles_usuario is None and isinstance(getattr(request, "auth", None), dict):
+            roles_usuario = request.auth.get("roles", [])
+
+        roles_usuario = roles_usuario or []
 
         roles_vista = getattr(view, "roles_permitidos", None) or self.roles_permitidos
         if not roles_vista:
             return True
 
-        return rol_activo in roles_vista
+        return any(rol in roles_vista for rol in roles_usuario)
 
 
 class EsAdmin(TieneRolPermitido):

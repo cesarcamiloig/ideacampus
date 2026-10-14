@@ -20,9 +20,6 @@ GOOGLE_CLIENT_ID = (
     else DEFAULT_GOOGLE_CLIENT_ID
 )
 ALLOWED_EMAIL_DOMAIN = "@ufps.edu.co"
-ROLE_ALIASES = {
-    "administrador": "admin",
-}
 
 
 def obtener_roles_activos(usuario):
@@ -36,21 +33,12 @@ def obtener_roles_activos(usuario):
 class GoogleLogin(APIView):
     def post(self, request):
         token = request.data.get("id_token")
-        rol_solicitado = request.data.get("rol")
 
         if not token:
             return Response(
                 {"error": "id_token es requerido"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
-        if not rol_solicitado:
-            return Response(
-                {"error": "rol es requerido"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        rol_normalizado = ROLE_ALIASES.get(rol_solicitado, rol_solicitado)
 
         try:
             idinfo = google_id_token.verify_oauth2_token(
@@ -80,13 +68,6 @@ class GoogleLogin(APIView):
                 nombre_rol="estudiante",
                 defaults={"descripcion": "Usuario estudiante"}
             )
-            try:
-                rol = Rol.objects.get(nombre_rol=rol_normalizado)
-            except Rol.DoesNotExist:
-                return Response(
-                    {"error": f"El rol '{rol_solicitado}' no existe"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
 
             usuario, created = Usuario.objects.get_or_create(
                 google_id=google_id,
@@ -99,37 +80,16 @@ class GoogleLogin(APIView):
                     status=status.HTTP_403_FORBIDDEN
                 )
 
-            if created:
-                UsuarioRol.objects.get_or_create(
-                    usuario=usuario,
-                    rol=rol_estudiante,
-                    defaults={"estado": "activo"}
-                )
-
-            if rol.nombre_rol == "estudiante":
-                UsuarioRol.objects.update_or_create(
-                    usuario=usuario,
-                    rol=rol_estudiante,
-                    defaults={"estado": "activo"}
-                )
-
-        if rol.nombre_rol != "estudiante":
-            tiene_el_rol = UsuarioRol.objects.filter(
+            UsuarioRol.objects.get_or_create(
                 usuario=usuario,
-                rol=rol,
-                estado="activo"
-            ).exists()
-
-            if not tiene_el_rol:
-                return Response(
-                    {"error": f"No tienes el rol '{rol.nombre_rol}' asignado"},
-                    status=status.HTTP_403_FORBIDDEN
-                )
+                rol=rol_estudiante,
+                defaults={"estado": "activo"}
+            )
 
         usuario.ultimo_acceso = timezone.now()
         usuario.save(update_fields=["ultimo_acceso"])
 
-        jwt_token = generar_token(usuario, rol.nombre_rol)
+        jwt_token = generar_token(usuario)
         roles_asignados = obtener_roles_activos(usuario)
 
         return Response({
@@ -138,8 +98,7 @@ class GoogleLogin(APIView):
                 "id_usuario": usuario.id_usuario,
                 "nombre": usuario.nombre,
                 "correo": usuario.correo,
-                "rol": rol.nombre_rol,
-                "roles_asignados": roles_asignados,
+                "roles": roles_asignados,
             },
             "created": created,
             "message": "Login exitoso"
@@ -152,13 +111,12 @@ class PerfilUsuarioView(APIView):
 
     def get(self, request):
         usuario = request.user
-        rol_activo = getattr(usuario, "rol_activo", None)
+        roles_activos = getattr(usuario, "roles_activos", [])
         return Response({
             "id_usuario": usuario.id_usuario,
             "nombre": usuario.nombre,
             "correo": usuario.correo,
-            "rol": rol_activo,
-            "roles_asignados": obtener_roles_activos(usuario),
+            "roles": roles_activos,
         })
 
 
@@ -227,7 +185,6 @@ class VariableDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Alternar estado activo / inactivo
         if "isActive" in request.data:
             variable.estado = "activo" if request.data["isActive"] else "inactivo"
         elif "estado" in request.data:
@@ -299,7 +256,6 @@ class PeriodoDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Toggle de estado
         if "isActive" in request.data:
             nuevo_activo = bool(request.data["isActive"])
             periodo.estado = "activo" if nuevo_activo else "inactivo"
@@ -389,12 +345,10 @@ class UsuarioRolesUpdateView(APIView):
                 for r in Rol.objects.filter(nombre_rol__in=roles_solicitados)
             }
 
-            # Desactivar roles funcionales que ya no fueron seleccionados (excepto admin si ya era admin)
             UsuarioRol.objects.filter(usuario=usuario).exclude(
                 rol__nombre_rol__in=roles_solicitados
             ).exclude(rol__nombre_rol="admin").update(estado="inactivo")
 
-            # Activar o crear roles seleccionados
             for nombre_rol, rol_obj in roles_objetos.items():
                 UsuarioRol.objects.update_or_create(
                     usuario=usuario,
@@ -431,4 +385,3 @@ class UsuarioAdminDetailView(APIView):
             UsuarioAdminSerializer(usuario).data,
             status=status.HTTP_200_OK,
         )
-
