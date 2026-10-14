@@ -14,6 +14,7 @@ import {
 import { useAuth } from "../../../../context/AuthContext"
 import { NotificacionesModal } from "../../../gestion_convocatorias/components/NotificacionesModal"
 import { getResumenNotificaciones } from "../../../gestion_convocatorias/services/convocatoriaService"
+import { getResumenAlertas } from "../../../gestion_convocatorias/services/alertaService"
 
 const ROLE_LABELS = {
     admin: "Administrador del Sistema",
@@ -54,14 +55,17 @@ export default function MainLayout({
 
     const fetchResumenNotificaciones = useCallback(async () => {
         try {
-            const data = await getResumenNotificaciones()
-            if (data && typeof data.no_leidas === "number") {
-                setUnreadNotifCount(data.no_leidas)
-            }
+            const [notifData, alertaData] = await Promise.all([
+                getResumenNotificaciones().catch(() => null),
+                getResumenAlertas(activeRole).catch(() => null),
+            ]);
+            const notifUnread = (notifData && typeof notifData.no_leidas === "number") ? notifData.no_leidas : 0;
+            const alertaUnread = (alertaData && typeof alertaData.no_leidas === "number") ? alertaData.no_leidas : 0;
+            setUnreadNotifCount(notifUnread + alertaUnread);
         } catch {
             // Silencioso
         }
-    }, [])
+    }, [activeRole])
 
     useEffect(() => {
         if (usuario) {
@@ -83,48 +87,56 @@ export default function MainLayout({
             .toUpperCase() || "UI"
 
 
-    // Menús de navegación según el rol seleccionado en la cabecera
+    // Menús de navegación según el rol seleccionado en la cabecera (HU-12 Centro de Alertas)
     const menuConfigByRole = {
         admin: [
             { id: "convocatorias", label: "Convocatorias", icon: FileText },
             { id: "emprendimientos", label: "Emprendimientos", icon: Lightbulb },
             { id: "parametros", label: "Administración Paramétrica", icon: Settings },
+            { id: "alertas", label: "Centro de Alertas", icon: Bell },
         ],
         tutor: [
             { id: "tutorias", label: "Mis Iniciativas Asignadas", icon: BookOpen },
             { id: "acompanamiento", label: "Registro de Tutorías", icon: Users },
             { id: "perfil", label: "Mi Perfil Académico", icon: Award },
+            { id: "alertas", label: "Centro de Alertas", icon: Bell },
         ],
         mentor: [
             { id: "mentorias", label: "Mentorías Asignadas", icon: BookOpen },
             { id: "acompanamiento", label: "Sesiones de Asesoría", icon: Users },
             { id: "perfil", label: "Mi Perfil Profesional", icon: Award },
+            { id: "alertas", label: "Centro de Alertas", icon: Bell },
         ],
         evaluador: [
             { id: "evaluaciones", label: "Iniciativas por Evaluar", icon: ClipboardCheck },
             { id: "rubricas", label: "Historial de Calificaciones", icon: Award },
+            { id: "alertas", label: "Centro de Alertas", icon: Bell },
         ],
         coordinador: [
             { id: "convocatorias", label: "Gestión de Convocatorias", icon: FileText },
             { id: "emprendimientos", label: "Banco de Emprendimientos", icon: Lightbulb },
             { id: "reportes", label: "Métricas e Impacto", icon: Award },
+            { id: "alertas", label: "Centro de Alertas", icon: Bell },
         ],
         estudiante: [
             { id: "equipo", label: "Equipo Emprendedor", icon: Users },
             { id: "postulaciones", label: "Convocatorias Abiertas", icon: FileText },
             { id: "mi-iniciativa", label: "Mis Iniciativas", icon: Lightbulb },
+            { id: "alertas", label: "Centro de Alertas", icon: Bell },
         ],
         direccion_del_programa: [
             { id: "dashboard", label: "Panel de Dirección", icon: Award },
             { id: "convocatorias", label: "Gestión de Convocatorias", icon: FileText },
             { id: "iniciativas", label: "Banco de Iniciativas", icon: Lightbulb },
             { id: "indicadores", label: "Métricas e Indicadores", icon: FileText },
+            { id: "alertas", label: "Centro de Alertas", icon: Bell },
         ],
         direccion: [
             { id: "dashboard", label: "Panel de Dirección", icon: Award },
             { id: "convocatorias", label: "Gestión de Convocatorias", icon: FileText },
             { id: "iniciativas", label: "Banco de Iniciativas", icon: Lightbulb },
             { id: "indicadores", label: "Métricas e Indicadores", icon: FileText },
+            { id: "alertas", label: "Centro de Alertas", icon: Bell },
         ],
     }
 
@@ -292,6 +304,10 @@ export default function MainLayout({
                 open={notificacionesOpen}
                 onOpenChange={setNotificacionesOpen}
                 onNotificationRead={fetchResumenNotificaciones}
+                onNavigate={(mod) => {
+                    if (onModuleChange) onModuleChange(mod);
+                    if (onNavigate) onNavigate(mod);
+                }}
             />
         </div>
     )

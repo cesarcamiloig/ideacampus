@@ -16,6 +16,7 @@ import TutorProfileForm from "../../gestion_acompaniamiento/pages/TutorProfileFo
 import EstudianteIniciativasPage from "../../gestion_convocatorias/pages/EstudianteIniciativasPage";
 import EquipoPage from "../../gestion_emprendimiento_2/pages/EquipoPage";
 import BancoIniciativasView from "../../gestion_convocatorias/components/BancoIniciativasView";
+import AlertasPage from "../../gestion_convocatorias/pages/AlertasPage";
 
 const ROLE_CONFIG = {
   estudiante: {
@@ -268,6 +269,12 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
   const [activeModule, setActiveModule] = useState(defaultModule || roleConfig.defaultModule);
   const [showProfileForm, setShowProfileForm] = useState(false);
 
+  React.useEffect(() => {
+    if (defaultModule) {
+      setActiveModule(defaultModule);
+    }
+  }, [defaultModule]);
+
   // Si es tutor o mentor y seleccionó el módulo 'perfil' o activó el flag
   if (
     (normalizedRole === "tutor" || normalizedRole === "mentor") &&
@@ -374,8 +381,17 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
         </section>
 
 
-        {/* CONTENIDO ESPECÍFICO SEGÚN ROL */}
-        {normalizedRole === "estudiante" ? (
+        {/* CONTENIDO ESPECÍFICO SEGÚN ROL (HU-12 Alertas y Compromisos) */}
+        {activeModule === "alertas" ? (
+          <AlertasPage
+            key="alertas-page"
+            onNavigate={(mod) => {
+              setActiveModule(mod);
+              if (onNavigate) onNavigate(mod);
+            }}
+            activeRole={normalizedRole}
+          />
+        ) : normalizedRole === "estudiante" ? (
           activeModule === "equipo" ? (
             <EquipoPage key="equipo" />
           ) : (

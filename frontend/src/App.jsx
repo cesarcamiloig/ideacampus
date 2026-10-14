@@ -22,6 +22,9 @@ function AppContent() {
     if (currentModule === "emprendimientos") {
       return <RoleDashboardPage role="coordinador" onNavigate={setCurrentModule} defaultModule="emprendimientos" />;
     }
+    if (currentModule === "alertas") {
+      return <RoleDashboardPage role="admin" onNavigate={setCurrentModule} defaultModule="alertas" />;
+    }
     return <AdminParametrosPage onNavigate={setCurrentModule} />;
   }
 
@@ -43,7 +46,7 @@ function AppContent() {
   }
 
   // 3. Estudiante Emprendedor (HU-03) y otros roles institucionales
-  return <RoleDashboardPage role={rolActivo} onNavigate={setCurrentModule} />;
+  return <RoleDashboardPage role={rolActivo} onNavigate={setCurrentModule} defaultModule={currentModule} />;
 }
 
 function App() {
