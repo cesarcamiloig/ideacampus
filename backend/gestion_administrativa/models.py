@@ -67,54 +67,6 @@ class UsuarioRol(models.Model):
         return f'{self.usuario} - {self.rol}'
 
 
-class Permiso(models.Model):
-    id_permiso = models.AutoField(primary_key=True)
-    codigo = models.CharField(max_length=100, unique=True)
-    nombre = models.CharField(max_length=150)
-    descripcion = models.CharField(
-        max_length=255,
-        null=True,
-        blank=True
-    )
-    modulo = models.CharField(
-        max_length=50,
-        null=True,
-        blank=True
-    )
-    estado = models.CharField(max_length=20, default='activo')
-
-    class Meta:
-        db_table = 'permiso'
-
-    def __str__(self):
-        return self.codigo
-
-
-class RolPermiso(models.Model):
-    rol = models.ForeignKey(
-        Rol,
-        on_delete=models.CASCADE,
-        db_column='id_rol'
-    )
-
-    permiso = models.ForeignKey(
-        Permiso,
-        on_delete=models.CASCADE,
-        db_column='id_permiso'
-    )
-
-    class Meta:
-        db_table = 'rol_permiso'
-        constraints = [
-            models.UniqueConstraint(
-                fields=['rol', 'permiso'],
-                name='unique_rol_permiso'
-            )
-        ]
-
-    def __str__(self):
-        return f'{self.rol} - {self.permiso}'
-
 
 class VariableCaracterizacion(models.Model):
     id_variable = models.AutoField(primary_key=True)
@@ -160,4 +112,4 @@ class PeriodoAcademico(models.Model):
         ordering = ['-anio', '-semestre']
 
     def __str__(self):
-        return self.nombre
+        return self.nombre
