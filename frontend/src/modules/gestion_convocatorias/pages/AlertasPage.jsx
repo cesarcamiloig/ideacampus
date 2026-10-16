@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Bell,
   AlertTriangle,
   Clock,
   CheckCircle2,
   CheckCheck,
-  Filter,
   Search,
   RefreshCw,
   Calendar,
@@ -19,8 +18,9 @@ import {
   EyeOff,
   Flame,
   X,
-  ArrowUpDown,
   ExternalLink,
+  ShieldCheck,
+  ArrowUpDown,
 } from "lucide-react";
 import { useAuth } from "../../../context/AuthContext";
 import {
@@ -32,29 +32,83 @@ import {
 } from "../services/alertaService";
 
 const ROLE_INFO = {
-  estudiante: { label: "Estudiante Emprendedor", icon: GraduationCap, color: "text-blue-600 bg-blue-50 border-blue-200" },
-  tutor: { label: "Tutor Académico", icon: BookOpen, color: "text-purple-600 bg-purple-50 border-purple-200" },
-  mentor: { label: "Mentor Especializado", icon: Award, color: "text-amber-600 bg-amber-50 border-amber-200" },
-  evaluador: { label: "Evaluador de Iniciativas", icon: ClipboardCheck, color: "text-teal-600 bg-teal-50 border-teal-200" },
-  coordinador: { label: "Coordinador de Emprendimiento", icon: Layers, color: "text-emerald-600 bg-emerald-50 border-emerald-200" },
-  admin: { label: "Administrador del Sistema", icon: Layers, color: "text-slate-700 bg-slate-100 border-slate-300" },
+  estudiante: {
+    label: "Estudiante Emprendedor",
+    icon: GraduationCap,
+    badgeBg: "bg-blue-50 text-blue-800 border-blue-200",
+  },
+  tutor: {
+    label: "Tutor Académico",
+    icon: BookOpen,
+    badgeBg: "bg-purple-50 text-purple-800 border-purple-200",
+  },
+  mentor: {
+    label: "Mentor Especializado",
+    icon: Award,
+    badgeBg: "bg-amber-50 text-amber-800 border-amber-200",
+  },
+  evaluador: {
+    label: "Evaluador de Iniciativas",
+    icon: ClipboardCheck,
+    badgeBg: "bg-teal-50 text-teal-800 border-teal-200",
+  },
+  coordinador: {
+    label: "Coordinador de Emprendimiento",
+    icon: Layers,
+    badgeBg: "bg-emerald-50 text-emerald-800 border-emerald-200",
+  },
+  admin: {
+    label: "Administrador del Sistema",
+    icon: Layers,
+    badgeBg: "bg-slate-100 text-slate-800 border-slate-300",
+  },
+  direccion_del_programa: {
+    label: "Dirección de Programa",
+    icon: Award,
+    badgeBg: "bg-rose-50 text-rose-800 border-rose-200",
+  },
 };
 
 const TIPO_INFO = {
-  vencimiento_convocatoria: { label: "Vencimiento de Convocatoria", color: "bg-red-50 text-red-700 border-red-200" },
-  compromiso_tutoria: { label: "Compromiso de Tutoría", color: "bg-purple-50 text-purple-700 border-purple-200" },
-  compromiso_mentoria: { label: "Compromiso de Mentoría", color: "bg-amber-50 text-amber-700 border-amber-200" },
-  evaluacion_pendiente: { label: "Evaluación Pendiente", color: "bg-teal-50 text-teal-700 border-teal-200" },
-  entrega_documentacion: { label: "Entrega de Documentos", color: "bg-blue-50 text-blue-700 border-blue-200" },
-  cierre_periodo: { label: "Cierre de Periodo / Supervisión", color: "bg-rose-50 text-rose-700 border-rose-200" },
-  general: { label: "Aviso General", color: "bg-slate-100 text-slate-700 border-slate-200" },
+  vencimiento_convocatoria: {
+    label: "Vencimiento de Convocatoria",
+    color: "bg-red-50 text-red-700 border-red-200",
+  },
+  compromiso_tutoria: {
+    label: "Compromiso de Tutoría",
+    color: "bg-purple-50 text-purple-700 border-purple-200",
+  },
+  compromiso_mentoria: {
+    label: "Compromiso de Mentoría",
+    color: "bg-amber-50 text-amber-700 border-amber-200",
+  },
+  evaluacion_pendiente: {
+    label: "Evaluación Pendiente",
+    color: "bg-teal-50 text-teal-700 border-teal-200",
+  },
+  entrega_documentacion: {
+    label: "Entrega de Documentos",
+    color: "bg-blue-50 text-blue-700 border-blue-200",
+  },
+  cierre_periodo: {
+    label: "Cierre y Supervisión",
+    color: "bg-rose-50 text-rose-700 border-rose-200",
+  },
+  general: {
+    label: "Aviso General",
+    color: "bg-slate-100 text-slate-700 border-slate-200",
+  },
 };
 
 export default function AlertasPage({ onNavigate, activeRole: propRole }) {
   const { usuario, rolActivo } = useAuth();
-  const currentRole = (propRole || rolActivo || usuario?.rol || "estudiante").trim().toLowerCase();
+  const currentRole = (propRole || rolActivo || usuario?.rol || "estudiante")
+    .trim()
+    .toLowerCase();
+  const roleConfig = ROLE_INFO[currentRole] || ROLE_INFO.estudiante;
+  const RoleIcon = roleConfig.icon;
 
-  // Estados de carga y datos
+  // Estados
   const [alertas, setAlertas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -67,33 +121,25 @@ export default function AlertasPage({ onNavigate, activeRole: propRole }) {
   });
 
   // Filtros interactivos
-  const [selectedRole, setSelectedRole] = useState(currentRole);
-  const [filtroLectura, setFiltroLectura] = useState("todas"); // 'todas' | 'no_leidas' | 'leidas'
-  const [filtroPrioridad, setFiltroPrioridad] = useState("todas"); // 'todas' | 'alta' | 'media' | 'baja'
-  const [filtroFecha, setFiltroFecha] = useState("todas"); // 'todas' | 'hoy_48h' | 'semana' | 'proximas' | 'vencidas'
-  const [filtroTipo, setFiltroTipo] = useState("todos");
-  const [orden, setOrden] = useState("vencimiento_asc"); // 'vencimiento_asc' | 'vencimiento_desc' | 'prioridad' | 'recientes'
+  const [activeTab, setActiveTab] = useState("todas"); // 'todas' | 'pendientes' | 'urgentes' | 'leidas'
   const [searchTerm, setSearchTerm] = useState("");
+  const [orden, setOrden] = useState("vencimiento_asc"); // 'vencimiento_asc' | 'recientes' | 'prioridad'
 
   // Modal de detalle
   const [detalleAlerta, setDetalleAlerta] = useState(null);
 
-  // Cargar alertas
+  // Carga de alertas desde el backend exclusivamente para el rol activo
   const loadAlertas = useCallback(async () => {
     try {
-      const params = {};
-      if (selectedRole && selectedRole !== "todos") params.rol = selectedRole;
-      if (filtroLectura === "no_leidas") params.leida = "false";
-      if (filtroLectura === "leidas") params.leida = "true";
-      if (filtroPrioridad !== "todas") params.prioridad = filtroPrioridad;
-      if (filtroFecha !== "todas") params.ventana_fecha = filtroFecha;
-      if (filtroTipo !== "todos") params.tipo = filtroTipo;
+      const params = { rol: currentRole, orden };
+      if (activeTab === "pendientes") params.leida = "false";
+      if (activeTab === "leidas") params.leida = "true";
+      if (activeTab === "urgentes") params.prioridad = "alta";
       if (searchTerm.trim()) params.q = searchTerm.trim();
-      params.orden = orden;
 
       const [dataList, dataResumen] = await Promise.all([
         getAlertas(params),
-        getResumenAlertas(selectedRole),
+        getResumenAlertas(currentRole),
       ]);
 
       setAlertas(Array.isArray(dataList) ? dataList : []);
@@ -101,12 +147,12 @@ export default function AlertasPage({ onNavigate, activeRole: propRole }) {
         setResumen(dataResumen);
       }
     } catch {
-      // Manejo silencioso con fallback
+      // Manejo silencioso
     } finally {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [selectedRole, filtroLectura, filtroPrioridad, filtroFecha, filtroTipo, searchTerm, orden]);
+  }, [currentRole, activeTab, searchTerm, orden]);
 
   useEffect(() => {
     loadAlertas();
@@ -119,7 +165,9 @@ export default function AlertasPage({ onNavigate, activeRole: propRole }) {
       const nuevaLeida = !currentLeida;
       await marcarAlertaLeida(id, nuevaLeida);
       setAlertas((prev) =>
-        prev.map((item) => (item.id_alerta === id ? { ...item, leida: nuevaLeida } : item))
+        prev.map((item) =>
+          item.id_alerta === id ? { ...item, leida: nuevaLeida } : item
+        )
       );
       setResumen((prev) => ({
         ...prev,
@@ -144,146 +192,115 @@ export default function AlertasPage({ onNavigate, activeRole: propRole }) {
     }
   };
 
-  // Sincronizar alertas automáticas
+  // Sincronizar alertas con el servidor
   const handleSincronizar = async () => {
     setIsRefreshing(true);
     try {
-      await sincronizarAlertas();
+      await sincronizarAlertas(currentRole);
       await loadAlertas();
     } catch {
       setIsRefreshing(false);
     }
   };
 
-  // Limpiar todos los filtros
-  const handleResetFiltros = () => {
-    setFiltroLectura("todas");
-    setFiltroPrioridad("todas");
-    setFiltroFecha("todas");
-    setFiltroTipo("todos");
-    setSearchTerm("");
-    setOrden("vencimiento_asc");
+  // Redirigir al módulo destino institucional
+  const handleIrAlModulo = (moduloDestino, e) => {
+    if (e) e.stopPropagation();
+    if (!onNavigate || !moduloDestino) return;
+    onNavigate(moduloDestino);
   };
 
-  // Formato de fechas
-  const formatDateTime = (dateString) => {
-    if (!dateString) return "Fecha no especificada";
-    try {
-      const d = new Date(dateString);
-      return d.toLocaleDateString("es-CO", {
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } catch {
-      return dateString;
-    }
-  };
-
-  // Cálculo del estado del vencimiento
-  const getVencimientoBadge = (dateString) => {
-    if (!dateString) return null;
-    const now = new Date();
-    const target = new Date(dateString);
-    const diffMs = target.getTime() - now.getTime();
-    const diffHours = diffMs / (1000 * 3600);
-    const diffDays = Math.ceil(diffMs / (1000 * 3600 * 24));
+  // Helper de cálculo de tiempo restante
+  const calcularEstadoVencimiento = (fechaStr) => {
+    if (!fechaStr) return null;
+    const diffMs = new Date(fechaStr).getTime() - Date.now();
+    const diffDias = Math.ceil(diffMs / (1000 * 3600 * 24));
+    const diffHoras = Math.ceil(diffMs / (1000 * 3600));
 
     if (diffMs < 0) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
-          <AlertTriangle className="h-3 w-3" />
-          Vencida hace {Math.abs(diffDays)} {Math.abs(diffDays) === 1 ? "día" : "días"}
-        </span>
-      );
+      return {
+        texto: "Vencida",
+        urgente: true,
+        badgeClass: "bg-rose-100 text-rose-800 border-rose-200",
+      };
     }
-    if (diffHours <= 24) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-600 text-white shadow-sm animate-pulse">
-          <Flame className="h-3 w-3" />
-          Vence Hoy ({Math.round(diffHours)}h restantes)
-        </span>
-      );
+    if (diffHoras <= 24) {
+      return {
+        texto: "Cierra en menos de 24h",
+        urgente: true,
+        badgeClass: "bg-red-100 text-red-800 border-red-200 animate-pulse",
+      };
     }
-    if (diffDays <= 2) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-orange-100 text-orange-800 border border-orange-200">
-          <Clock className="h-3 w-3" />
-          Vence en {diffDays} días (Crítico)
-        </span>
-      );
+    if (diffHoras <= 48) {
+      return {
+        texto: "Cierra en 48 horas",
+        urgente: true,
+        badgeClass: "bg-red-50 text-red-700 border-red-200",
+      };
     }
-    if (diffDays <= 7) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
-          <Clock className="h-3 w-3" />
-          Vence en {diffDays} días
-        </span>
-      );
+    if (diffDias <= 7) {
+      return {
+        texto: `Vence en ${diffDias} días`,
+        urgente: false,
+        badgeClass: "bg-amber-50 text-amber-800 border-amber-200",
+      };
     }
-    return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
-        <Calendar className="h-3 w-3" />
-        Faltan {diffDays} días
-      </span>
-    );
+    return {
+      texto: `Vence en ${diffDias} días`,
+      urgente: false,
+      badgeClass: "bg-slate-100 text-slate-700 border-slate-200",
+    };
   };
 
-  // Navegar al módulo de destino
-  const handleActionClick = (modulo, e) => {
-    if (e) e.stopPropagation();
-    if (onNavigate && modulo) {
-      onNavigate(modulo);
-    }
-  };
-
-  const hasFiltrosActivos =
-    filtroLectura !== "todas" ||
-    filtroPrioridad !== "todas" ||
-    filtroFecha !== "todas" ||
-    filtroTipo !== "todos" ||
-    searchTerm.trim() !== "";
+  // Filtrado reactivo en cliente (búsqueda y orden local inmediato)
+  const alertasFiltradas = useMemo(() => {
+    return alertas.filter((a) => {
+      if (!searchTerm.trim()) return true;
+      const q = searchTerm.toLowerCase();
+      return (
+        a.titulo?.toLowerCase().includes(q) ||
+        a.mensaje?.toLowerCase().includes(q) ||
+        a.convocatoria_nombre?.toLowerCase().includes(q)
+      );
+    });
+  }, [alertas, searchTerm]);
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6 pb-12 animate-in fade-in duration-200">
-      {/* 1. ENCABEZADO PRINCIPAL DE LA VISTA INSTITUCIONAL */}
-      <section className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
-        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-red-600 via-rose-600 to-red-500" />
-        
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-200">
-                <Bell className="h-3.5 w-3.5" />
-                HU-12 · Alertas Automáticas
+    <div className="space-y-6">
+      {/* 1. ENCABEZADO INSTITUCIONAL */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <span
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${roleConfig.badgeBg}`}
+              >
+                <RoleIcon className="h-3.5 w-3.5" />
+                {roleConfig.label}
               </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                Universidad Francisco de Paula Santander
+              <span className="text-xs text-slate-500 font-medium">
+                Periodo Académico 2026-1 · Universidad Francisco de Paula Santander
               </span>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+            <h2 className="text-2xl font-bold tracking-tight text-slate-900">
               Centro de Alertas y Vencimientos
-            </h1>
-            <p className="text-sm text-slate-600 max-w-2xl leading-relaxed">
-              Recibe avisos oportunos sobre plazos de convocatorias, hitos y compromisos pendientes
-              según tu rol institucional para no perder fechas críticas del proceso formativo.
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-2xl">
+              Supervisión de plazos, convocatorias vigentes y compromisos académicos asignados a tu rol de {roleConfig.label}.
             </p>
           </div>
 
-          {/* Botones de acción superior */}
-          <div className="flex flex-wrap items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2.5 shrink-0">
             {resumen.no_leidas > 0 && (
               <button
                 type="button"
                 onClick={handleMarcarTodasLeidas}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 shadow-sm transition-all"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
+                title="Marcar todas como leídas"
               >
                 <CheckCheck className="h-4 w-4 text-emerald-600" />
-                Marcar todas leídas ({resumen.no_leidas})
+                <span>Marcar leídas ({resumen.no_leidas})</span>
               </button>
             )}
 
@@ -294,481 +311,376 @@ export default function AlertasPage({ onNavigate, activeRole: propRole }) {
               className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-red-700 active:scale-95 transition-all disabled:opacity-50"
             >
               <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-              {isRefreshing ? "Sincronizando..." : "Sincronizar Alertas"}
+              <span>{isRefreshing ? "Actualizando..." : "Actualizar"}</span>
             </button>
           </div>
         </div>
 
-        {/* SELECTOR DE ROL PARA PRUEBAS Y VISUALIZACIÓN DINÁMICA */}
-        <div className="mt-6 border-t border-slate-100 pt-5">
-          <div className="flex items-center justify-between gap-4 flex-wrap mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-              <Filter className="h-3.5 w-3.5 text-red-600" />
-              Filtrar por Rol Institucional:
-            </span>
-            <span className="text-xs text-slate-500">
-              Mostrando alertas configuradas para el rol seleccionado
-            </span>
-          </div>
+        {/* 2. TARJETAS DE INDICADORES RÁPIDOS (KPIs) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mt-6 border-t border-slate-100 pt-5">
+          {/* Pendientes */}
+          <button
+            type="button"
+            onClick={() => setActiveTab("pendientes")}
+            className={`text-left rounded-xl p-4 border transition-all ${
+              activeTab === "pendientes"
+                ? "bg-red-50/60 border-red-300 ring-2 ring-red-500/20 shadow-sm"
+                : "bg-slate-50/60 border-slate-200 hover:bg-white hover:border-slate-300"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Pendientes por revisar
+              </span>
+              <div
+                className={`flex h-7 w-7 items-center justify-center rounded-lg ${
+                  resumen.no_leidas > 0
+                    ? "bg-red-100 text-red-700"
+                    : "bg-emerald-100 text-emerald-700"
+                }`}
+              >
+                {resumen.no_leidas > 0 ? (
+                  <Bell className="h-3.5 w-3.5" />
+                ) : (
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                )}
+              </div>
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl font-bold text-slate-900 leading-none">
+                {resumen.no_leidas}
+              </span>
+              <span className="text-[11px] text-slate-500 font-medium">
+                {resumen.no_leidas === 1 ? "aviso sin leer" : "avisos sin leer"}
+              </span>
+            </div>
+          </button>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
-            {[
-              { id: "todos", label: "Todos los Roles", icon: Layers },
-              { id: "estudiante", label: "Estudiante", icon: GraduationCap },
-              { id: "tutor", label: "Tutor", icon: BookOpen },
-              { id: "mentor", label: "Mentor", icon: Award },
-              { id: "evaluador", label: "Evaluador", icon: ClipboardCheck },
-              { id: "coordinador", label: "Coordinador", icon: Layers },
-            ].map((r) => {
-              const Icon = r.icon;
-              const isSelected = selectedRole === r.id;
-              return (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => setSelectedRole(r.id)}
-                  className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
-                    isSelected
-                      ? "bg-red-600 text-white border-red-600 shadow-sm shadow-red-200 scale-[1.02]"
-                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-white hover:border-slate-300"
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  <span>{r.label}</span>
-                </button>
-              );
-            })}
+          {/* Alta Prioridad */}
+          <button
+            type="button"
+            onClick={() => setActiveTab("urgentes")}
+            className={`text-left rounded-xl p-4 border transition-all ${
+              activeTab === "urgentes"
+                ? "bg-red-50/60 border-red-300 ring-2 ring-red-500/20 shadow-sm"
+                : "bg-slate-50/60 border-slate-200 hover:bg-white hover:border-slate-300"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Alta Prioridad / Críticas
+              </span>
+              <div
+                className={`flex h-7 w-7 items-center justify-center rounded-lg ${
+                  resumen.alta_prioridad > 0
+                    ? "bg-rose-100 text-rose-700"
+                    : "bg-slate-100 text-slate-500"
+                }`}
+              >
+                <Flame className="h-3.5 w-3.5" />
+              </div>
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl font-bold text-slate-900 leading-none">
+                {resumen.alta_prioridad}
+              </span>
+              <span className="text-[11px] text-slate-500 font-medium">
+                vencen en &lt; 48 horas
+              </span>
+            </div>
+          </button>
+
+          {/* Próximos Vencimientos */}
+          <div className="rounded-xl p-4 border border-slate-200 bg-slate-50/60">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Próximos 7 días
+              </span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+                <Clock className="h-3.5 w-3.5" />
+              </div>
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl font-bold text-slate-900 leading-none">
+                {resumen.proximas_a_vencer}
+              </span>
+              <span className="text-[11px] text-slate-500 font-medium">
+                compromisos en calendario
+              </span>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* 2. TARJETAS DE INDICADORES / KPIS (RESUMEN CUANTITATIVO) */}
-      <section className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {/* Total Alertas */}
-        <div
-          onClick={() => {
-            setFiltroLectura("todas");
-            setFiltroPrioridad("todas");
-          }}
-          className="cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 transition-all"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Total Alertas</span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
-              <Bell className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-2 text-2xl font-black text-slate-900">{resumen.total}</div>
-          <div className="mt-0.5 text-xs text-slate-500">Registradas para el rol</div>
+      {/* 3. BARRA DE HERRAMIENTAS: PESTAÑAS RÁPIDAS + BÚSQUEDA + ORDEN */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        {/* Pestañas de estado */}
+        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 border border-slate-200/80 shrink-0 overflow-x-auto">
+          {[
+            { id: "todas", label: `Todas (${resumen.total})` },
+            { id: "pendientes", label: `No Leídas (${resumen.no_leidas})` },
+            { id: "urgentes", label: `Críticas (${resumen.alta_prioridad})` },
+            { id: "leidas", label: "Leídas" },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap ${
+                activeTab === tab.id
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
-        {/* Alta Prioridad / Urgentes */}
-        <div
-          onClick={() => setFiltroPrioridad("alta")}
-          className={`cursor-pointer rounded-2xl border p-4 shadow-sm transition-all ${
-            filtroPrioridad === "alta"
-              ? "bg-red-50/50 border-red-300 ring-2 ring-red-200"
-              : "bg-white border-slate-200 hover:border-red-200"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-red-600">Críticas / Alta</span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-red-100 text-red-700">
-              <Flame className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-2 text-2xl font-black text-red-700">{resumen.alta_prioridad}</div>
-          <div className="mt-0.5 text-xs text-red-600 font-medium">Vencen en &lt; 48 horas</div>
-        </div>
-
-        {/* Próximas a vencer */}
-        <div
-          onClick={() => setFiltroFecha("semana")}
-          className={`cursor-pointer rounded-2xl border p-4 shadow-sm transition-all ${
-            filtroFecha === "semana"
-              ? "bg-amber-50/50 border-amber-300 ring-2 ring-amber-200"
-              : "bg-white border-slate-200 hover:border-amber-200"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">Próximos 7 Días</span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-100 text-amber-800">
-              <Clock className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-2 text-2xl font-black text-amber-800">{resumen.proximas_a_vencer}</div>
-          <div className="mt-0.5 text-xs text-amber-700 font-medium">Compromisos vigentes</div>
-        </div>
-
-        {/* No leídas */}
-        <div
-          onClick={() => setFiltroLectura("no_leidas")}
-          className={`cursor-pointer rounded-2xl border p-4 shadow-sm transition-all ${
-            filtroLectura === "no_leidas"
-              ? "bg-blue-50/50 border-blue-300 ring-2 ring-blue-200"
-              : "bg-white border-slate-200 hover:border-blue-200"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-blue-700">No Leídas</span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
-              <Eye className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-2 text-2xl font-black text-blue-800">{resumen.no_leidas}</div>
-          <div className="mt-0.5 text-xs text-blue-700 font-medium">Pendientes por revisar</div>
-        </div>
-      </section>
-
-      {/* 3. BARRA DE CONTROL, FILTROS Y ORGANIZACIÓN MULTIDIMENSIONAL */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
-        {/* Barra superior de búsqueda y orden */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        {/* Buscador y Ordenamiento */}
+        <div className="flex items-center gap-2 flex-1 sm:max-w-md">
           <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar por título, compromiso o convocatoria..."
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/70 py-2.5 pl-10 pr-9 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-200 transition-all"
+              placeholder="Buscar alertas..."
+              className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 bg-white placeholder-slate-400 text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 shadow-sm"
             />
             {searchTerm && (
               <button
                 type="button"
                 onClick={() => setSearchTerm("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-xs">
-              <ArrowUpDown className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-              <label htmlFor="orden-select" className="text-slate-500 font-medium text-[11px] sr-only">
-                Ordenar:
-              </label>
-              <select
-                id="orden-select"
-                value={orden}
-                onChange={(e) => setOrden(e.target.value)}
-                className="bg-transparent font-semibold text-slate-700 focus:outline-none cursor-pointer text-xs"
-              >
-                <option value="vencimiento_asc">Vence más pronto</option>
-                <option value="vencimiento_desc">Vence más lejano</option>
-                <option value="prioridad">Mayor prioridad primero</option>
-                <option value="recientes">Más recientes primero</option>
-              </select>
-            </div>
-
-            {hasFiltrosActivos && (
-              <button
-                type="button"
-                onClick={handleResetFiltros}
-                className="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200 transition-colors"
-                title="Limpiar todos los filtros"
-              >
-                Limpiar
-              </button>
-            )}
+          <div className="relative shrink-0">
+            <select
+              value={orden}
+              onChange={(e) => setOrden(e.target.value)}
+              className="text-xs pl-2.5 pr-7 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-red-500/20 shadow-sm cursor-pointer appearance-none"
+            >
+              <option value="vencimiento_asc">Próximas a vencer</option>
+              <option value="recientes">Más recientes</option>
+              <option value="prioridad">Mayor prioridad</option>
+            </select>
+            <ArrowUpDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400 pointer-events-none" />
           </div>
         </div>
+      </div>
 
-        {/* Grupos de filtros organizados */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-slate-100 pt-4">
-          {/* A. ORGANIZADO POR ESTADO DE LECTURA */}
-          <div>
-            <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
-              Estado de Lectura:
-            </span>
-            <div className="flex rounded-xl bg-slate-100 p-1 border border-slate-200">
-              {[
-                { id: "todas", label: "Todas" },
-                { id: "no_leidas", label: `No leídas (${resumen.no_leidas})` },
-                { id: "leidas", label: "Leídas" },
-              ].map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => setFiltroLectura(opt.id)}
-                  className={`flex-1 rounded-lg py-1.5 text-center text-xs font-bold transition-all ${
-                    filtroLectura === opt.id
-                      ? "bg-white text-slate-900 shadow-sm"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* B. ORGANIZADO POR PRIORIDAD */}
-          <div>
-            <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
-              Nivel de Prioridad:
-            </span>
-            <div className="flex rounded-xl bg-slate-100 p-1 border border-slate-200">
-              {[
-                { id: "todas", label: "Todas" },
-                { id: "alta", label: "Alta" },
-                { id: "media", label: "Media" },
-                { id: "baja", label: "Baja" },
-              ].map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => setFiltroPrioridad(opt.id)}
-                  className={`flex-1 rounded-lg py-1.5 text-center text-xs font-bold transition-all ${
-                    filtroPrioridad === opt.id
-                      ? opt.id === "alta"
-                        ? "bg-red-600 text-white shadow-sm"
-                        : opt.id === "media"
-                        ? "bg-amber-600 text-white shadow-sm"
-                        : opt.id === "baja"
-                        ? "bg-blue-600 text-white shadow-sm"
-                        : "bg-white text-slate-900 shadow-sm"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* C. ORGANIZADO POR FECHA / VENTANA TEMPORAL */}
-          <div>
-            <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
-              Plazo de Vencimiento:
-            </span>
-            <div className="relative">
-              <select
-                value={filtroFecha}
-                onChange={(e) => setFiltroFecha(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/70 py-2 px-3 text-xs font-semibold text-slate-700 focus:bg-white focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-200"
-              >
-                <option value="todas">Cualquier fecha</option>
-                <option value="hoy_48h">Vencen en menos de 48 horas</option>
-                <option value="semana">Vencen esta semana (próximos 7 días)</option>
-                <option value="proximas">Vencen en más de 7 días</option>
-                <option value="vencidas">Compromisos vencidos</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 4. LISTADO PRINCIPAL DE ALERTAS Y COMPROMISOS */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between px-2">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-            Alertas Encontradas ({alertas.length})
-          </span>
-          <span className="text-xs text-slate-400">
-            Haz clic en una alerta para ver el detalle y resolver el compromiso
+      {/* 4. LISTADO DE ALERTAS */}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl border border-slate-200">
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-red-600 border-t-transparent" />
+          <span className="mt-3 text-xs font-medium text-slate-500">
+            Consultando alertas de {roleConfig.label}...
           </span>
         </div>
-
-        {loading ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white py-16 text-slate-400 space-y-3">
-            <RefreshCw className="h-7 w-7 animate-spin text-red-600" />
-            <p className="text-xs font-semibold text-slate-600">Cargando alertas del sistema...</p>
-          </div>
-        ) : alertas.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white py-16 px-6 text-center space-y-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-              <CheckCircle2 className="h-6 w-6 text-emerald-600" />
-            </div>
-            <h3 className="text-base font-bold text-slate-800">
-              No tienes alertas con los filtros seleccionados
-            </h3>
-            <p className="text-xs text-slate-500 max-w-sm">
-              Estás al día con tus compromisos institucionales o no hay fechas críticas que coincidan
-              con tu selección actual.
-            </p>
-            {hasFiltrosActivos && (
+      ) : alertasFiltradas.length === 0 ? (
+        <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
+          {searchTerm || activeTab !== "todas" ? (
+            <>
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                <Search className="h-6 w-6" />
+              </div>
+              <h3 className="mt-3.5 text-base font-bold text-slate-800">
+                No se encontraron alertas con estos criterios
+              </h3>
+              <p className="mt-1 text-xs text-slate-500 max-w-sm mx-auto">
+                Prueba ajustando el término de búsqueda o cambiando la pestaña activa.
+              </p>
               <button
                 type="button"
-                onClick={handleResetFiltros}
-                className="mt-2 rounded-xl bg-red-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-red-700 transition-colors"
+                onClick={() => {
+                  setSearchTerm("");
+                  setActiveTab("todas");
+                }}
+                className="mt-4 px-3.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition-colors"
               >
-                Restablecer Filtros
+                Restablecer filtros
               </button>
-            )}
-          </div>
-        ) : (
-          alertas.map((alerta) => {
-            const roleBadge = ROLE_INFO[alerta.rol_destinatario] || ROLE_INFO.estudiante;
-            const tipoBadge = TIPO_INFO[alerta.tipo] || TIPO_INFO.general;
-            const isUnread = !alerta.leida;
-            const isAlta = alerta.prioridad === "alta";
-            const isMedia = alerta.prioridad === "media";
+            </>
+          ) : (
+            <>
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100">
+                <CheckCircle2 className="h-7 w-7" />
+              </div>
+              <h3 className="mt-4 text-base font-bold text-slate-800">
+                ¡Estás al día! No tienes alertas ni compromisos pendientes
+              </h3>
+              <p className="mt-1.5 text-xs text-slate-500 max-w-md mx-auto">
+                No hay avisos ni vencimientos activos registrados para tu rol de{" "}
+                <strong className="text-slate-700">{roleConfig.label}</strong>. Cuando se publiquen nuevas convocatorias o se asignen compromisos, los verás aquí.
+              </p>
+            </>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {alertasFiltradas.map((item) => {
+            const vInfo = calcularEstadoVencimiento(item.fecha_vencimiento);
+            const tipoConfig = TIPO_INFO[item.tipo] || TIPO_INFO.general;
+            const esAlta = item.prioridad === "alta";
+            const esMedia = item.prioridad === "media";
+
+            const borderClass = esAlta
+              ? "border-l-4 border-l-red-500"
+              : esMedia
+              ? "border-l-4 border-l-amber-500"
+              : "border-l-4 border-l-slate-300";
 
             return (
               <div
-                key={alerta.id_alerta}
-                onClick={() => setDetalleAlerta(alerta)}
-                className={`group relative overflow-hidden rounded-2xl border transition-all cursor-pointer ${
-                  isUnread
-                    ? "bg-white border-slate-300 shadow-md hover:border-red-300 hover:shadow-lg"
-                    : "bg-slate-50/70 border-slate-200 hover:bg-white hover:border-slate-300 shadow-sm"
+                key={item.id_alerta}
+                onClick={() => setDetalleAlerta(item)}
+                className={`rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:border-slate-300 hover:shadow-md cursor-pointer ${borderClass} ${
+                  !item.leida ? "bg-red-50/[0.04]" : "opacity-95"
                 }`}
               >
-                {/* Borde izquierdo con código de prioridad */}
-                <div
-                  className={`absolute left-0 top-0 bottom-0 w-1.5 ${
-                    isAlta ? "bg-red-600" : isMedia ? "bg-amber-500" : "bg-blue-500"
-                  }`}
-                />
-
-                <div className="p-5 sm:p-6 pl-6 sm:pl-7">
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                    <div className="space-y-1.5 flex-1 pr-2">
-                      {/* Badges de clasificación */}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {/* Indicador no leída */}
-                        {isUnread && (
-                          <span className="flex h-2 w-2 rounded-full bg-red-600 animate-pulse" />
-                        )}
-
-                        {/* Prioridad */}
-                        <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                            isAlta
-                              ? "bg-red-100 text-red-800 border border-red-200"
-                              : isMedia
-                              ? "bg-amber-100 text-amber-800 border border-amber-200"
-                              : "bg-blue-100 text-blue-800 border border-blue-200"
-                          }`}
-                        >
-                          {isAlta ? <Flame className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
-                          Prioridad {alerta.prioridad}
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                  <div className="space-y-2 flex-1">
+                    {/* Fila de etiquetas de estado y tipo */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {!item.leida ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-100 text-red-800 border border-red-200">
+                          <span className="h-1.5 w-1.5 rounded-full bg-red-600 animate-pulse" />
+                          No leída
                         </span>
-
-                        {/* Tipo de Alerta */}
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${tipoBadge.color}`}
-                        >
-                          {tipoBadge.label}
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600">
+                          <CheckCircle2 className="h-3 w-3 text-slate-400" />
+                          Leída
                         </span>
+                      )}
 
-                        {/* Rol destinatario */}
-                        <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${roleBadge.color}`}
-                        >
-                          <roleBadge.icon className="h-3 w-3" />
-                          {roleBadge.label}
+                      <span
+                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
+                          esAlta
+                            ? "bg-red-50 text-red-700 border-red-200"
+                            : esMedia
+                            ? "bg-amber-50 text-amber-800 border-amber-200"
+                            : "bg-slate-100 text-slate-700 border-slate-200"
+                        }`}
+                      >
+                        {esAlta && <Flame className="h-3 w-3 text-red-500" />}
+                        {esMedia && <AlertTriangle className="h-3 w-3 text-amber-500" />}
+                        Prioridad {item.prioridad?.toUpperCase()}
+                      </span>
+
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${tipoConfig.color}`}
+                      >
+                        {tipoConfig.label}
+                      </span>
+
+                      {item.convocatoria_nombre && (
+                        <span className="text-[11px] text-slate-500 font-medium">
+                          • {item.convocatoria_nombre}
                         </span>
-                      </div>
-
-                      {/* Título de la alerta */}
-                      <h4 className="text-base font-bold text-slate-900 group-hover:text-red-700 transition-colors">
-                        {alerta.titulo}
-                      </h4>
-
-                      {/* Mensaje descriptivo */}
-                      <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">
-                        {alerta.mensaje}
-                      </p>
-
-                      {/* Convocatoria vinculada si existe */}
-                      {alerta.convocatoria_nombre && (
-                        <div className="pt-1">
-                          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg">
-                            <Layers className="h-3 w-3 text-red-600" />
-                            {alerta.convocatoria_nombre}
-                          </span>
-                        </div>
                       )}
                     </div>
 
-                    {/* Vencimiento & Countdown Badge */}
-                    <div className="flex sm:flex-col items-start sm:items-end justify-between sm:justify-start gap-2 shrink-0 pt-2 sm:pt-0">
-                      {getVencimientoBadge(alerta.fecha_vencimiento)}
-                      <span className="text-[11px] text-slate-400 font-mono">
-                        Límite: {new Date(alerta.fecha_vencimiento).toLocaleDateString("es-CO")}
-                      </span>
-                    </div>
+                    {/* Título de la alerta */}
+                    <h3 className="text-base font-bold text-slate-900 leading-snug">
+                      {item.titulo}
+                    </h3>
+
+                    {/* Mensaje descriptivo */}
+                    <p className="text-xs text-slate-600 leading-relaxed max-w-3xl line-clamp-2">
+                      {item.mensaje}
+                    </p>
+
+                    {/* Fecha de vencimiento si existe */}
+                    {vInfo && (
+                      <div className="flex items-center gap-2 pt-1 text-xs">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-semibold border ${vInfo.badgeClass}`}
+                        >
+                          <Clock className="h-3 w-3" />
+                          {vInfo.texto}
+                        </span>
+                        {item.fecha_vencimiento && (
+                          <span className="text-[11px] text-slate-400 font-medium">
+                            Fecha límite:{" "}
+                            {new Date(item.fecha_vencimiento).toLocaleDateString("es-CO", {
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                            })}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
-                  {/* Barra inferior de la tarjeta con acciones directas */}
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3 text-xs">
-                    <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                      <Clock className="h-3.5 w-3.5" />
-                      <span>Emitida {new Date(alerta.fecha_creacion).toLocaleDateString("es-CO")}</span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
+                  {/* Acciones de la alerta */}
+                  <div className="flex items-center sm:flex-col sm:items-end justify-between sm:justify-center gap-2 shrink-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                    {item.modulo_destino && onNavigate && (
                       <button
                         type="button"
-                        onClick={(e) => handleToggleLeida(alerta.id_alerta, alerta.leida, e)}
-                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
-                        title={alerta.leida ? "Marcar como no leída" : "Marcar como leída"}
+                        onClick={(e) => handleIrAlModulo(item.modulo_destino, e)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-semibold shadow-sm transition-all active:scale-95"
                       >
-                        {alerta.leida ? (
-                          <>
-                            <EyeOff className="h-3.5 w-3.5" />
-                            <span>Marcar no leída</span>
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                            <span className="text-emerald-700 font-bold">Marcar leída</span>
-                          </>
-                        )}
+                        <span>Resolver</span>
+                        <ChevronRight className="h-3.5 w-3.5" />
                       </button>
+                    )}
 
-                      {alerta.modulo_destino && (
-                        <button
-                          type="button"
-                          onClick={(e) => handleActionClick(alerta.modulo_destino, e)}
-                          className="inline-flex items-center gap-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 px-3 py-1.5 text-[11px] font-bold transition-colors"
-                        >
-                          <span>Resolver compromiso</span>
-                          <ChevronRight className="h-3 w-3" />
-                        </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleToggleLeida(item.id_alerta, item.leida, e)}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium border transition-colors ${
+                        item.leida
+                          ? "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                          : "bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100"
+                      }`}
+                      title={item.leida ? "Marcar como no leída" : "Marcar como leída"}
+                    >
+                      {item.leida ? (
+                        <>
+                          <EyeOff className="h-3.5 w-3.5 text-slate-400" />
+                          <span className="hidden sm:inline">No leída</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                          <span className="hidden sm:inline">Marcar leída</span>
+                        </>
                       )}
-                    </div>
+                    </button>
                   </div>
                 </div>
               </div>
             );
-          })
-        )}
-      </section>
+          })}
+        </div>
+      )}
 
-      {/* 5. MODAL DE DETALLE COMPLETO DEL COMPROMISO / ALERTA */}
+      {/* 5. MODAL DE DETALLE DE ALERTA */}
       {detalleAlerta && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl space-y-5">
-            <div className="absolute top-0 left-0 right-0 h-1.5 rounded-t-2xl bg-gradient-to-r from-red-600 via-rose-600 to-red-500" />
-
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <div
-                  className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-                    detalleAlerta.prioridad === "alta"
-                      ? "bg-red-100 text-red-700"
-                      : detalleAlerta.prioridad === "media"
-                      ? "bg-amber-100 text-amber-800"
-                      : "bg-blue-100 text-blue-700"
-                  }`}
-                >
-                  <Bell className="h-5 w-5" />
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-red-600">
-                    Detalle del Compromiso
-                  </span>
-                  <h3 className="text-base font-bold text-slate-900 leading-snug">
-                    {detalleAlerta.titulo}
-                  </h3>
-                </div>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+          onClick={() => setDetalleAlerta(null)}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-red-600">
+                  Detalle del Compromiso
+                </span>
+                <h3 className="text-lg font-bold text-slate-900 mt-1">
+                  {detalleAlerta.titulo}
+                </h3>
               </div>
-
               <button
                 type="button"
                 onClick={() => setDetalleAlerta(null)}
@@ -778,89 +690,72 @@ export default function AlertasPage({ onNavigate, activeRole: propRole }) {
               </button>
             </div>
 
-            {/* Metadatos */}
-            <div className="rounded-xl bg-slate-50 border border-slate-100 p-4 space-y-2.5 text-xs">
-              <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
-                <span className="text-slate-500 font-medium">Nivel de Prioridad:</span>
-                <span className="font-bold uppercase tracking-wider text-slate-800">
-                  {detalleAlerta.prioridad}
-                </span>
-              </div>
-
-              <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
-                <span className="text-slate-500 font-medium">Rol Destinatario:</span>
-                <span className="font-bold text-slate-800 capitalize">
-                  {ROLE_INFO[detalleAlerta.rol_destinatario]?.label || detalleAlerta.rol_destinatario}
-                </span>
-              </div>
-
-              <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
-                <span className="text-slate-500 font-medium">Fecha y Hora Límite:</span>
-                <span className="font-bold text-red-700">
-                  {formatDateTime(detalleAlerta.fecha_vencimiento)}
-                </span>
-              </div>
-
-              <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
-                <span className="text-slate-500 font-medium">Estado de Lectura:</span>
-                <span className={`font-bold ${detalleAlerta.leida ? "text-slate-700" : "text-red-600"}`}>
-                  {detalleAlerta.leida ? "Leída" : "Pendiente de lectura"}
-                </span>
-              </div>
+            <div className="py-4 space-y-4">
+              <p className="text-sm text-slate-700 leading-relaxed">
+                {detalleAlerta.mensaje}
+              </p>
 
               {detalleAlerta.convocatoria_nombre && (
-                <div className="flex justify-between items-center py-1">
-                  <span className="text-slate-500 font-medium">Convocatoria:</span>
-                  <span className="font-bold text-slate-900">{detalleAlerta.convocatoria_nombre}</span>
+                <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs">
+                  <span className="text-slate-500 font-medium">Convocatoria asociada:</span>
+                  <p className="font-bold text-slate-800 mt-0.5">
+                    {detalleAlerta.convocatoria_nombre}
+                  </p>
+                </div>
+              )}
+
+              {detalleAlerta.fecha_vencimiento && (
+                <div className="flex items-center gap-2 text-xs text-slate-600 bg-amber-50/60 border border-amber-200/80 p-3 rounded-xl">
+                  <Clock className="h-4 w-4 text-amber-600 shrink-0" />
+                  <div>
+                    <span className="font-semibold text-amber-900">Fecha límite de cumplimiento:</span>
+                    <p className="text-amber-800 mt-0.5">
+                      {new Date(detalleAlerta.fecha_vencimiento).toLocaleString("es-CO", {
+                        day: "2-digit",
+                        month: "long",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Mensaje completo */}
-            <div className="space-y-1.5">
-              <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                Instrucciones / Descripción del Compromiso:
-              </h5>
-              <p className="text-xs text-slate-600 leading-relaxed bg-amber-50/50 border border-amber-200/60 rounded-xl p-3.5 whitespace-pre-line">
-                {detalleAlerta.mensaje}
-              </p>
-            </div>
-
-            {/* Acciones */}
-            <div className="flex items-center justify-between gap-3 pt-2">
+            <div className="flex items-center justify-between gap-3 pt-4 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() =>
                   handleToggleLeida(detalleAlerta.id_alerta, detalleAlerta.leida)
                 }
-                className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                className="px-3.5 py-2 text-xs font-semibold rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 transition-colors"
               >
-                {detalleAlerta.leida ? "Marcar no leída" : "Marcar como leída"}
+                {detalleAlerta.leida ? "Marcar como no leída" : "Marcar como leída"}
               </button>
 
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setDetalleAlerta(null)}
-                  className="rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200 transition-colors"
-                >
-                  Cerrar
-                </button>
-
-                {detalleAlerta.modulo_destino && (
+                {detalleAlerta.modulo_destino && onNavigate && (
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={(e) => {
                       const mod = detalleAlerta.modulo_destino;
                       setDetalleAlerta(null);
-                      handleActionClick(mod);
+                      handleIrAlModulo(mod, e);
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-red-700 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-sm transition-all"
                   >
-                    <span>Ir a la pantalla del módulo</span>
+                    <span>Ir al módulo</span>
                     <ExternalLink className="h-3.5 w-3.5" />
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => setDetalleAlerta(null)}
+                  className="px-4 py-2 text-xs font-bold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
+                >
+                  Cerrar
+                </button>
               </div>
             </div>
           </div>

@@ -352,7 +352,13 @@ export default function ConvocatoriasPage({ onNavigate }) {
   };
 
   return (
-    <MainLayout activeModule="convocatorias" onNavigate={onNavigate}>
+    <MainLayout
+      activeModule="convocatorias"
+      onNavigate={onNavigate}
+      onRoleChange={() => {
+        if (onNavigate) onNavigate(null);
+      }}
+    >
       <div className="mx-auto w-full max-w-6xl space-y-6">
         {/* Toast Notificación */}
         {toastMessage && (
@@ -376,8 +382,8 @@ export default function ConvocatoriasPage({ onNavigate }) {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/80 pb-5">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="inline-block rounded-md bg-red-100 px-2.5 py-0.5 text-[11px] font-bold text-red-700 font-mono">
-                HU-02 • GENNOVA
+              <span className="inline-block rounded-md bg-red-100 px-2.5 py-0.5 text-[11px] font-bold text-red-700">
+                GENNOVA Institucional
               </span>
               <span className="text-xs text-slate-400">•</span>
               <span className="text-xs text-slate-500 font-medium">

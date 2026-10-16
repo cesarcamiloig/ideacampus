@@ -1,14 +1,17 @@
-import React, { useState } from "react";
-import { FileText, Layers } from "lucide-react";
+import React, { useState, useEffect } from "react";
 import ConvocatoriasAbiertasView from "../components/ConvocatoriasAbiertasView";
 import FormularioPostulacion from "../components/FormularioPostulacion";
 import MisPostulacionesView from "../components/MisPostulacionesView";
 import ComprobanteRadicacionModal from "../components/ComprobanteRadicacionModal";
 
-export default function EstudianteIniciativasPage({ initialTab = "convocatorias" }) {
+export default function EstudianteIniciativasPage({ initialTab = "convocatorias", onNavigate }) {
   const [activeTab, setActiveTab] = useState(initialTab); // 'convocatorias' | 'mis_postulaciones'
   const [convocatoriaSeleccionada, setConvocatoriaSeleccionada] = useState(null);
   const [comprobanteModal, setComprobanteModal] = useState(null);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   const handleSelectConvocatoria = (convocatoria) => {
     setConvocatoriaSeleccionada(convocatoria);
@@ -21,42 +24,31 @@ export default function EstudianteIniciativasPage({ initialTab = "convocatorias"
   const handlePostulacionExitosa = (nuevaPostulacion) => {
     setConvocatoriaSeleccionada(null);
     setComprobanteModal(nuevaPostulacion);
-    setActiveTab("mis_postulaciones");
+    if (onNavigate) {
+      onNavigate("mi-iniciativa");
+    } else {
+      setActiveTab("mis_postulaciones");
+    }
+  };
+
+  const handleVerMisPostulaciones = () => {
+    if (onNavigate) {
+      onNavigate("mi-iniciativa");
+    } else {
+      setActiveTab("mis_postulaciones");
+    }
+  };
+
+  const handleNuevaPostulacion = () => {
+    if (onNavigate) {
+      onNavigate("postulaciones");
+    } else {
+      setActiveTab("convocatorias");
+    }
   };
 
   return (
     <div className="w-full space-y-6">
-      {/* NAVEGACIÓN SECUNDARIA SI NO ESTÁ EN MEDIO DE UN FORMULARIO */}
-      {!convocatoriaSeleccionada && (
-        <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
-          <button
-            type="button"
-            onClick={() => setActiveTab("convocatorias")}
-            className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all ${
-              activeTab === "convocatorias"
-                ? "bg-red-600 text-white shadow-sm"
-                : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-            }`}
-          >
-            <FileText className="h-4 w-4" />
-            <span>Convocatorias Abiertas (HU-03)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("mis_postulaciones")}
-            className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all ${
-              activeTab === "mis_postulaciones"
-                ? "bg-red-600 text-white shadow-sm"
-                : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-            }`}
-          >
-            <Layers className="h-4 w-4" />
-            <span>Mis Iniciativas y Radicados</span>
-          </button>
-        </div>
-      )}
-
       {/* VISTA SEGÚN ESTADO */}
       {convocatoriaSeleccionada ? (
         <FormularioPostulacion
@@ -67,11 +59,11 @@ export default function EstudianteIniciativasPage({ initialTab = "convocatorias"
       ) : activeTab === "convocatorias" ? (
         <ConvocatoriasAbiertasView
           onSelectConvocatoria={handleSelectConvocatoria}
-          onVerMisPostulaciones={() => setActiveTab("mis_postulaciones")}
+          onVerMisPostulaciones={handleVerMisPostulaciones}
         />
       ) : (
         <MisPostulacionesView
-          onNuevaPostulacion={() => setActiveTab("convocatorias")}
+          onNuevaPostulacion={handleNuevaPostulacion}
         />
       )}
 
@@ -82,7 +74,7 @@ export default function EstudianteIniciativasPage({ initialTab = "convocatorias"
           onCerrar={() => setComprobanteModal(null)}
           onVerMisPostulaciones={() => {
             setComprobanteModal(null);
-            setActiveTab("mis_postulaciones");
+            handleVerMisPostulaciones();
           }}
         />
       )}

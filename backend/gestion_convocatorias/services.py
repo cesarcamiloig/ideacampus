@@ -240,8 +240,8 @@ def generar_alertas_automaticas_por_rol(usuario=None):
                     )
                     alertas_creadas += 1
 
-        # B. Compromisos para Evaluador
-        if 'evaluador' in roles_set:
+        # B. Compromisos para Evaluador (únicamente si hay convocatorias activas o iniciativas radicadas)
+        if 'evaluador' in roles_set and (convocatorias_activas or Iniciativa.objects.filter(estado='radicada').exists()):
             titulo = "Compromiso Pendiente: Calificación de Iniciativas"
             if not AlertaRol.objects.filter(usuario=user, tipo='evaluacion_pendiente', leida=False).exists():
                 AlertaRol.objects.create(
@@ -256,8 +256,8 @@ def generar_alertas_automaticas_por_rol(usuario=None):
                 )
                 alertas_creadas += 1
 
-        # C. Compromisos para Tutor Académico
-        if 'tutor' in roles_set:
+        # C. Compromisos para Tutor Académico (únicamente si hay iniciativas registradas)
+        if 'tutor' in roles_set and Iniciativa.objects.exists():
             titulo = "Compromiso de Tutoría: Registro de Bitácora"
             if not AlertaRol.objects.filter(usuario=user, tipo='compromiso_tutoria', leida=False).exists():
                 AlertaRol.objects.create(
@@ -272,8 +272,8 @@ def generar_alertas_automaticas_por_rol(usuario=None):
                 )
                 alertas_creadas += 1
 
-        # D. Compromisos para Mentor Especializado
-        if 'mentor' in roles_set:
+        # D. Compromisos para Mentor Especializado (únicamente si hay iniciativas en etapas avanzadas)
+        if 'mentor' in roles_set and Iniciativa.objects.filter(estado__in=['aprobada', 'aceptada']).exists():
             titulo = "Compromiso de Mentoría: Asesoría Técnica y de Negocio"
             if not AlertaRol.objects.filter(usuario=user, tipo='compromiso_mentoria', leida=False).exists():
                 AlertaRol.objects.create(
@@ -288,25 +288,27 @@ def generar_alertas_automaticas_por_rol(usuario=None):
                 )
                 alertas_creadas += 1
 
-        # E. Compromisos para Estudiante Emprendedor
-        if 'estudiante' in roles_set:
-            # Alerta sobre documentación y equipo
-            titulo = "Compromiso de Postulación: Completar Equipo y Documento"
+        # E. Compromisos para Estudiante Emprendedor (únicamente si hay convocatorias activas)
+        if 'estudiante' in roles_set and convocatorias_activas:
+            # Alerta sobre documentación y equipo para la convocatoria activa
+            primera_conv = convocatorias_activas[0]
+            titulo = f"Compromiso de Postulación: {primera_conv.nombre}"
             if not AlertaRol.objects.filter(usuario=user, tipo='entrega_documentacion', leida=False).exists():
                 AlertaRol.objects.create(
                     usuario=user,
+                    convocatoria=primera_conv,
                     titulo=titulo,
-                    mensaje="Verifica que tu equipo emprendedor cuente con los integrantes activos y el documento PDF de propuesta radicado correctamente.",
+                    mensaje=f"Verifica los requisitos y la radicación de tu propuesta e integrantes para '{primera_conv.nombre}'.",
                     rol_destinatario='estudiante',
                     tipo='entrega_documentacion',
                     prioridad='media',
-                    fecha_vencimiento=now + timedelta(days=3),
-                    modulo_destino='equipo'
+                    fecha_vencimiento=primera_conv.fecha_cierre,
+                    modulo_destino='postulaciones'
                 )
                 alertas_creadas += 1
 
-        # F. Compromisos para Coordinador de Emprendimiento
-        if 'coordinador' in roles_set or 'admin' in roles_set:
+        # F. Compromisos para Coordinador de Emprendimiento (únicamente si hay convocatorias activas)
+        if ('coordinador' in roles_set or 'admin' in roles_set) and convocatorias_activas:
             titulo = "Supervisión Institucional: Cierre y Asignación de Jurados"
             if not AlertaRol.objects.filter(usuario=user, tipo='cierre_periodo', leida=False).exists():
                 AlertaRol.objects.create(

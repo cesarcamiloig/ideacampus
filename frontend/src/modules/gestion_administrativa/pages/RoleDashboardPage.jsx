@@ -39,7 +39,7 @@ const ROLE_CONFIG = {
       },
       postulaciones: {
         title: "Convocatorias Abiertas",
-        tag: "HU-03",
+        tag: "Convocatorias",
         desc: "Consulta los ciclos de postulación activos publicados por la coordinación y radica tu iniciativa adjuntando documentación y declarando su origen académico.",
         details:
           "Revisa requisitos mínimos, fechas límite de entrega, rúbricas de evaluación aplicables y postula tu propuesta.",
@@ -47,7 +47,7 @@ const ROLE_CONFIG = {
       },
       "mi-iniciativa": {
         title: "Mis Iniciativas y Expedientes",
-        tag: "HU-03 / HU-04",
+        tag: "Iniciativas",
         desc: "Consulta el historial de iniciativas radicadas, número de radicado, documentos y el nivel de madurez tecnológica (TRL).",
         details:
           "Trazabilidad longitudinal del origen académico (asignaturas, semilleros, proyectos de grado), integrantes y estado de la solución.",
@@ -324,6 +324,11 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
       }}
       onNavigate={onNavigate}
       activeRole={normalizedRole}
+      onRoleChange={() => {
+        if (onNavigate) {
+          onNavigate(null);
+        }
+      }}
     >
       <div className="mx-auto w-full max-w-5xl space-y-6">
         {/* BANNER DE BIENVENIDA INSTITUCIONAL */}
@@ -400,6 +405,10 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
               initialTab={
                 activeModule === "postulaciones" ? "convocatorias" : "mis_postulaciones"
               }
+              onNavigate={(mod) => {
+                setActiveModule(mod);
+                if (onNavigate) onNavigate(mod);
+              }}
             />
           )
         ) : activeModule === "emprendimientos" || activeModule === "iniciativas" ? (

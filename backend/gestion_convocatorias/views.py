@@ -334,6 +334,9 @@ class AlertaRolViewSet(viewsets.ModelViewSet):
         Indicadores consolidados para badges, campana y tarjetas superiores de KPI.
         """
         qs = AlertaRol.objects.filter(usuario=request.user)
+        rol = request.query_params.get('rol')
+        if rol and rol.lower() != 'todos':
+            qs = qs.filter(Q(rol_destinatario=rol.lower()) | Q(rol_destinatario='todos'))
         now = timezone.now()
         total = qs.count()
         no_leidas = qs.filter(leida=False).count()
