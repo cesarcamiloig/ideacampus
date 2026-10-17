@@ -11,8 +11,13 @@ from .models import (
     DocumentoPostulacion,
     Iniciativa,
     NotificacionConvocatoria,
+    AlertaRol,
 )
-from .services import actualizar_estados_convocatorias, notificar_apertura
+from .services import (
+    actualizar_estados_convocatorias,
+    notificar_apertura,
+    generar_alertas_automaticas_por_rol,
+)
 
 
 class GestionConvocatoriasTests(APITestCase):
@@ -469,3 +474,119 @@ class GestionConvocatoriasTests(APITestCase):
         self.assertIn("attachment", response["Content-Disposition"])
         self.assertIn("propuesta.pdf", response["Content-Disposition"])
         self.assertEqual(b"".join(response.streaming_content), b"%PDF-1.4 prueba")
+
+    # ==========================================
+    # PRUEBAS HU-12: ALERTAS AUTOMÁTICAS POR ROL
+    # ==========================================
+
+    def test_generacion_automatica_alertas_por_vencimiento_convocatoria(self):
+        """Verifica que convocatorias próximas a vencer generen alertas automáticas para estudiantes."""
+        convocatoria_urgente = Convocatoria.objects.create(
+            nombre="Convocatoria Por Vencer",
+            fecha_apertura=timezone.now() - timedelta(days=5),
+            fecha_cierre=timezone.now() + timedelta(hours=20),
+            estado="abierta",
+        )
+        generadas = generar_alertas_automaticas_por_rol(self.estudiante)
+        self.assertGreaterEqual(generadas, 1)
+
+        alerta = AlertaRol.objects.filter(
+            usuario=self.estudiante,
+            convocatoria=convocatoria_urgente,
+            prioridad="alta"
+        ).first()
+        self.assertIsNotNone(alerta)
+        self.assertIn("Vencimiento Crítico", alerta.titulo)
+        self.assertEqual(alerta.rol_destinatario, "estudiante")
+        self.assertFalse(alerta.leida)
+
+    def test_listado_alertas_endpoint_con_filtros(self):
+        """Verifica el endpoint GET /api/alertas/ con filtros por prioridad y lectura."""
+        AlertaRol.objects.create(
+            usuario=self.estudiante,
+            titulo="Alerta Urgente",
+            mensaje="Mensaje urgente",
+            rol_destinatario="estudiante",
+            prioridad="alta",
+            leida=False,
+            fecha_vencimiento=timezone.now() + timedelta(days=1),
+        )
+        AlertaRol.objects.create(
+            usuario=self.estudiante,
+            titulo="Alerta Informativa Leída",
+            mensaje="Mensaje informativo",
+            rol_destinatario="estudiante",
+            prioridad="baja",
+            leida=True,
+            fecha_vencimiento=timezone.now() + timedelta(days=10),
+        )
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_estudiante}")
+
+        # 1. Listar todas
+        res = self.client.get("/api/alertas/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(len(res.data), 2)
+
+        # 2. Filtrar solo no leídas
+        res_no_leidas = self.client.get("/api/alertas/?leida=false")
+        self.assertEqual(res_no_leidas.status_code, status.HTTP_200_OK)
+        for item in res_no_leidas.data:
+            self.assertFalse(item["leida"])
+
+        # 3. Filtrar por prioridad alta
+        res_alta = self.client.get("/api/alertas/?prioridad=alta")
+        self.assertEqual(res_alta.status_code, status.HTTP_200_OK)
+        for item in res_alta.data:
+            self.assertEqual(item["prioridad"], "alta")
+
+    def test_marcar_alerta_leida_y_marcar_todas(self):
+        """Verifica las acciones de marcar como leída individual y masivamente."""
+        alerta1 = AlertaRol.objects.create(
+            usuario=self.estudiante,
+            titulo="Compromiso 1",
+            mensaje="Mensaje 1",
+            prioridad="media",
+            leida=False,
+        )
+        alerta2 = AlertaRol.objects.create(
+            usuario=self.estudiante,
+            titulo="Compromiso 2",
+            mensaje="Mensaje 2",
+            prioridad="alta",
+            leida=False,
+        )
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_estudiante}")
+
+        # Marcar individual
+        res_individual = self.client.patch(f"/api/alertas/{alerta1.id_alerta}/leer/", {"leida": True})
+        self.assertEqual(res_individual.status_code, status.HTTP_200_OK)
+        alerta1.refresh_from_db()
+        self.assertTrue(alerta1.leida)
+
+        # Marcar todas leídas
+        res_todas = self.client.post("/api/alertas/marcar_todas_leidas/")
+        self.assertEqual(res_todas.status_code, status.HTTP_200_OK)
+        alerta2.refresh_from_db()
+        self.assertTrue(alerta2.leida)
+
+    def test_resumen_indicadores_alertas(self):
+        """Verifica el endpoint GET /api/alertas/resumen/ con métricas de alertas."""
+        AlertaRol.objects.create(
+            usuario=self.estudiante,
+            titulo="Alerta Resumen",
+            mensaje="Detalle",
+            prioridad="alta",
+            leida=False,
+            fecha_vencimiento=timezone.now() + timedelta(days=1),
+        )
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_estudiante}")
+        res = self.client.get("/api/alertas/resumen/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn("total", res.data)
+        self.assertIn("no_leidas", res.data)
+        self.assertIn("alta_prioridad", res.data)
+        self.assertGreaterEqual(res.data["total"], 1)
+        self.assertGreaterEqual(res.data["no_leidas"], 1)

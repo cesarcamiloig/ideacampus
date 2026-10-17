@@ -1,3 +1,4 @@
+from datetime import timedelta
 from django.db.models import Q
 from django.http import FileResponse
 from django.utils import timezone
@@ -9,16 +10,18 @@ from rest_framework.response import Response
 
 from gestion_administrativa.authentication import JWTAuthentication
 from gestion_administrativa.permissions import TieneRolPermitido
-from .models import Convocatoria, Iniciativa, NotificacionConvocatoria
+from .models import Convocatoria, Iniciativa, NotificacionConvocatoria, AlertaRol
 from .serializers import (
     ConvocatoriaSerializer,
     IniciativaSerializer,
     NotificacionConvocatoriaSerializer,
+    AlertaRolSerializer,
 )
 from .services import (
     actualizar_estados_convocatorias,
     notificar_apertura,
     notificar_cierre,
+    generar_alertas_automaticas_por_rol,
 )
 
 
@@ -211,6 +214,145 @@ class NotificacionConvocatoriaViewSet(viewsets.ReadOnlyModelViewSet):
         return Response({
             'total': total,
             'no_leidas': no_leidas
+        }, status=status.HTTP_200_OK)
+
+
+class AlertaRolViewSet(viewsets.ModelViewSet):
+    """
+    HU-12: Gestión integral de alertas automáticas sobre vencimientos y compromisos
+    organizadas por fecha, prioridad y estado de lectura para los roles institucionales.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+    serializer_class = AlertaRolSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        # Sincronizar alertas automáticas si no tiene ninguna registrada aún
+        if not AlertaRol.objects.filter(usuario=user).exists():
+            generar_alertas_automaticas_por_rol(user)
+
+        qs = AlertaRol.objects.filter(usuario=user)
+
+        # Filtro por estado de lectura: leida = 'true' / 'false'
+        leida = self.request.query_params.get('leida')
+        if leida is not None:
+            if leida.lower() in ['true', '1']:
+                qs = qs.filter(leida=True)
+            elif leida.lower() in ['false', '0']:
+                qs = qs.filter(leida=False)
+
+        # Filtro por prioridad: 'alta', 'media', 'baja'
+        prioridad = self.request.query_params.get('prioridad')
+        if prioridad:
+            qs = qs.filter(prioridad=prioridad.lower())
+
+        # Filtro por tipo de alerta
+        tipo = self.request.query_params.get('tipo')
+        if tipo:
+            qs = qs.filter(tipo=tipo)
+
+        # Filtro por rol_destinatario
+        rol = self.request.query_params.get('rol')
+        if rol and rol.lower() != 'todos':
+            qs = qs.filter(Q(rol_destinatario=rol.lower()) | Q(rol_destinatario='todos'))
+
+        # Filtro por ventana temporal de fecha de vencimiento
+        ventana = self.request.query_params.get('ventana_fecha')
+        now = timezone.now()
+        if ventana == 'hoy_48h':
+            qs = qs.filter(fecha_vencimiento__gte=now, fecha_vencimiento__lte=now + timedelta(days=2))
+        elif ventana == 'semana':
+            qs = qs.filter(fecha_vencimiento__gte=now, fecha_vencimiento__lte=now + timedelta(days=7))
+        elif ventana == 'proximas':
+            qs = qs.filter(fecha_vencimiento__gt=now + timedelta(days=7))
+        elif ventana == 'vencidas':
+            qs = qs.filter(fecha_vencimiento__lt=now)
+
+        # Búsqueda por texto (q)
+        q = self.request.query_params.get('q')
+        if q:
+            qs = qs.filter(Q(titulo__icontains=q) | Q(mensaje__icontains=q))
+
+        # Ordenamiento dinámico
+        orden = self.request.query_params.get('orden', 'fecha_vencimiento')
+        if orden == 'vencimiento_asc':
+            qs = qs.order_by('fecha_vencimiento')
+        elif orden == 'vencimiento_desc':
+            qs = qs.order_by('-fecha_vencimiento')
+        elif orden == 'recientes':
+            qs = qs.order_by('-fecha_creacion')
+        elif orden == 'prioridad':
+            qs = qs.order_by('prioridad', 'fecha_vencimiento')
+        else:
+            qs = qs.order_by('fecha_vencimiento', '-fecha_creacion')
+
+        return qs
+
+    @action(detail=True, methods=['patch', 'post'])
+    def leer(self, request, pk=None):
+        """
+        Marca o alterna una alerta como leída/no leída.
+        """
+        alerta = self.get_object()
+        nueva_leida = request.data.get('leida', True)
+        if isinstance(nueva_leida, str):
+            nueva_leida = nueva_leida.lower() in ['true', '1']
+        alerta.leida = bool(nueva_leida)
+        alerta.save(update_fields=['leida'])
+        return Response(self.get_serializer(alerta).data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'])
+    def marcar_todas_leidas(self, request):
+        """
+        Marca todas las alertas pendientes del usuario como leídas.
+        """
+        actualizadas = AlertaRol.objects.filter(
+            usuario=request.user,
+            leida=False
+        ).update(leida=True)
+        return Response({
+            'mensaje': 'Todas las alertas han sido marcadas como leídas.',
+            'actualizadas': actualizadas
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'])
+    def sincronizar(self, request):
+        """
+        Revalida las convocatorias y compromisos y genera alertas automáticas frescas.
+        """
+        actualizar_estados_convocatorias()
+        generadas = generar_alertas_automaticas_por_rol(request.user)
+        return Response({
+            'mensaje': 'Alertas automáticas sincronizadas con éxito.',
+            'alertas_generadas': generadas
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'])
+    def resumen(self, request):
+        """
+        Indicadores consolidados para badges, campana y tarjetas superiores de KPI.
+        """
+        qs = AlertaRol.objects.filter(usuario=request.user)
+        rol = request.query_params.get('rol')
+        if rol and rol.lower() != 'todos':
+            qs = qs.filter(Q(rol_destinatario=rol.lower()) | Q(rol_destinatario='todos'))
+        now = timezone.now()
+        total = qs.count()
+        no_leidas = qs.filter(leida=False).count()
+        alta_prioridad = qs.filter(prioridad='alta').count()
+        proximas_a_vencer = qs.filter(
+            fecha_vencimiento__gte=now,
+            fecha_vencimiento__lte=now + timedelta(days=7)
+        ).count()
+        vencidas = qs.filter(fecha_vencimiento__lt=now).count()
+
+        return Response({
+            'total': total,
+            'no_leidas': no_leidas,
+            'alta_prioridad': alta_prioridad,
+            'proximas_a_vencer': proximas_a_vencer,
+            'vencidas': vencidas
         }, status=status.HTTP_200_OK)
 
 

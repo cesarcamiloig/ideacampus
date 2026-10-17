@@ -16,6 +16,7 @@ import TutorProfileForm from "../../gestion_acompaniamiento/pages/TutorProfileFo
 import EstudianteIniciativasPage from "../../gestion_convocatorias/pages/EstudianteIniciativasPage";
 import EquipoPage from "../../gestion_emprendimiento_2/pages/EquipoPage";
 import BancoIniciativasView from "../../gestion_convocatorias/components/BancoIniciativasView";
+import AlertasPage from "../../gestion_convocatorias/pages/AlertasPage";
 
 const ROLE_CONFIG = {
   estudiante: {
@@ -38,7 +39,7 @@ const ROLE_CONFIG = {
       },
       postulaciones: {
         title: "Convocatorias Abiertas",
-        tag: "HU-03",
+        tag: "Convocatorias",
         desc: "Consulta los ciclos de postulación activos publicados por la coordinación y radica tu iniciativa adjuntando documentación y declarando su origen académico.",
         details:
           "Revisa requisitos mínimos, fechas límite de entrega, rúbricas de evaluación aplicables y postula tu propuesta.",
@@ -46,7 +47,7 @@ const ROLE_CONFIG = {
       },
       "mi-iniciativa": {
         title: "Mis Iniciativas y Expedientes",
-        tag: "HU-03 / HU-04",
+        tag: "Iniciativas",
         desc: "Consulta el historial de iniciativas radicadas, número de radicado, documentos y el nivel de madurez tecnológica (TRL).",
         details:
           "Trazabilidad longitudinal del origen académico (asignaturas, semilleros, proyectos de grado), integrantes y estado de la solución.",
@@ -268,6 +269,12 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
   const [activeModule, setActiveModule] = useState(defaultModule || roleConfig.defaultModule);
   const [showProfileForm, setShowProfileForm] = useState(false);
 
+  React.useEffect(() => {
+    if (defaultModule) {
+      setActiveModule(defaultModule);
+    }
+  }, [defaultModule]);
+
   // Si es tutor o mentor y seleccionó el módulo 'perfil' o activó el flag
   if (
     (normalizedRole === "tutor" || normalizedRole === "mentor") &&
@@ -317,6 +324,11 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
       }}
       onNavigate={onNavigate}
       activeRole={normalizedRole}
+      onRoleChange={() => {
+        if (onNavigate) {
+          onNavigate(null);
+        }
+      }}
     >
       <div className="mx-auto w-full max-w-5xl space-y-6">
         {/* BANNER DE BIENVENIDA INSTITUCIONAL */}
@@ -374,8 +386,17 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
         </section>
 
 
-        {/* CONTENIDO ESPECÍFICO SEGÚN ROL */}
-        {normalizedRole === "estudiante" ? (
+        {/* CONTENIDO ESPECÍFICO SEGÚN ROL (HU-12 Alertas y Compromisos) */}
+        {activeModule === "alertas" ? (
+          <AlertasPage
+            key="alertas-page"
+            onNavigate={(mod) => {
+              setActiveModule(mod);
+              if (onNavigate) onNavigate(mod);
+            }}
+            activeRole={normalizedRole}
+          />
+        ) : normalizedRole === "estudiante" ? (
           activeModule === "equipo" ? (
             <EquipoPage key="equipo" />
           ) : (
@@ -384,6 +405,10 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
               initialTab={
                 activeModule === "postulaciones" ? "convocatorias" : "mis_postulaciones"
               }
+              onNavigate={(mod) => {
+                setActiveModule(mod);
+                if (onNavigate) onNavigate(mod);
+              }}
             />
           )
         ) : activeModule === "emprendimientos" || activeModule === "iniciativas" ? (

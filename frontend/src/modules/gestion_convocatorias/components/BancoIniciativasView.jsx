@@ -153,7 +153,7 @@ export default function BancoIniciativasView() {
           <div>
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-bold uppercase tracking-wider text-red-600">
-                Coordinación de Emprendimiento · HU-03 / HU-04
+                Coordinación de Emprendimiento
               </span>
             </div>
             <h2 className="text-xl font-bold text-slate-900">
