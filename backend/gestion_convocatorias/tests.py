@@ -299,8 +299,8 @@ class GestionConvocatoriasTests(APITestCase):
         res = self.client.post("/api/iniciativas/", payload, format="json")
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_coordinador_aprueba_iniciativa_y_notifica_estudiante(self):
-        """El coordinador puede evaluar y aprobar una iniciativa (HU-03)."""
+    def test_direccion_aprueba_iniciativa_y_notifica_estudiante(self):
+        """La Dirección del Programa puede evaluar y aprobar una iniciativa (HU-03)."""
         from .models import Iniciativa
         now = timezone.now()
         conv = Convocatoria.objects.create(
@@ -318,8 +318,8 @@ class GestionConvocatoriasTests(APITestCase):
             estado="pendiente"
         )
 
-        # Coordinador aprueba iniciativa vía cambiar-estado
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+        # Dirección del Programa aprueba iniciativa vía cambiar-estado
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_direccion}")
         res = self.client.patch(
             f"/api/iniciativas/{iniciativa.id_iniciativa}/cambiar-estado/",
             {"estado": "aprobada"},
@@ -330,6 +330,22 @@ class GestionConvocatoriasTests(APITestCase):
 
         iniciativa.refresh_from_db()
         self.assertEqual(iniciativa.estado, "aprobada")
+
+        # Al aprobarse se crea oficialmente el proyecto, sin coordinador/tutor/mentores
+        from gestion_emprendimiento_2.models import Proyecto
+        proyecto = Proyecto.objects.get(iniciativa=iniciativa)
+        self.assertEqual(proyecto.nombre_proyecto, "Plataforma de IA")
+        self.assertIsNone(proyecto.coordinador)
+        self.assertIsNone(proyecto.tutor)
+        self.assertEqual(proyecto.mentores.count(), 0)
+
+        # Aprobar de nuevo no duplica el proyecto
+        self.client.patch(
+            f"/api/iniciativas/{iniciativa.id_iniciativa}/cambiar-estado/",
+            {"estado": "aprobada"},
+            format="json"
+        )
+        self.assertEqual(Proyecto.objects.filter(iniciativa=iniciativa).count(), 1)
 
         # Verificar notificación de felicitación al estudiante
         notif = NotificacionConvocatoria.objects.filter(usuario=self.estudiante, tipo="apertura").first()

@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.db.models import Q
 from django.http import FileResponse
 from django.utils import timezone
@@ -9,6 +10,7 @@ from rest_framework.response import Response
 
 from gestion_administrativa.authentication import JWTAuthentication
 from gestion_administrativa.permissions import TieneRolPermitido
+from gestion_emprendimiento_2.services import crear_proyecto_desde_iniciativa
 from .models import Convocatoria, Iniciativa, NotificacionConvocatoria
 from .serializers import (
     ConvocatoriaSerializer,
@@ -218,7 +220,7 @@ class IniciativaViewSet(viewsets.ModelViewSet):
     """
     Gestión de postulaciones e iniciativas de estudiantes (HU-03).
     - Los estudiantes solo pueden consultar sus propias postulaciones y radicar si son estudiantes activos.
-    - Los coordinadores y administradores pueden ver todas las iniciativas y aprobarlas/rechazarlas.
+    - La Dirección del Programa y los administradores pueden ver todas las iniciativas y aprobarlas/rechazarlas.
     - Notifica automáticamente al estudiante tras radicar o tras cambio de estado.
     """
     authentication_classes = [JWTAuthentication]
@@ -229,8 +231,10 @@ class IniciativaViewSet(viewsets.ModelViewSet):
     def _es_gestor(self, usuario):
         roles_usuario = getattr(usuario, 'roles_asignados', [])
         rol_activo = getattr(usuario, 'rol_activo', '')
-        return ('admin' in roles_usuario or 'coordinador' in roles_usuario or
-                rol_activo in ['admin', 'coordinador'])
+        roles_gestores = ['admin', 'direccion_del_programa', 'direccion']
+        return any(rol in roles_usuario for rol in roles_gestores) or (
+            rol_activo in roles_gestores
+        )
 
     def get_queryset(self):
         usuario = self.request.user
@@ -270,14 +274,17 @@ class IniciativaViewSet(viewsets.ModelViewSet):
         # Si el usuario NO es gestor y pretende cambiar el estado, se rechaza
         if 'estado' in request.data and not es_gestor:
             return Response(
-                {"error": "Solo un coordinador o administrador puede modificar el estado de evaluación de una iniciativa."},
+                {"error": "Solo la Dirección del Programa o un administrador puede modificar el estado de evaluación de una iniciativa."},
                 status=status.HTTP_403_FORBIDDEN
             )
 
         estado_anterior = instance.estado
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
-        iniciativa = serializer.save()
+        with transaction.atomic():
+            iniciativa = serializer.save()
+            if iniciativa.estado == 'aprobada':
+                crear_proyecto_desde_iniciativa(iniciativa)
 
         # Si cambió el estado, notificar al estudiante
         if es_gestor and 'estado' in request.data and iniciativa.estado != estado_anterior:
@@ -289,7 +296,7 @@ class IniciativaViewSet(viewsets.ModelViewSet):
         nuevo_norm = nuevo.lower().strip()
         if nuevo_norm in ['aprobada', 'aprobado', 'aceptada', 'aceptado', 'validada', 'validado']:
             titulo = "¡Iniciativa Aprobada!"
-            mensaje = f"¡Felicitaciones! Tu iniciativa '{iniciativa.nombre}' ha sido aprobada por la Coordinación. Ya puedes proceder a conformar y registrar tu Equipo Emprendedor."
+            mensaje = f"¡Felicitaciones! Tu iniciativa '{iniciativa.nombre}' ha sido aprobada por la Dirección del Programa. Ya puedes proceder a conformar y registrar tu Equipo Emprendedor."
             tipo = "apertura"
         elif nuevo_norm in ['rechazada', 'rechazado']:
             titulo = "Iniciativa No Seleccionada"
@@ -313,7 +320,7 @@ class IniciativaViewSet(viewsets.ModelViewSet):
         iniciativa = self.get_object()
         if not self._es_gestor(request.user):
             return Response(
-                {"error": "Solo un coordinador o administrador puede modificar el estado de una iniciativa."},
+                {"error": "Solo la Dirección del Programa o un administrador puede modificar el estado de una iniciativa."},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -334,7 +341,11 @@ class IniciativaViewSet(viewsets.ModelViewSet):
 
         estado_anterior = iniciativa.estado
         iniciativa.estado = nuevo_estado
-        iniciativa.save(update_fields=['estado', 'fecha_actualizacion'])
+        with transaction.atomic():
+            iniciativa.save(update_fields=['estado', 'fecha_actualizacion'])
+            # Al aprobarse, la iniciativa se convierte oficialmente en Proyecto
+            if nuevo_estado == 'aprobada':
+                crear_proyecto_desde_iniciativa(iniciativa)
 
         self._notificar_cambio_estado(iniciativa, estado_anterior, nuevo_estado)
 
