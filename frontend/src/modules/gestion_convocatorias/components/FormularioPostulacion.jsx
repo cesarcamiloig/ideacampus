@@ -273,11 +273,10 @@ export default function FormularioPostulacion({
                     type="button"
                     aria-pressed={seleccionado}
                     onClick={() => actualizar("tipo", opcion.id)}
-                    className={`rounded-xl border p-4 text-left transition-all ${
-                      seleccionado
+                    className={`rounded-xl border p-4 text-left transition-all ${seleccionado
                         ? "border-red-500 bg-red-50/60 shadow-sm ring-2 ring-red-500/20"
                         : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-                    }`}
+                      }`}
                   >
                     <div className="mb-1.5 flex items-center justify-between">
                       <span className="text-sm font-bold text-slate-900">{opcion.titulo}</span>
@@ -304,11 +303,10 @@ export default function FormularioPostulacion({
                     type="button"
                     aria-pressed={seleccionado}
                     onClick={() => actualizar("origen_academico", opcion.id)}
-                    className={`rounded-xl border p-4 text-left transition-all ${
-                      seleccionado
+                    className={`rounded-xl border p-4 text-left transition-all ${seleccionado
                         ? "border-red-500 bg-red-50/60 shadow-sm ring-2 ring-red-500/20"
                         : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-                    }`}
+                      }`}
                   >
                     <div className="mb-1.5 flex items-center justify-between">
                       <span className="text-sm font-bold text-slate-900">{opcion.titulo}</span>
