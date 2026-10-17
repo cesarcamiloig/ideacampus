@@ -15,6 +15,7 @@ import { useAuth } from "../../../context/AuthContext";
 import TutorProfileForm from "../../gestion_acompaniamiento/pages/TutorProfileForm";
 import EstudianteIniciativasPage from "../../gestion_convocatorias/pages/EstudianteIniciativasPage";
 import EquipoPage from "../../gestion_emprendimiento_2/pages/EquipoPage";
+import EvidenciaForm from "../../gestion_emprendimiento_2/pages/EvidenciaForm";
 import BancoIniciativasView from "../../gestion_convocatorias/components/BancoIniciativasView";
 
 const ROLE_CONFIG = {
@@ -51,6 +52,13 @@ const ROLE_CONFIG = {
         details:
           "Trazabilidad longitudinal del origen académico (asignaturas, semilleros, proyectos de grado), integrantes y estado de la solución.",
         actionLabel: "Ver mis radicados",
+      },
+      evidencias: {
+        title: "Evidencias de Avance",
+        desc: "Adjunta documentos, enlaces, prototipos y presentaciones que respalden el avance de tu iniciativa.",
+        details:
+          "Registro de evidencias al finalizar cada etapa para la trazabilidad de la madurez tecnológica.",
+        actionLabel: "Registrar evidencia",
       },
     },
     stats: [
@@ -378,6 +386,8 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
         {normalizedRole === "estudiante" ? (
           activeModule === "equipo" ? (
             <EquipoPage key="equipo" />
+          ) : activeModule === "evidencias" ? (
+            <EvidenciaForm key="evidencias" />
           ) : (
             <EstudianteIniciativasPage
               key={activeModule}
