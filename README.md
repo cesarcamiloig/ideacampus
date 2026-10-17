@@ -95,6 +95,21 @@ Una vez que la terminal indique que los contenedores están "Running", puedes ve
   5. **Mínimo de integrantes:** Requiere al menos un integrante adicional además del estudiante líder.
   6. **Ciclo de vida y disolución:** El líder puede retirar integrantes o disolver el equipo por completo, liberando a los miembros y permitiendo volver a conformar un equipo para la iniciativa cuando lo requiera.
 
+### HU-12 · Centro de Alertas y Notificaciones Institucionales por Rol
+* Centro de alertas automatizadas parametrizadas por rol activo (estudiante, tutor, mentor, evaluador, coordinador, dirección, admin).
+* Filtrado en tiempo real por prioridad (alta, media, baja), estado (leída/no leída) y búsqueda textual.
+* Indicador visual dinámico en la barra superior unificado con la campana de notificaciones.
+* Prevención de compromisos fantasma: generación condicionada a iniciativas y convocatorias activas reales.
+
+### HU-16 · Perfil Profesional y Académico de Tutor / Mentor
+* Rediseño visual completo del perfil de acompañamiento adaptado a la arquitectura Tailwind CSS y componentes estándar del sistema.
+* Navegación embebida dentro del layout institucional (`MainLayout`) preservando la barra lateral, campana de notificaciones y selector de usuario.
+* Soporte para restablecer el perfil original guardado al cancelar y sincronización directa con el backend.
+
+### Conmutador Dinámico de Roles Institucionales
+* Selector contextual en el menú de usuario de la cabecera superior para alternar dinámicamente entre vistas y permisos asignados (`useAuth.switchRole`) sin requerir cierre de sesión.
+* Blindaje de interfaz con `ErrorBoundary` para recuperación ante discrepancias de sesión o caché.
+
 ---
 
 ## 🔔 Sistema Global de Notificaciones
@@ -114,7 +129,7 @@ Una vez que la terminal indique que los contenedores están "Running", puedes ve
 ```bash
 docker exec ideacampus_backend python manage.py test
 ```
-*Cubre 38 pruebas unitarias y de integración que validan permisos, reglas de negocio Estudiante-Iniciativa-Equipo, autenticación JWT y endpoints REST.*
+*Cubre 45 pruebas unitarias y de integración que validan permisos, reglas de negocio Estudiante-Iniciativa-Equipo, autenticación JWT, ciclo de vida de convocatorias, alertas automáticas y endpoints REST.*
 
 ### Compilación y Verificación de Tipos del Frontend
 ```bash
