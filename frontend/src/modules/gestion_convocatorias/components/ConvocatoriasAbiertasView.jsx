@@ -92,7 +92,7 @@ export default function ConvocatoriasAbiertasView({ onSelectConvocatoria, onVerM
           <div className="flex items-center gap-2 mb-1.5">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 border border-red-200">
               <BookOpen className="h-3.5 w-3.5" />
-              HU-03: Postulación de Iniciativas
+              Postulación de Iniciativas
             </span>
             <span className="text-xs text-slate-500 font-medium">
               Periodo Académico 2026-1
@@ -161,6 +161,16 @@ export default function ConvocatoriasAbiertasView({ onSelectConvocatoria, onVerM
         <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-3">
           <AlertCircle className="h-5 w-5 shrink-0" />
           <span>{error}</span>
+        </div>
+      ) : convocatorias.length === 0 ? (
+        <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 p-8">
+          <FileText className="mx-auto h-12 w-12 text-slate-300" />
+          <h3 className="mt-3 text-base font-bold text-slate-800">
+            No hay convocatorias abiertas en este momento
+          </h3>
+          <p className="mt-1 text-xs text-slate-500 max-w-sm mx-auto">
+            Actualmente no hay ciclos de postulación activos publicados en la plataforma.
+          </p>
         </div>
       ) : convocatoriasFiltradas.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 p-8">

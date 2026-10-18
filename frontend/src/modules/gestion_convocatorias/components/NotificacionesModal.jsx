@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   X,
   Bell,
@@ -7,6 +7,7 @@ import {
   AlertCircle,
   Loader2,
   Clock,
+  ArrowRight,
 } from "lucide-react";
 import {
   getNotificacionesConvocatoria,
@@ -14,13 +15,13 @@ import {
   marcarTodasNotificacionesLeidas,
 } from "../services/convocatoriaService";
 
-export function NotificacionesModal({ open, onOpenChange, onNotificationRead }) {
+export function NotificacionesModal({ open, onOpenChange, onNotificationRead, onNavigate }) {
   const [notificaciones, setNotificaciones] = useState([]);
   const [filterLeida, setFilterLeida] = useState("todas");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const loadNotifications = async () => {
+  const loadNotifications = useCallback(async () => {
     setIsLoading(true);
     setErrorMessage("");
     try {
@@ -37,13 +38,13 @@ export function NotificacionesModal({ open, onOpenChange, onNotificationRead }) 
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [filterLeida]);
 
   useEffect(() => {
     if (open) {
       loadNotifications();
     }
-  }, [open, filterLeida]);
+  }, [open, loadNotifications]);
 
   if (!open) return null;
 
@@ -233,7 +234,21 @@ export function NotificacionesModal({ open, onOpenChange, onNotificationRead }) 
         </div>
 
         {/* Footer */}
-        <div className="border-t border-slate-100 px-6 py-3 bg-slate-50/50 rounded-b-2xl flex justify-end">
+        <div className="border-t border-slate-100 px-6 py-3 bg-slate-50/50 rounded-b-2xl flex items-center justify-between">
+          {onNavigate ? (
+            <button
+              type="button"
+              onClick={() => {
+                onOpenChange(false);
+                onNavigate("alertas");
+              }}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-red-600 hover:text-red-700 transition-colors"
+            >
+              <span>Ver Centro de Alertas y Vencimientos</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          ) : <div />}
+
           <button
             type="button"
             onClick={() => onOpenChange(false)}

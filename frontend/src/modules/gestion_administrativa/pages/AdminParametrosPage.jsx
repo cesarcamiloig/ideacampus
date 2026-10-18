@@ -24,7 +24,13 @@ export default function AdminParametrosPage({ onNavigate }) {
   }, [activeTab])
 
   return (
-    <MainLayout activeModule="parametros" onNavigate={onNavigate}>
+    <MainLayout
+      activeModule="parametros"
+      onNavigate={onNavigate}
+      onRoleChange={() => {
+        if (onNavigate) onNavigate(null);
+      }}
+    >
       <div className="mx-auto w-full max-w-5xl">
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mb-6">
           Módulo de Administración Paramétrica
