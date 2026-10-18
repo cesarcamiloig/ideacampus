@@ -17,6 +17,7 @@ import EstudianteIniciativasPage from "../../gestion_convocatorias/pages/Estudia
 import EquipoPage from "../../gestion_emprendimiento_2/pages/EquipoPage";
 import BancoIniciativasView from "../../gestion_convocatorias/components/BancoIniciativasView";
 import AlertasPage from "../../gestion_convocatorias/pages/AlertasPage";
+import RubricasTab from "../../gestion_evaluacion/components/RubricasTab";
 
 const ROLE_CONFIG = {
   estudiante: {
@@ -244,6 +245,13 @@ const ROLE_CONFIG = {
           "Reportes de producción, innovación y participación de la comunidad académica.",
         actionLabel: "Exportar indicadores",
       },
+      rubricas: {
+        title: "Rúbricas de Evaluación",
+        desc: "Configuración de los módulos y porcentajes con los que se evalúan las iniciativas de emprendimiento e innovación.",
+        details:
+          "Una rúbrica por tipo de iniciativa, calificable de 1 a 5 por módulo.",
+        actionLabel: "Configurar rúbricas",
+      },
     },
     stats: [
       { label: "Programa", value: "Ing. de Sistemas", subtext: "UFPS Cúcuta" },
@@ -368,6 +376,10 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
               }}
               activeRole={normalizedRole}
             />
+          ) : activeModule === "rubricas" ? (
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+              <RubricasTab key="rubricas" />
+            </section>
           ) : normalizedRole === "estudiante" ? (
             activeModule === "equipo" ? (
               <EquipoPage key="equipo" />

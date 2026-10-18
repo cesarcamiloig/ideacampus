@@ -142,6 +142,7 @@ export default function MainLayout({
             { id: "iniciativas", label: "Banco de Iniciativas", icon: Lightbulb },
             { id: "indicadores", label: "Métricas e Indicadores", icon: FileText },
             { id: "alertas", label: "Centro de Alertas", icon: Bell },
+            { id: "rubricas", label: "Rúbricas de Evaluación", icon: ClipboardCheck },
         ],
         direccion: [
             { id: "dashboard", label: "Panel de Dirección", icon: Award },
@@ -149,6 +150,7 @@ export default function MainLayout({
             { id: "iniciativas", label: "Banco de Iniciativas", icon: Lightbulb },
             { id: "indicadores", label: "Métricas e Indicadores", icon: FileText },
             { id: "alertas", label: "Centro de Alertas", icon: Bell },
+            { id: "rubricas", label: "Rúbricas de Evaluación", icon: ClipboardCheck },
         ],
     }
 
