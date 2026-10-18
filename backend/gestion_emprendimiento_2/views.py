@@ -8,7 +8,8 @@ from gestion_administrativa.authentication import JWTAuthentication
 from gestion_administrativa.permissions import EsEstudiante, TieneRolPermitido
 from gestion_administrativa.models import Usuario, UsuarioRol
 
-from .models import Estudiante, EquipoEmprendedor
+from .models import Estudiante, EquipoEmprendedor, Proyecto
+from .services import evaluadores_activos
 from .serializers import (
     EstudianteDisponibleSerializer,
     CrearEquipoSerializer,
@@ -555,3 +556,61 @@ class EquipoMiembroView(APIView):
             )
 
         return Response({"message": "Miembro eliminado del equipo exitosamente"}, status=status.HTTP_200_OK)
+
+ROLES_GESTORES_PROYECTO = ('admin', 'direccion_del_programa', 'direccion')
+
+
+class EvaluadoresDisponiblesView(APIView):
+    """Lista de usuarios con rol 'evaluador' activo que pueden asignarse a un proyecto."""
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [TieneRolPermitido]
+    roles_permitidos = ROLES_GESTORES_PROYECTO
+
+    def get(self, request):
+        data = [
+            {"id_usuario": u.id_usuario, "nombre": u.nombre, "correo": u.correo}
+            for u in evaluadores_activos()
+        ]
+        return Response(data, status=status.HTTP_200_OK)
+
+
+class AsignarEvaluadorView(APIView):
+    """
+    Asigna (o quita, enviando id_evaluador = null) el evaluador de un proyecto.
+    Solo se permiten usuarios con el rol 'evaluador' activo.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [TieneRolPermitido]
+    roles_permitidos = ROLES_GESTORES_PROYECTO
+
+    def patch(self, request, id_proyecto):
+        proyecto = Proyecto.objects.filter(pk=id_proyecto).first()
+        if proyecto is None:
+            return Response({"error": "Proyecto no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        if 'id_evaluador' not in request.data:
+            return Response(
+                {"error": "Debe enviar el campo 'id_evaluador'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        id_evaluador = request.data.get('id_evaluador')
+        evaluador = None
+        if id_evaluador:
+            evaluador = evaluadores_activos().filter(pk=id_evaluador).first()
+            if evaluador is None:
+                return Response(
+                    {"error": "El usuario seleccionado no es un evaluador activo."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        proyecto.evaluador = evaluador
+        proyecto.save(update_fields=['evaluador'])
+        return Response(
+            {
+                "id_proyecto": proyecto.id_proyecto,
+                "id_evaluador": evaluador.id_usuario if evaluador else None,
+                "evaluador_nombre": evaluador.nombre if evaluador else None,
+            },
+            status=status.HTTP_200_OK
+        )

@@ -3,7 +3,7 @@ from rest_framework.test import APITestCase
 
 from gestion_administrativa.jwt_utils import generar_token
 from gestion_administrativa.models import Rol, Usuario, UsuarioRol
-from .models import Estudiante, EquipoEmprendedor
+from .models import Estudiante, EquipoEmprendedor, Proyecto
 
 
 class GestionEquiposEmprendedoresTests(APITestCase):
@@ -354,3 +354,93 @@ class GestionEquiposEmprendedoresTests(APITestCase):
         res_del = self.client.delete(f"/api/equipos/{id_equipo}/")
         self.assertEqual(res_del.status_code, status.HTTP_403_FORBIDDEN)
         self.assertTrue(EquipoEmprendedor.objects.filter(id_equipo=id_equipo).exists())
+
+
+class AsignacionEvaluadorProyectoTests(APITestCase):
+    def setUp(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from gestion_convocatorias.models import Convocatoria, Iniciativa
+
+        rol_evaluador, _ = Rol.objects.get_or_create(nombre_rol="evaluador", defaults={"descripcion": "Evaluador"})
+        rol_estudiante, _ = Rol.objects.get_or_create(nombre_rol="estudiante", defaults={"descripcion": "Estudiante"})
+        rol_direccion, _ = Rol.objects.get_or_create(
+            nombre_rol="direccion_del_programa", defaults={"descripcion": "Dirección de Programa"}
+        )
+
+        self.evaluador = Usuario.objects.create(
+            nombre="Eva Evaluadora", correo="eva@ufps.edu.co", google_id="gid-eva", estado="activo"
+        )
+        UsuarioRol.objects.create(usuario=self.evaluador, rol=rol_evaluador, estado="activo")
+
+        self.evaluador_inactivo = Usuario.objects.create(
+            nombre="Ivan Inactivo", correo="ivan@ufps.edu.co", google_id="gid-ivan", estado="activo"
+        )
+        UsuarioRol.objects.create(usuario=self.evaluador_inactivo, rol=rol_evaluador, estado="inactivo")
+
+        self.estudiante = Usuario.objects.create(
+            nombre="Sara Estudiante", correo="sara@ufps.edu.co", google_id="gid-sara", estado="activo"
+        )
+        UsuarioRol.objects.create(usuario=self.estudiante, rol=rol_estudiante, estado="activo")
+        self.token_estudiante = generar_token(self.estudiante, "estudiante")
+
+        direccion = Usuario.objects.create(
+            nombre="Diana Direccion", correo="diana@ufps.edu.co", google_id="gid-diana", estado="activo"
+        )
+        UsuarioRol.objects.create(usuario=direccion, rol=rol_direccion, estado="activo")
+        self.token_direccion = generar_token(direccion, "direccion_del_programa")
+
+        now = timezone.now()
+        conv = Convocatoria.objects.create(
+            nombre="Convocatoria Abierta",
+            fecha_apertura=now - timedelta(days=2),
+            fecha_cierre=now + timedelta(days=10),
+            estado="abierta",
+        )
+        iniciativa = Iniciativa.objects.create(
+            convocatoria=conv, usuario=self.estudiante, nombre="Huerta Inteligente",
+            tipo="emprendimiento", origen_academico="asignatura", estado="aprobada",
+        )
+        self.proyecto = Proyecto.objects.get(iniciativa=iniciativa)
+        self.url = f"/api/proyectos/{self.proyecto.id_proyecto}/evaluador/"
+
+    def test_lista_solo_evaluadores_activos(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_direccion}")
+        res = self.client.get("/api/proyectos/evaluadores/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        ids = [e["id_usuario"] for e in res.data]
+        self.assertEqual(ids, [self.evaluador.id_usuario])
+
+    def test_direccion_asigna_y_quita_evaluador(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_direccion}")
+        res = self.client.patch(self.url, {"id_evaluador": self.evaluador.id_usuario}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.proyecto.refresh_from_db()
+        self.assertEqual(self.proyecto.evaluador, self.evaluador)
+
+        res = self.client.patch(self.url, {"id_evaluador": None}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.proyecto.refresh_from_db()
+        self.assertIsNone(self.proyecto.evaluador)
+
+    def test_rechaza_usuarios_sin_rol_evaluador_activo(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_direccion}")
+        for usuario in (self.estudiante, self.evaluador_inactivo):
+            res = self.client.patch(self.url, {"id_evaluador": usuario.id_usuario}, format="json")
+            self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.proyecto.refresh_from_db()
+        self.assertIsNone(self.proyecto.evaluador)
+
+    def test_estudiante_no_puede_asignar_evaluador(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_estudiante}")
+        res = self.client.patch(self.url, {"id_evaluador": self.evaluador.id_usuario}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_modelo_valida_rol_evaluador(self):
+        """La validación del modelo (usada por el admin) solo acepta evaluadores activos."""
+        from django.core.exceptions import ValidationError
+        self.proyecto.evaluador = self.estudiante
+        with self.assertRaises(ValidationError):
+            self.proyecto.full_clean()
+        self.proyecto.evaluador = self.evaluador
+        self.proyecto.full_clean()

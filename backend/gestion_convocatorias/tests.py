@@ -323,12 +323,27 @@ class GestionConvocatoriasTests(APITestCase):
             estado="pendiente"
         )
 
-        # Dirección del Programa aprueba iniciativa vía cambiar-estado
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_direccion}")
+        url = f"/api/iniciativas/{iniciativa.id_iniciativa}/cambiar-estado/"
+
+        # La lista de coordinadores disponibles incluye al coordinador activo
+        res = self.client.get("/api/iniciativas/coordinadores/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn(self.coordinador.id_usuario, [c["id_usuario"] for c in res.data])
+
+        # Aprobar sin coordinador o con un usuario que no es coordinador se rechaza
+        res = self.client.patch(url, {"estado": "aprobada"}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         res = self.client.patch(
-            f"/api/iniciativas/{iniciativa.id_iniciativa}/cambiar-estado/",
-            {"estado": "aprobada"},
-            format="json"
+            url, {"estado": "aprobada", "id_coordinador": self.estudiante.id_usuario}, format="json"
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        iniciativa.refresh_from_db()
+        self.assertEqual(iniciativa.estado, "pendiente")
+
+        # Dirección del Programa aprueba iniciativa vía cambiar-estado eligiendo coordinador
+        res = self.client.patch(
+            url, {"estado": "aprobada", "id_coordinador": self.coordinador.id_usuario}, format="json"
         )
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["estado"], "aprobada")
@@ -336,21 +351,33 @@ class GestionConvocatoriasTests(APITestCase):
         iniciativa.refresh_from_db()
         self.assertEqual(iniciativa.estado, "aprobada")
 
-        # Al aprobarse se crea oficialmente el proyecto, sin coordinador/tutor/mentores
+        # Al aprobarse se crea oficialmente el proyecto con el coordinador elegido
         from gestion_emprendimiento_2.models import Proyecto
         proyecto = Proyecto.objects.get(iniciativa=iniciativa)
         self.assertEqual(proyecto.nombre_proyecto, "Plataforma de IA")
-        self.assertIsNone(proyecto.coordinador)
+        self.assertEqual(proyecto.coordinador, self.coordinador)
+        self.assertIsNone(proyecto.evaluador)
         self.assertIsNone(proyecto.tutor)
         self.assertEqual(proyecto.mentores.count(), 0)
 
         # Aprobar de nuevo no duplica el proyecto
         self.client.patch(
-            f"/api/iniciativas/{iniciativa.id_iniciativa}/cambiar-estado/",
-            {"estado": "aprobada"},
-            format="json"
+            url, {"estado": "aprobada", "id_coordinador": self.coordinador.id_usuario}, format="json"
         )
         self.assertEqual(Proyecto.objects.filter(iniciativa=iniciativa).count(), 1)
+
+        # Al rechazarla se elimina el proyecto
+        res = self.client.patch(url, {"estado": "rechazada"}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertFalse(Proyecto.objects.filter(iniciativa=iniciativa).exists())
+
+        # Si se aprueba de nuevo, el proyecto se vuelve a crear
+        res = self.client.patch(
+            url, {"estado": "aprobada", "id_coordinador": self.coordinador.id_usuario}, format="json"
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        proyecto = Proyecto.objects.get(iniciativa=iniciativa)
+        self.assertEqual(proyecto.coordinador, self.coordinador)
 
         # Verificar notificación de felicitación al estudiante
         notif = NotificacionConvocatoria.objects.filter(usuario=self.estudiante, tipo="apertura").first()
@@ -385,6 +412,11 @@ class GestionConvocatoriasTests(APITestCase):
         proyecto = Proyecto.objects.get(iniciativa=iniciativa)
         self.assertEqual(proyecto.nombre_proyecto, "App de Reciclaje")
         self.assertEqual(proyecto.descripcion, "Gestión de residuos en el campus")
+
+        # Rechazarla fuera de la API también elimina el proyecto
+        iniciativa.estado = "rechazada"
+        iniciativa.save()
+        self.assertFalse(Proyecto.objects.filter(iniciativa=iniciativa).exists())
 
     def test_estudiante_no_puede_autoaprobar_iniciativa(self):
         """Un estudiante NO tiene permiso para aprobar su propia iniciativa."""

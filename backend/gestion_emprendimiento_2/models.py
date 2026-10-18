@@ -54,6 +54,15 @@ class EquipoEmprendedor(models.Model):
         return self.nombre_equipo
 
 
+def usuarios_con_rol_activo(nombre_rol):
+    """Filtro de usuarios activos que tienen el rol indicado activo."""
+    return models.Q(
+        estado="activo",
+        usuariorol__rol__nombre_rol=nombre_rol,
+        usuariorol__estado="activo",
+    )
+
+
 class Proyecto(models.Model):
     class Estado(models.TextChoices):
         ACTIVO = "activo", "Activo"
@@ -70,7 +79,8 @@ class Proyecto(models.Model):
     )
     nombre_proyecto = models.CharField(max_length=150)
     descripcion = models.CharField(max_length=1000, null=True, blank=True)
-    # Coordinador, tutor y mentores se asignan manualmente después de crear el proyecto.
+    # Evaluador, tutor y mentores se asignan manualmente después de crear el proyecto;
+    # el coordinador se elige al aprobar la iniciativa.
     # El coordinador es un Usuario con el rol "coordinador" (no existe modelo propio)
     coordinador = models.ForeignKey(
         Usuario,
@@ -79,6 +89,17 @@ class Proyecto(models.Model):
         null=True,
         blank=True,
         related_name="proyectos_coordinados",
+        limit_choices_to=usuarios_con_rol_activo("coordinador"),
+    )
+    # El evaluador es un Usuario con el rol "evaluador" (no existe modelo propio)
+    evaluador = models.ForeignKey(
+        Usuario,
+        on_delete=models.SET_NULL,
+        db_column="id_evaluador",
+        null=True,
+        blank=True,
+        related_name="proyectos_evaluados",
+        limit_choices_to=usuarios_con_rol_activo("evaluador"),
     )
     tutor = models.ForeignKey(
         "gestion_acompaniamiento.Tutor",

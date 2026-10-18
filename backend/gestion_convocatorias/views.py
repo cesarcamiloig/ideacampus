@@ -11,6 +11,10 @@ from rest_framework.response import Response
 
 from gestion_administrativa.authentication import JWTAuthentication
 from gestion_administrativa.permissions import TieneRolPermitido
+from gestion_emprendimiento_2.services import (
+    coordinadores_activos,
+    crear_proyecto_desde_iniciativa,
+)
 from .models import Convocatoria, Iniciativa, NotificacionConvocatoria, AlertaRol
 from .serializers import (
     ConvocatoriaSerializer,
@@ -479,15 +483,47 @@ class IniciativaViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Al aprobar se debe elegir el coordinador que quedará a cargo del proyecto
+        coordinador = None
+        if nuevo_estado == 'aprobada':
+            id_coordinador = request.data.get('id_coordinador')
+            if not id_coordinador:
+                return Response(
+                    {"error": "Debe seleccionar un coordinador para aprobar la iniciativa."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            coordinador = coordinadores_activos().filter(pk=id_coordinador).first()
+            if coordinador is None:
+                return Response(
+                    {"error": "El usuario seleccionado no es un coordinador activo."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
         estado_anterior = iniciativa.estado
         iniciativa.estado = nuevo_estado
         # Al aprobarse, la señal post_save crea oficialmente su Proyecto
         with transaction.atomic():
             iniciativa.save(update_fields=['estado', 'fecha_actualizacion'])
+            if coordinador is not None:
+                crear_proyecto_desde_iniciativa(iniciativa, coordinador=coordinador)
 
         self._notificar_cambio_estado(iniciativa, estado_anterior, nuevo_estado)
 
         return Response(self.get_serializer(iniciativa).data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'], url_path='coordinadores')
+    def coordinadores(self, request):
+        """Lista de coordinadores activos para asignar al proyecto al aprobar una iniciativa."""
+        if not self._es_gestor(request.user):
+            return Response(
+                {"error": "Solo la Dirección del Programa o un administrador puede consultar los coordinadores."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        data = [
+            {"id_usuario": u.id_usuario, "nombre": u.nombre, "correo": u.correo}
+            for u in coordinadores_activos()
+        ]
+        return Response(data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['get'], url_path='mis-aprobadas')
     def mis_aprobadas(self, request):
