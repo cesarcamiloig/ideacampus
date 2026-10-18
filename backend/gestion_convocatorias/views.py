@@ -10,7 +10,6 @@ from rest_framework.response import Response
 
 from gestion_administrativa.authentication import JWTAuthentication
 from gestion_administrativa.permissions import TieneRolPermitido
-from gestion_emprendimiento_2.services import crear_proyecto_desde_iniciativa
 from .models import Convocatoria, Iniciativa, NotificacionConvocatoria
 from .serializers import (
     ConvocatoriaSerializer,
@@ -281,10 +280,9 @@ class IniciativaViewSet(viewsets.ModelViewSet):
         estado_anterior = instance.estado
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
+        # Si queda aprobada, la señal post_save crea su Proyecto en la misma transacción
         with transaction.atomic():
             iniciativa = serializer.save()
-            if iniciativa.estado == 'aprobada':
-                crear_proyecto_desde_iniciativa(iniciativa)
 
         # Si cambió el estado, notificar al estudiante
         if es_gestor and 'estado' in request.data and iniciativa.estado != estado_anterior:
@@ -341,11 +339,9 @@ class IniciativaViewSet(viewsets.ModelViewSet):
 
         estado_anterior = iniciativa.estado
         iniciativa.estado = nuevo_estado
+        # Al aprobarse, la señal post_save crea oficialmente su Proyecto
         with transaction.atomic():
             iniciativa.save(update_fields=['estado', 'fecha_actualizacion'])
-            # Al aprobarse, la iniciativa se convierte oficialmente en Proyecto
-            if nuevo_estado == 'aprobada':
-                crear_proyecto_desde_iniciativa(iniciativa)
 
         self._notificar_cambio_estado(iniciativa, estado_anterior, nuevo_estado)
 

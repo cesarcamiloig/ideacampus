@@ -352,6 +352,35 @@ class GestionConvocatoriasTests(APITestCase):
         self.assertIsNotNone(notif)
         self.assertIn("Aprobada", notif.titulo)
 
+    def test_aprobar_fuera_de_la_api_tambien_crea_proyecto(self):
+        """Aprobar guardando el modelo directamente (p. ej. desde el admin) crea el proyecto."""
+        from .models import Iniciativa
+        from gestion_emprendimiento_2.models import Proyecto
+        now = timezone.now()
+        conv = Convocatoria.objects.create(
+            nombre="Convocatoria Abierta",
+            fecha_apertura=now - timedelta(days=2),
+            fecha_cierre=now + timedelta(days=10),
+            estado="abierta",
+        )
+        iniciativa = Iniciativa.objects.create(
+            convocatoria=conv,
+            usuario=self.estudiante,
+            nombre="App de Reciclaje",
+            descripcion="Gestión de residuos en el campus",
+            tipo="emprendimiento",
+            origen_academico="asignatura",
+            estado="pendiente"
+        )
+        self.assertFalse(Proyecto.objects.filter(iniciativa=iniciativa).exists())
+
+        iniciativa.estado = "aprobada"
+        iniciativa.save()
+
+        proyecto = Proyecto.objects.get(iniciativa=iniciativa)
+        self.assertEqual(proyecto.nombre_proyecto, "App de Reciclaje")
+        self.assertEqual(proyecto.descripcion, "Gestión de residuos en el campus")
+
     def test_estudiante_no_puede_autoaprobar_iniciativa(self):
         """Un estudiante NO tiene permiso para aprobar su propia iniciativa."""
         from .models import Iniciativa
