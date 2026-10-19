@@ -83,17 +83,18 @@ const PLANTILLAS = {
     ],
 }
 
-export function nuevoIdLocal() {
-    return `nuevo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-}
-
-export function esIdLocal(id) {
-    return String(id).startsWith("nuevo-")
+// Clave solo para la interfaz (listas de React, ids del DOM, errores). Nunca se envía al
+// backend: el `id` de cada hito o criterio es únicamente el que asigna el servidor y los
+// elementos nuevos no lo llevan.
+let contadorClaves = 0
+export function nuevaClave() {
+    contadorClaves += 1
+    return `k${contadorClaves}-${Math.random().toString(36).slice(2, 8)}`
 }
 
 export function crearCriterio(ponderacion = "") {
     return {
-        id: nuevoIdLocal(),
+        _key: nuevaClave(),
         nombre: "",
         descripcion: "",
         ponderacion,
@@ -104,12 +105,27 @@ export function crearCriterio(ponderacion = "") {
 
 export function crearHito(ponderacion = "") {
     return {
-        id: nuevoIdLocal(),
+        _key: nuevaClave(),
         nombre: "",
         descripcion: "",
         ponderacion,
         criterios: [crearCriterio(PESO_TOTAL)],
     }
+}
+
+// Hitos de ejemplo, todos nuevos (sin id)
+export function crearHitosPlantilla(tipo) {
+    return PLANTILLAS[tipo].map((hito) => ({
+        _key: nuevaClave(),
+        nombre: hito.nombre,
+        descripcion: hito.descripcion,
+        ponderacion: hito.ponderacion,
+        criterios: hito.criterios.map((criterio) => ({
+            ...crearCriterio(criterio.ponderacion),
+            nombre: criterio.nombre,
+            descripcion: criterio.descripcion,
+        })),
+    }))
 }
 
 export function crearRubricaBase(tipo) {
@@ -118,18 +134,88 @@ export function crearRubricaBase(tipo) {
         id: null,
         tipo_iniciativa: tipo,
         nombre: `Rúbrica de ${label}`,
-        subrubricas: PLANTILLAS[tipo].map((hito) => ({
-            id: nuevoIdLocal(),
-            nombre: hito.nombre,
-            descripcion: hito.descripcion,
-            ponderacion: hito.ponderacion,
+        subrubricas: crearHitosPlantilla(tipo),
+    }
+}
+
+// Convierte la rúbrica del servidor al estado del formulario: conserva los id del
+// backend y agrega una _key local. Los campos extra (rubrica, subrubrica,
+// suma_criterios, creado) se descartan.
+export function normalizarRubrica(rubrica, tipo) {
+    return {
+        id: rubrica.id ?? null,
+        tipo_iniciativa: rubrica.tipo_iniciativa || tipo,
+        nombre: rubrica.nombre || "",
+        subrubricas: [...(rubrica.subrubricas || [])]
+            .sort((a, b) => (a.numero_hito ?? 0) - (b.numero_hito ?? 0))
+            .map((hito) => ({
+                id: hito.id,
+                _key: nuevaClave(),
+                nombre: hito.nombre || "",
+                descripcion: hito.descripcion || "",
+                ponderacion: normalizarPonderacion(hito.ponderacion),
+                criterios: (hito.criterios || []).map((criterio) => ({
+                    id: criterio.id,
+                    _key: nuevaClave(),
+                    nombre: criterio.nombre || "",
+                    descripcion: criterio.descripcion || "",
+                    ponderacion: normalizarPonderacion(criterio.ponderacion),
+                    escala_min: criterio.escala_min ?? ESCALA_MIN,
+                    escala_max: criterio.escala_max ?? ESCALA_MAX,
+                })),
+            })),
+    }
+}
+
+// Tras guardar, la respuesta trae los mismos hitos y criterios en el mismo orden: se
+// reutilizan las _key anteriores para que los hitos abiertos sigan abiertos.
+export function conservarClaves(nueva, anterior) {
+    return {
+        ...nueva,
+        subrubricas: nueva.subrubricas.map((hito, i) => {
+            const previo = anterior.subrubricas[i]
+            if (!previo) return hito
+            return {
+                ...hito,
+                _key: previo._key,
+                criterios: hito.criterios.map((criterio, j) =>
+                    previo.criterios[j] ? { ...criterio, _key: previo.criterios[j]._key } : criterio
+                ),
+            }
+        }),
+    }
+}
+
+// Cuerpo del PUT: id solo en lo que ya existía, sin _key y ponderaciones como texto ("35.00").
+// El nombre de la rúbrica no se envía: es fijo.
+export function construirPayload(rubrica) {
+    const conId = (item) => (item.id !== null && item.id !== undefined ? { id: item.id } : {})
+    return {
+        subrubricas: rubrica.subrubricas.map((hito, index) => ({
+            ...conId(hito),
+            numero_hito: index + 1,
+            nombre: hito.nombre.trim(),
+            descripcion: hito.descripcion.trim(),
+            ponderacion: ponderacionATexto(hito.ponderacion),
             criterios: hito.criterios.map((criterio) => ({
-                ...crearCriterio(criterio.ponderacion),
-                nombre: criterio.nombre,
-                descripcion: criterio.descripcion,
+                ...conId(criterio),
+                nombre: criterio.nombre.trim(),
+                descripcion: criterio.descripcion.trim(),
+                ponderacion: ponderacionATexto(criterio.ponderacion),
+                escala_min: criterio.escala_min,
+                escala_max: criterio.escala_max,
             })),
         })),
     }
+}
+
+function normalizarPonderacion(valor) {
+    // DRF serializa los DecimalField como texto ("30.00")
+    return valor === null || valor === undefined || valor === "" ? "" : Number(valor)
+}
+
+function ponderacionATexto(valor) {
+    return Number(valor).toFixed(2)
 }
 
 function redondear(valor) {
@@ -151,7 +237,7 @@ export function calcularAporteCriterio(criterio, nota) {
 export function calcularNotaHito(criterios, notas) {
     return criterios.reduce(
         (total, criterio) =>
-            total + calcularAporteCriterio(criterio, notas[criterio.id] ?? (Number(criterio.escala_max) || ESCALA_MAX)),
+            total + calcularAporteCriterio(criterio, notas[criterio._key] ?? (Number(criterio.escala_max) || ESCALA_MAX)),
         0
     )
 }
@@ -176,9 +262,9 @@ function validarNombresUnicos(items, mensajeVacio) {
     items.forEach((item) => {
         const nombre = item.nombre.trim().toLowerCase()
         if (!nombre) {
-            errores[item.id] = mensajeVacio
+            errores[item._key] = mensajeVacio
         } else if (vistos.has(nombre)) {
-            errores[item.id] = "Ya existe otro con este nombre."
+            errores[item._key] = "Ya existe otro con este nombre."
         }
         vistos.add(nombre)
     })
@@ -187,10 +273,6 @@ function validarNombresUnicos(items, mensajeVacio) {
 
 export function validarRubrica(rubrica) {
     const errores = { hitos: {} }
-
-    if (!rubrica.nombre.trim()) {
-        errores.nombre = "Indica el nombre de la rúbrica."
-    }
 
     const hitos = rubrica.subrubricas
     if (hitos.length === 0) {
@@ -206,7 +288,7 @@ export function validarRubrica(rubrica) {
 
     hitos.forEach((hito) => {
         const errorHito = { criterios: {} }
-        if (nombresHitos[hito.id]) errorHito.nombre = nombresHitos[hito.id]
+        if (nombresHitos[hito._key]) errorHito.nombre = nombresHitos[hito._key]
 
         const errorPonderacion = validarPonderacion(hito.ponderacion)
         if (errorPonderacion) errorHito.ponderacion = errorPonderacion
@@ -223,11 +305,11 @@ export function validarRubrica(rubrica) {
         const nombresCriterios = validarNombresUnicos(hito.criterios, "Indica el nombre del criterio.")
         hito.criterios.forEach((criterio) => {
             const errorCriterio = {}
-            if (nombresCriterios[criterio.id]) errorCriterio.nombre = nombresCriterios[criterio.id]
+            if (nombresCriterios[criterio._key]) errorCriterio.nombre = nombresCriterios[criterio._key]
             const errorPeso = validarPonderacion(criterio.ponderacion)
             if (errorPeso) errorCriterio.ponderacion = errorPeso
             if (Object.keys(errorCriterio).length > 0) {
-                errorHito.criterios[criterio.id] = errorCriterio
+                errorHito.criterios[criterio._key] = errorCriterio
             }
         })
 
@@ -237,12 +319,12 @@ export function validarRubrica(rubrica) {
             errorHito.general ||
             Object.keys(errorHito.criterios).length > 0
         ) {
-            errores.hitos[hito.id] = errorHito
+            errores.hitos[hito._key] = errorHito
         }
     })
 
     const tieneErrores =
-        Boolean(errores.nombre || errores.general) || Object.keys(errores.hitos).length > 0
+        Boolean(errores.general) || Object.keys(errores.hitos).length > 0
     return tieneErrores ? errores : null
 }
 

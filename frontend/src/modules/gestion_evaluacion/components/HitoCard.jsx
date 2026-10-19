@@ -81,10 +81,10 @@ function VistaPrevia({ hito }) {
             <ul className="space-y-3">
                 {hito.criterios.map((criterio, index) => {
                     const nombre = criterio.nombre.trim() || `Criterio ${index + 1}`
-                    const nota = notas[criterio.id] ?? ESCALA_MAX
+                    const nota = notas[criterio._key] ?? ESCALA_MAX
                     return (
                         <li
-                            key={criterio.id}
+                            key={criterio._key}
                             className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
                         >
                             <div className="min-w-0">
@@ -103,7 +103,7 @@ function VistaPrevia({ hito }) {
                                         <button
                                             key={valor}
                                             type="button"
-                                            onClick={() => setNotas((prev) => ({ ...prev, [criterio.id]: valor }))}
+                                            onClick={() => setNotas((prev) => ({ ...prev, [criterio._key]: valor }))}
                                             aria-pressed={elegida}
                                             aria-label={`${valor} de ${ESCALA_MAX}`}
                                             className={`h-11 w-11 rounded-xl text-sm font-semibold tabular-nums transition-[transform,background-color,color] duration-150 ease-out-suave active:scale-[0.97] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ufps/15 motion-reduce:transition-none ${elegida
@@ -184,7 +184,7 @@ export default function HitoCard({
         document.getElementById(id)?.focus()
     }
 
-    const errorPesoId = errores?.ponderacion ? `hito-peso-error-${hito.id}` : undefined
+    const errorPesoId = errores?.ponderacion ? `hito-peso-error-${hito._key}` : undefined
     const mostrarErrorSinCriterios = errores?.general && hito.criterios.length === 0
 
     return (
@@ -195,11 +195,11 @@ export default function HitoCard({
             {/* Cabecera: se entiende sin abrir el hito */}
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 p-2 sm:p-3">
                 <button
-                    id={`hito-toggle-${hito.id}`}
+                    id={`hito-toggle-${hito._key}`}
                     type="button"
                     onClick={onToggle}
                     aria-expanded={abierto}
-                    aria-controls={`hito-panel-${hito.id}`}
+                    aria-controls={`hito-panel-${hito._key}`}
                     className="flex min-h-12 min-w-0 flex-1 basis-52 items-center gap-3 rounded-xl px-2 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ufps/15"
                 >
                     <ChevronDown
@@ -225,7 +225,7 @@ export default function HitoCard({
 
                 <div className="ml-auto flex items-center gap-1">
                     <PesoInput
-                        id={`hito-peso-${hito.id}`}
+                        id={`hito-peso-${hito._key}`}
                         value={hito.ponderacion}
                         onChange={(valor) => onCambiar("ponderacion", valor)}
                         invalid={Boolean(errores?.ponderacion)}
@@ -236,7 +236,7 @@ export default function HitoCard({
                     />
                     <div className="hidden items-center sm:flex">
                         <button
-                            id={`hito-subir-cabecera-${hito.id}`}
+                            id={`hito-subir-cabecera-${hito._key}`}
                             type="button"
                             onClick={() => onMover(-1, "cabecera")}
                             disabled={esPrimero}
@@ -247,7 +247,7 @@ export default function HitoCard({
                             <ArrowUp className="h-4 w-4" aria-hidden="true" />
                         </button>
                         <button
-                            id={`hito-bajar-cabecera-${hito.id}`}
+                            id={`hito-bajar-cabecera-${hito._key}`}
                             type="button"
                             onClick={() => onMover(1, "cabecera")}
                             disabled={esUltimo}
@@ -269,7 +269,7 @@ export default function HitoCard({
 
             {/* Cuerpo: altura animada con grid-rows; inert evita el foco mientras está cerrado */}
             <div
-                id={`hito-panel-${hito.id}`}
+                id={`hito-panel-${hito._key}`}
                 className={`grid transition-[grid-template-rows] ease-out-suave motion-reduce:transition-none ${abierto ? "grid-rows-[1fr] duration-[250ms]" : "grid-rows-[0fr] duration-200"
                     }`}
             >
@@ -278,31 +278,31 @@ export default function HitoCard({
                         {/* Datos del hito */}
                         <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
                             <div className="space-y-1.5">
-                                <label htmlFor={`hito-nombre-${hito.id}`} className={ETIQUETA}>
+                                <label htmlFor={`hito-nombre-${hito._key}`} className={ETIQUETA}>
                                     Nombre del hito
                                 </label>
                                 <input
-                                    id={`hito-nombre-${hito.id}`}
+                                    id={`hito-nombre-${hito._key}`}
                                     type="text"
                                     placeholder="Ej. Validación"
                                     value={hito.nombre}
                                     onChange={(e) => onCambiar("nombre", e.target.value)}
                                     aria-invalid={Boolean(errores?.nombre)}
-                                    aria-describedby={errores?.nombre ? `hito-nombre-error-${hito.id}` : undefined}
+                                    aria-describedby={errores?.nombre ? `hito-nombre-error-${hito._key}` : undefined}
                                     className={CAMPO}
                                 />
                                 {errores?.nombre && (
-                                    <p id={`hito-nombre-error-${hito.id}`} className={ERROR}>
+                                    <p id={`hito-nombre-error-${hito._key}`} className={ERROR}>
                                         {errores.nombre}
                                     </p>
                                 )}
                             </div>
                             <div className="space-y-1.5">
-                                <label htmlFor={`hito-desc-${hito.id}`} className={ETIQUETA}>
+                                <label htmlFor={`hito-desc-${hito._key}`} className={ETIQUETA}>
                                     ¿Qué se espera en este hito? <span className="font-normal text-slate-500">(opcional)</span>
                                 </label>
                                 <textarea
-                                    id={`hito-desc-${hito.id}`}
+                                    id={`hito-desc-${hito._key}`}
                                     rows={2}
                                     placeholder="Lo que el equipo debería haber logrado al llegar aquí"
                                     value={hito.descripcion}
@@ -318,7 +318,7 @@ export default function HitoCard({
                                 items={hito.criterios}
                                 total={sumarPonderaciones(hito.criterios)}
                                 titulo={`Criterios del hito ${numero}${nombreVisible ? ` · ${nombreVisible}` : ""}`}
-                                tituloId={`hito-criterios-${hito.id}`}
+                                tituloId={`hito-criterios-${hito._key}`}
                                 nombreItem="criterio"
                                 tamano="sm"
                                 activoId={criterioActivo}
@@ -335,25 +335,25 @@ export default function HitoCard({
 
                             <ol className="space-y-2">
                                 {hito.criterios.map((criterio, index) => {
-                                    const errorCriterio = errores?.criterios?.[criterio.id] || {}
-                                    const nombreErrorId = errorCriterio.nombre ? `crit-nombre-error-${criterio.id}` : undefined
-                                    const pesoErrorId = errorCriterio.ponderacion ? `crit-peso-error-${criterio.id}` : undefined
+                                    const errorCriterio = errores?.criterios?.[criterio._key] || {}
+                                    const nombreErrorId = errorCriterio.nombre ? `crit-nombre-error-${criterio._key}` : undefined
+                                    const pesoErrorId = errorCriterio.ponderacion ? `crit-peso-error-${criterio._key}` : undefined
                                     return (
                                         <li
-                                            key={criterio.id}
+                                            key={criterio._key}
                                             className="space-y-2 rounded-2xl bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.06)] animate-aparecer motion-reduce:animate-desvanecer"
                                         >
                                             <div className="flex flex-wrap items-start gap-2">
                                                 <div className="min-w-0 flex-1 basis-full space-y-1.5 sm:basis-0">
-                                                    <label htmlFor={`crit-nombre-${criterio.id}`} className={ETIQUETA}>
+                                                    <label htmlFor={`crit-nombre-${criterio._key}`} className={ETIQUETA}>
                                                         Criterio {numero}.{index + 1}
                                                     </label>
                                                     <input
-                                                        id={`crit-nombre-${criterio.id}`}
+                                                        id={`crit-nombre-${criterio._key}`}
                                                         type="text"
                                                         placeholder="Ej. Evidencia de solidez"
                                                         value={criterio.nombre}
-                                                        onChange={(e) => onCambiarCriterio(criterio.id, "nombre", e.target.value)}
+                                                        onChange={(e) => onCambiarCriterio(criterio._key, "nombre", e.target.value)}
                                                         aria-invalid={Boolean(errorCriterio.nombre)}
                                                         aria-describedby={nombreErrorId}
                                                         className={CAMPO}
@@ -365,16 +365,16 @@ export default function HitoCard({
                                                     )}
                                                 </div>
                                                 <div className="space-y-1.5 max-sm:flex-1">
-                                                    <label htmlFor={`crit-peso-${criterio.id}`} className={ETIQUETA}>
+                                                    <label htmlFor={`crit-peso-${criterio._key}`} className={ETIQUETA}>
                                                         Peso
                                                     </label>
                                                     <PesoInput
-                                                        id={`crit-peso-${criterio.id}`}
+                                                        id={`crit-peso-${criterio._key}`}
                                                         value={criterio.ponderacion}
-                                                        onChange={(valor) => onCambiarCriterio(criterio.id, "ponderacion", valor)}
+                                                        onChange={(valor) => onCambiarCriterio(criterio._key, "ponderacion", valor)}
                                                         invalid={Boolean(errorCriterio.ponderacion)}
                                                         describedBy={pesoErrorId}
-                                                        onFocus={() => setCriterioActivo(criterio.id)}
+                                                        onFocus={() => setCriterioActivo(criterio._key)}
                                                         onBlur={() => setCriterioActivo(null)}
                                                     />
                                                     {errorCriterio.ponderacion && (
@@ -385,7 +385,7 @@ export default function HitoCard({
                                                 </div>
                                                 <button
                                                     type="button"
-                                                    onClick={() => onEliminarCriterio(criterio.id)}
+                                                    onClick={() => onEliminarCriterio(criterio._key)}
                                                     className={`${BOTON_ICONO} mt-[1.6rem] hover:bg-ufps-suave hover:text-ufps`}
                                                     aria-label={`Eliminar el criterio ${criterio.nombre.trim() || index + 1}`}
                                                     title="Eliminar criterio"
@@ -398,7 +398,7 @@ export default function HitoCard({
                                                 aria-label={`Qué debe mirar el evaluador en el criterio ${index + 1}`}
                                                 placeholder="¿Qué debe mirar el evaluador? (opcional)"
                                                 value={criterio.descripcion}
-                                                onChange={(e) => onCambiarCriterio(criterio.id, "descripcion", e.target.value)}
+                                                onChange={(e) => onCambiarCriterio(criterio._key, "descripcion", e.target.value)}
                                                 className={`${CAMPO} min-h-11 resize-none bg-superficie-alta shadow-none`}
                                             />
                                         </li>
@@ -407,7 +407,7 @@ export default function HitoCard({
                             </ol>
 
                             <button
-                                id={`agregar-criterio-${hito.id}`}
+                                id={`agregar-criterio-${hito._key}`}
                                 type="button"
                                 onClick={onAgregarCriterio}
                                 className={BOTON_FANTASMA}
@@ -435,7 +435,7 @@ export default function HitoCard({
                         <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                             <div className="flex gap-1 sm:hidden">
                                 <button
-                                    id={`hito-subir-cuerpo-${hito.id}`}
+                                    id={`hito-subir-cuerpo-${hito._key}`}
                                     type="button"
                                     onClick={() => onMover(-1, "cuerpo")}
                                     disabled={esPrimero}
@@ -445,7 +445,7 @@ export default function HitoCard({
                                     Subir
                                 </button>
                                 <button
-                                    id={`hito-bajar-cuerpo-${hito.id}`}
+                                    id={`hito-bajar-cuerpo-${hito._key}`}
                                     type="button"
                                     onClick={() => onMover(1, "cuerpo")}
                                     disabled={esUltimo}

@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from "react"
-import { AlertCircle, Check, CloudOff, Loader2, Plus, RefreshCw, RotateCcw, Save } from "lucide-react"
-import { getRubricas, updateRubrica } from "../services/rubricaService"
+import { AlertCircle, Check, CloudOff, Loader2, Lock, Plus, RefreshCw, RotateCcw, Save } from "lucide-react"
+import { getRubrica, getRubricas, updateRubrica } from "../services/rubricaService"
 import {
     ESCALA_MAX,
     ESCALA_MIN,
     PESO_TOTAL,
     TIPOS_RUBRICA,
+    conservarClaves,
+    construirPayload,
     crearCriterio,
     crearHito,
+    crearHitosPlantilla,
     crearRubricaBase,
-    esIdLocal,
-    nuevoIdLocal,
+    normalizarRubrica,
     sumarPonderaciones,
     validarRubrica,
 } from "../utils/rubricaUtils"
@@ -18,69 +20,30 @@ import DistribucionPesos from "./DistribucionPesos"
 import HitoCard from "./HitoCard"
 import { BOTON_PRIMARIO, BOTON_SECUNDARIO, CAMPO, ERROR, ETIQUETA } from "./estilos"
 
-const CLAVE_BORRADOR = "gennova:rubricas:borrador:v1"
+// v2: hitos y criterios con _key local; el id es solo el del servidor
+const CLAVE_BORRADOR = "gennova:rubricas:borrador:v2"
 // Lo que tarda en abrirse un hito; el foco espera a que el campo sea visible
 const ESPERA_APERTURA = 260
 
-function normalizarPonderacion(valor) {
-    // DRF serializa los DecimalField como texto ("30.00")
-    return valor === null || valor === undefined || valor === "" ? "" : Number(valor)
+function etiquetaDe(tipo) {
+    return TIPOS_RUBRICA.find((t) => t.id === tipo)?.label || tipo
 }
 
-function normalizarRubrica(rubrica, tipo) {
-    if (!rubrica) return crearRubricaBase(tipo)
-    return {
-        id: rubrica.id ?? null,
-        tipo_iniciativa: tipo,
-        nombre: rubrica.nombre || "",
-        subrubricas: [...(rubrica.subrubricas || [])]
-            .sort((a, b) => (a.numero_hito ?? 0) - (b.numero_hito ?? 0))
-            .map((hito) => ({
-                id: hito.id ?? nuevoIdLocal(),
-                nombre: hito.nombre || "",
-                descripcion: hito.descripcion || "",
-                ponderacion: normalizarPonderacion(hito.ponderacion),
-                criterios: (hito.criterios || []).map((criterio) => ({
-                    id: criterio.id ?? nuevoIdLocal(),
-                    nombre: criterio.nombre || "",
-                    descripcion: criterio.descripcion || "",
-                    ponderacion: normalizarPonderacion(criterio.ponderacion),
-                    escala_min: criterio.escala_min ?? ESCALA_MIN,
-                    escala_max: criterio.escala_max ?? ESCALA_MAX,
-                })),
-            })),
-    }
-}
-
-function rubricasPorTipo(lista) {
-    const porTipo = {}
-    TIPOS_RUBRICA.forEach(({ id }) => {
-        const encontrada = Array.isArray(lista) ? lista.find((r) => r.tipo_iniciativa === id) : null
-        porTipo[id] = normalizarRubrica(encontrada, id)
-    })
-    return porTipo
-}
-
-function construirPayload(rubrica) {
-    return {
-        nombre: rubrica.nombre.trim(),
-        tipo_iniciativa: rubrica.tipo_iniciativa,
-        subrubricas: rubrica.subrubricas.map((hito, index) => ({
-            id: esIdLocal(hito.id) ? null : hito.id,
-            numero_hito: index + 1,
-            nombre: hito.nombre.trim(),
-            descripcion: hito.descripcion.trim(),
-            ponderacion: Number(hito.ponderacion),
-            criterios: hito.criterios.map((criterio) => ({
-                id: esIdLocal(criterio.id) ? null : criterio.id,
-                nombre: criterio.nombre.trim(),
-                descripcion: criterio.descripcion.trim(),
-                ponderacion: Number(criterio.ponderacion),
-                escala_min: criterio.escala_min,
-                escala_max: criterio.escala_max,
-            })),
-        })),
-    }
+// GET /rubricas/ para ubicar cada rúbrica por tipo_iniciativa (el id no es fijo) y
+// GET /rubricas/{id}/ para traerla completa con hitos y criterios.
+// Si un tipo no existe en el servidor queda con id null y no se puede guardar.
+async function cargarRubricasPorTipo() {
+    const data = await getRubricas()
+    const lista = Array.isArray(data) ? data : data?.results || data?.data || []
+    const entradas = await Promise.all(
+        TIPOS_RUBRICA.map(async ({ id: tipo }) => {
+            const resumen = lista.find((r) => r.tipo_iniciativa === tipo)
+            if (!resumen) return [tipo, crearRubricaBase(tipo)]
+            const completa = await getRubrica(resumen.id)
+            return [tipo, normalizarRubrica(completa, tipo)]
+        })
+    )
+    return Object.fromEntries(entradas)
 }
 
 function restante(items) {
@@ -125,7 +88,7 @@ function prefiereMenosMovimiento() {
 
 function contarErrores(errores) {
     if (!errores) return 0
-    let total = (errores.nombre ? 1 : 0) + (errores.general ? 1 : 0)
+    let total = errores.general ? 1 : 0
     Object.values(errores.hitos).forEach((e) => {
         total += (e.nombre ? 1 : 0) + (e.ponderacion ? 1 : 0) + (e.general ? 1 : 0)
         Object.values(e.criterios).forEach((c) => {
@@ -137,25 +100,46 @@ function contarErrores(errores) {
 
 // Primer campo con error en orden de lectura, para llevar el foco ahí
 function primerError(rubrica, errores) {
-    if (errores.nombre) return "rubrica-nombre"
     for (const hito of rubrica.subrubricas) {
-        const e = errores.hitos[hito.id]
+        const e = errores.hitos[hito._key]
         if (!e) continue
-        if (e.ponderacion) return `hito-peso-${hito.id}`
-        if (e.nombre) return `hito-nombre-${hito.id}`
+        if (e.ponderacion) return `hito-peso-${hito._key}`
+        if (e.nombre) return `hito-nombre-${hito._key}`
         for (const criterio of hito.criterios) {
-            const c = e.criterios[criterio.id]
-            if (c?.nombre) return `crit-nombre-${criterio.id}`
-            if (c?.ponderacion) return `crit-peso-${criterio.id}`
+            const c = e.criterios[criterio._key]
+            if (c?.nombre) return `crit-nombre-${criterio._key}`
+            if (c?.ponderacion) return `crit-peso-${criterio._key}`
         }
-        if (e.general) return `hito-criterios-${hito.id}`
+        if (e.general) return `hito-criterios-${hito._key}`
     }
     return "reparto-hitos"
 }
 
+// Primer mensaje legible de un error de validación de DRF ({ campo: ["msg"] } anidado)
+function primerMensaje(data) {
+    if (!data) return null
+    if (typeof data === "string") return data
+    if (Array.isArray(data)) {
+        for (const item of data) {
+            const mensaje = primerMensaje(item)
+            if (mensaje) return mensaje
+        }
+        return null
+    }
+    if (typeof data === "object") {
+        for (const valor of Object.values(data)) {
+            const mensaje = primerMensaje(valor)
+            if (mensaje) return mensaje
+        }
+    }
+    return null
+}
+
 function mensajeDeError(err) {
     if (!err?.status) return "No hay conexión con el servidor."
-    if (err.status === 404) return "El servidor de rúbricas todavía no está disponible."
+    if (err.status === 403) return "Tu rol no tiene permiso para editar rúbricas."
+    if (err.status === 404) return "No encontramos esta rúbrica en el servidor."
+    if (err.status === 400) return primerMensaje(err.data) || "El servidor rechazó los datos."
     return err.message || "El servidor rechazó los cambios."
 }
 
@@ -181,21 +165,25 @@ export default function RubricasTab() {
         let porTipo
         let fallo = false
         try {
-            const data = await getRubricas()
-            porTipo = rubricasPorTipo(Array.isArray(data) ? data : data?.data)
+            porTipo = await cargarRubricasPorTipo()
         } catch {
-            // Mientras el backend no exista se trabaja sobre una plantilla base editable
-            porTipo = rubricasPorTipo([])
+            // Sin conexión se trabaja sobre una plantilla base editable que no se puede guardar
+            porTipo = Object.fromEntries(TIPOS_RUBRICA.map(({ id }) => [id, crearRubricaBase(id)]))
             fallo = true
         }
 
-        // Reintentar o recargar nunca pisa el borrador: se recupera encima de lo cargado
+        // Reintentar o recargar nunca pisa el borrador: se recupera encima de lo cargado,
+        // solo si pertenece a la misma rúbrica del servidor (mismo id)
         const borrador = leerBorrador()
         const combinadas = { ...porTipo }
         let recuperado = false
         TIPOS_RUBRICA.forEach(({ id }) => {
             const pendiente = borrador?.[id]
-            if (pendiente?.tipo_iniciativa === id && Array.isArray(pendiente.subrubricas)) {
+            if (
+                pendiente?.tipo_iniciativa === id &&
+                Array.isArray(pendiente.subrubricas) &&
+                (fallo || pendiente.id === porTipo[id].id)
+            ) {
                 combinadas[id] = pendiente
                 recuperado = true
             }
@@ -270,7 +258,7 @@ export default function RubricasTab() {
     function actualizarHito(hitoId, cambio) {
         actualizarRubrica((actual) => ({
             ...actual,
-            subrubricas: actual.subrubricas.map((hito) => (hito.id === hitoId ? cambio(hito) : hito)),
+            subrubricas: actual.subrubricas.map((hito) => (hito._key === hitoId ? cambio(hito) : hito)),
         }))
     }
 
@@ -306,13 +294,12 @@ export default function RubricasTab() {
     function agregarHito() {
         const hito = crearHito(restante(rubrica.subrubricas) || "")
         actualizarRubrica((actual) => ({ ...actual, subrubricas: [...actual.subrubricas, hito] }))
-        abrirHitos([hito.id])
-        setFocoPendiente({ id: `hito-nombre-${hito.id}`, espera: ESPERA_APERTURA })
+        abrirHitos([hito._key])
+        setFocoPendiente({ id: `hito-nombre-${hito._key}`, espera: ESPERA_APERTURA })
     }
 
     function usarPlantilla() {
-        const base = crearRubricaBase(tipoActivo)
-        actualizarRubrica((actual) => ({ ...actual, subrubricas: base.subrubricas }))
+        actualizarRubrica((actual) => ({ ...actual, subrubricas: crearHitosPlantilla(tipoActivo) }))
         setAnuncio("Cargamos la plantilla de ejemplo.")
     }
 
@@ -322,10 +309,10 @@ export default function RubricasTab() {
         const vecino = hitos[index + 1] || hitos[index - 1]
         actualizarRubrica((actual) => ({
             ...actual,
-            subrubricas: actual.subrubricas.filter((h) => h.id !== hito.id),
+            subrubricas: actual.subrubricas.filter((h) => h._key !== hito._key),
         }))
         setAnuncio(`Eliminaste ${hito.nombre.trim() ? `“${hito.nombre.trim()}”` : `el hito ${index + 1}`}.`)
-        setFocoPendiente({ id: vecino ? `hito-toggle-${vecino.id}` : "agregar-hito" })
+        setFocoPendiente({ id: vecino ? `hito-toggle-${vecino._key}` : "agregar-hito" })
     }
 
     function moverHito(index, direccion, origen) {
@@ -344,7 +331,7 @@ export default function RubricasTab() {
         // Si el botón usado queda deshabilitado en el extremo, el foco pasa al contrario
         const llegoAlExtremo = destino === 0 || destino === hitos.length - 1
         const sentido = llegoAlExtremo ? (direccion < 0 ? "bajar" : "subir") : direccion < 0 ? "subir" : "bajar"
-        setFocoPendiente({ id: `hito-${sentido}-${origen}-${hito.id}` })
+        setFocoPendiente({ id: `hito-${sentido}-${origen}-${hito._key}` })
     }
 
     function repartirHitos() {
@@ -363,26 +350,26 @@ export default function RubricasTab() {
             ...hito,
             criterios: [...hito.criterios, { ...criterio, ponderacion: restante(hito.criterios) || "" }],
         }))
-        setFocoPendiente({ id: `crit-nombre-${criterio.id}` })
+        setFocoPendiente({ id: `crit-nombre-${criterio._key}` })
     }
 
     function cambiarCriterio(hitoId, criterioId, campo, valor) {
         actualizarHito(hitoId, (hito) => ({
             ...hito,
-            criterios: hito.criterios.map((criterio) => (criterio.id === criterioId ? { ...criterio, [campo]: valor } : criterio)),
+            criterios: hito.criterios.map((criterio) => (criterio._key === criterioId ? { ...criterio, [campo]: valor } : criterio)),
         }))
     }
 
     function eliminarCriterio(hitoId, criterioId) {
-        const hito = rubrica.subrubricas.find((h) => h.id === hitoId)
-        const index = hito.criterios.findIndex((c) => c.id === criterioId)
+        const hito = rubrica.subrubricas.find((h) => h._key === hitoId)
+        const index = hito.criterios.findIndex((c) => c._key === criterioId)
         const vecino = hito.criterios[index + 1] || hito.criterios[index - 1]
         actualizarHito(hitoId, (actual) => ({
             ...actual,
-            criterios: actual.criterios.filter((criterio) => criterio.id !== criterioId),
+            criterios: actual.criterios.filter((criterio) => criterio._key !== criterioId),
         }))
         setAnuncio("Eliminaste un criterio.")
-        setFocoPendiente({ id: vecino ? `crit-nombre-${vecino.id}` : `agregar-criterio-${hitoId}` })
+        setFocoPendiente({ id: vecino ? `crit-nombre-${vecino._key}` : `agregar-criterio-${hitoId}` })
     }
 
     function descartarCambios() {
@@ -408,11 +395,24 @@ export default function RubricasTab() {
             return
         }
 
+        if (rubrica.id === null || rubrica.id === undefined) {
+            setSaveStatus({
+                tipo: "error",
+                texto: sinServidor
+                    ? "No pudimos guardar: no hay conexión con el servidor. Tus cambios siguen aquí como borrador."
+                    : `No pudimos guardar: la rúbrica de ${etiquetaDe(tipoActivo)} no existe en el servidor. Pide que la creen.`,
+            })
+            return
+        }
+
         setIsSaving(true)
         setSaveStatus(null)
         try {
-            const respuesta = await updateRubrica(tipoActivo, construirPayload(rubrica))
-            const actualizada = respuesta?.subrubricas ? normalizarRubrica(respuesta, tipoActivo) : rubrica
+            // La respuesta trae la rúbrica actualizada: los hitos y criterios nuevos ya tienen id
+            const respuesta = await updateRubrica(rubrica.id, construirPayload(rubrica))
+            const actualizada = respuesta?.subrubricas
+                ? conservarClaves(normalizarRubrica(respuesta, tipoActivo), rubrica)
+                : rubrica
             setRubricas((prev) => ({ ...prev, [tipoActivo]: actualizada }))
             setGuardadas((prev) => ({ ...prev, [tipoActivo]: actualizada }))
             setSaveStatus({ tipo: "success", texto: "Guardado. La rúbrica quedó al día." })
@@ -476,6 +476,16 @@ export default function RubricasTab() {
                 </div>
             )}
 
+            {!sinServidor && rubrica.id === null && (
+                <div className="flex gap-3 rounded-2xl bg-amber-50 p-4 text-sm leading-relaxed text-amber-900">
+                    <AlertCircle className="h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
+                    <p>
+                        El servidor todavía no tiene la rúbrica de <strong>{etiquetaDe(tipoActivo)}</strong>. Puedes
+                        prepararla aquí, pero no se podrá guardar hasta que exista.
+                    </p>
+                </div>
+            )}
+
             {borradorRecuperado && hayCambios && (
                 <p className="flex items-center gap-2 text-sm text-slate-600 animate-aparecer motion-reduce:animate-desvanecer">
                     <RotateCcw className="h-4 w-4 text-slate-400" aria-hidden="true" />
@@ -520,25 +530,28 @@ export default function RubricasTab() {
             </div>
 
             <div id="panel-rubrica" role="tabpanel" aria-labelledby={`tab-${tipoActivo}`} className="space-y-10">
-                {/* Nombre */}
+                {/* Nombre: lo define el sistema, no se edita ni se envía en el PUT */}
                 <div className="max-w-xl space-y-1.5">
                     <label htmlFor="rubrica-nombre" className={ETIQUETA}>
                         Nombre de la rúbrica
                     </label>
-                    <input
-                        id="rubrica-nombre"
-                        type="text"
-                        value={rubrica.nombre}
-                        onChange={(e) => actualizarRubrica((actual) => ({ ...actual, nombre: e.target.value }))}
-                        aria-invalid={Boolean(erroresActivos?.nombre)}
-                        aria-describedby={erroresActivos?.nombre ? "rubrica-nombre-error" : undefined}
-                        className={`${CAMPO} text-lg font-semibold sm:text-lg`}
-                    />
-                    {erroresActivos?.nombre && (
-                        <p id="rubrica-nombre-error" className={ERROR}>
-                            {erroresActivos.nombre}
-                        </p>
-                    )}
+                    <div className="relative">
+                        <input
+                            id="rubrica-nombre"
+                            type="text"
+                            value={rubrica.nombre}
+                            readOnly
+                            aria-describedby="rubrica-nombre-ayuda"
+                            className="w-full cursor-not-allowed rounded-xl bg-slate-200/70 py-2.5 pl-3.5 pr-10 text-lg font-semibold text-slate-700 ring-1 ring-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                        />
+                        <Lock
+                            className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
+                            aria-hidden="true"
+                        />
+                    </div>
+                    <p id="rubrica-nombre-ayuda" className="text-xs text-slate-500">
+                        El nombre lo define el sistema y no se puede cambiar.
+                    </p>
                 </div>
 
                 {/* Reparto entre hitos */}
@@ -576,21 +589,21 @@ export default function RubricasTab() {
                             <ol className="space-y-3">
                                 {rubrica.subrubricas.map((hito, index) => (
                                     <HitoCard
-                                        key={hito.id}
+                                        key={hito._key}
                                         hito={hito}
                                         numero={index + 1}
                                         esPrimero={index === 0}
                                         esUltimo={index === rubrica.subrubricas.length - 1}
-                                        abierto={hitosAbiertos.has(hito.id)}
-                                        activo={hitoActivo === hito.id}
-                                        errores={erroresActivos?.hitos?.[hito.id]}
-                                        onToggle={() => alternarHito(hito.id)}
-                                        onActivar={(activo) => setHitoActivo(activo ? hito.id : null)}
-                                        onCambiar={(campo, valor) => actualizarHito(hito.id, (actual) => ({ ...actual, [campo]: valor }))}
-                                        onCambiarCriterio={(criterioId, campo, valor) => cambiarCriterio(hito.id, criterioId, campo, valor)}
-                                        onAgregarCriterio={() => agregarCriterio(hito.id)}
-                                        onEliminarCriterio={(criterioId) => eliminarCriterio(hito.id, criterioId)}
-                                        onRepartirCriterios={() => repartirCriterios(hito.id)}
+                                        abierto={hitosAbiertos.has(hito._key)}
+                                        activo={hitoActivo === hito._key}
+                                        errores={erroresActivos?.hitos?.[hito._key]}
+                                        onToggle={() => alternarHito(hito._key)}
+                                        onActivar={(activo) => setHitoActivo(activo ? hito._key : null)}
+                                        onCambiar={(campo, valor) => actualizarHito(hito._key, (actual) => ({ ...actual, [campo]: valor }))}
+                                        onCambiarCriterio={(criterioId, campo, valor) => cambiarCriterio(hito._key, criterioId, campo, valor)}
+                                        onAgregarCriterio={() => agregarCriterio(hito._key)}
+                                        onEliminarCriterio={(criterioId) => eliminarCriterio(hito._key, criterioId)}
+                                        onRepartirCriterios={() => repartirCriterios(hito._key)}
                                         onMover={(direccion, origen) => moverHito(index, direccion, origen)}
                                         onEliminar={() => eliminarHito(index)}
                                     />

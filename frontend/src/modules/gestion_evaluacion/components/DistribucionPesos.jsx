@@ -87,9 +87,9 @@ export default function DistribucionPesos({
                         if (peso <= 0) return null
                         return (
                             <div
-                                key={item.id}
+                                key={item._key}
                                 style={{ width: `${(peso / escala) * 100}%` }}
-                                className={`h-full rounded-full transition-[width,opacity] duration-150 ease-out-suave motion-reduce:transition-none ${tonoSegmento(index)} ${activoId && item.id !== activoId ? "opacity-30" : ""
+                                className={`h-full rounded-full transition-[width,opacity] duration-150 ease-out-suave motion-reduce:transition-none ${tonoSegmento(index)} ${activoId && item._key !== activoId ? "opacity-30" : ""
                                     }`}
                             />
                         )
@@ -116,7 +116,7 @@ export default function DistribucionPesos({
                             <>
                                 <span
                                     aria-hidden="true"
-                                    className={`h-2.5 w-2.5 shrink-0 rounded-full transition-opacity duration-150 ${tonoSegmento(index)} ${activoId && item.id !== activoId ? "opacity-30" : ""
+                                    className={`h-2.5 w-2.5 shrink-0 rounded-full transition-opacity duration-150 ${tonoSegmento(index)} ${activoId && item._key !== activoId ? "opacity-30" : ""
                                         }`}
                                 />
                                 <span className="max-w-[14rem] truncate text-slate-600">
@@ -128,11 +128,11 @@ export default function DistribucionPesos({
                             </>
                         )
                         return (
-                            <li key={item.id}>
+                            <li key={item._key}>
                                 {onSeleccionar ? (
                                     <button
                                         type="button"
-                                        onClick={() => onSeleccionar(item.id)}
+                                        onClick={() => onSeleccionar(item._key)}
                                         className="flex min-h-8 items-center gap-2 rounded-full px-1 text-xs transition-colors duration-150 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ufps/15"
                                         title={`Editar el peso de ${item.nombre.trim() || `${nombreItem} ${index + 1}`}`}
                                     >
