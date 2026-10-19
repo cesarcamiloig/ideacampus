@@ -40,7 +40,7 @@ export default function AdminParametrosPage({ onNavigate }) {
       }}
     >
       <div className="mx-auto w-full max-w-5xl">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mb-6">
+        <h1 className="mb-6 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
           Módulo de Administración Paramétrica
         </h1>
 
@@ -71,12 +71,13 @@ export default function AdminParametrosPage({ onNavigate }) {
 
         {/* Tarjeta inferior: Ciclos Académicos Activos */}
         <div className="mt-8 flex justify-center">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <h3 className="text-sm font-bold text-slate-900 mb-3">
               Ciclos Académicos Activos
             </h3>
 
-            <table className="w-full text-left text-xs">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[22rem] text-left text-xs">
               <thead className="bg-[#f0f2f5] text-slate-700 font-semibold">
                 <tr>
                   <th className="px-4 py-2 rounded-l">Año</th>
@@ -113,6 +114,7 @@ export default function AdminParametrosPage({ onNavigate }) {
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       </div>

@@ -314,11 +314,11 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
       ) : (
         <div className="mx-auto w-full max-w-5xl space-y-6">
           {/* BANNER DE BIENVENIDA INSTITUCIONAL */}
-          <section className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
+          <section className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
             <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-red-600 via-red-500 to-rose-600" />
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
               <div className="space-y-1.5">
-                <div className="flex items-center gap-2.5">
+                <div className="flex flex-wrap items-center gap-2.5">
                   <span
                     className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${roleConfig.badgeColor}`}
                   >
@@ -331,7 +331,7 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
                   </span>
                 </div>
 
-                <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+                <h1 className="break-words text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
                   ¡Bienvenido(a), {usuario?.nombre || "Usuario Institucional"}!
                 </h1>
                 <p className="text-sm text-slate-600 max-w-2xl leading-relaxed">
@@ -398,7 +398,7 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
             <BancoIniciativasView key="banco-iniciativas" />
           ) : (
             /* DETALLE DEL MÓDULO SELECCIONADO (PARA OTROS ROLES) */
-            <section className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
