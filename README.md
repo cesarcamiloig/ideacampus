@@ -97,8 +97,10 @@ Una vez que la terminal indique que los contenedores están "Running", puedes ve
 
 ### HU-06 · Gestión de Rúbricas Dinámicas y Creación Automática de Proyectos
 * Módulo de evaluación multicriterio (`gestion_evaluacion`) con soporte para rúbricas por tipo de iniciativa (`emprendimiento`, `innovacion`), estructuradas en hitos (`SubRubrica`) y criterios (`CriterioRubrica`) con validación estricta de ponderaciones al 100 %.
+* Editor visual interactivo de rúbricas en Frontend (`RubricasTab`, `HitoCard`, `DistribucionPesos`, `PesoInput`) integrado en el Panel de Administración Paramétrica y en la vista de Dirección del Programa, conectado en vivo con los endpoints `GET`/`PUT` `/api/rubricas/` y `/api/rubricas/<id>/validar/`.
 * Protección de integridad histórica: impide modificar ponderaciones o eliminar criterios que ya cuenten con calificaciones registradas (`NotaCriterio`).
 * Creación automática de `Proyecto` mediante señales (`post_save`) al aprobar una iniciativa y asignación formal de coordinador y evaluador activos.
+* Diseño responsivo del menú lateral (`MainLayout`) con soporte de ocultamiento en escritorio y cajón deslizante en dispositivos móviles.
 
 ### HU-12 · Centro de Alertas y Notificaciones Institucionales por Rol
 * Centro de alertas automatizadas parametrizadas por rol activo (estudiante, tutor, mentor, evaluador, coordinador, dirección, admin).
