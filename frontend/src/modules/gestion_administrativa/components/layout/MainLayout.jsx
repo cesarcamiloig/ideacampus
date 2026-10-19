@@ -11,11 +11,15 @@ import {
     Award,
     Bell,
     Check,
+    Menu,
+    X,
 } from "lucide-react"
 import { useAuth } from "../../../../context/AuthContext"
 import { NotificacionesModal } from "../../../gestion_convocatorias/components/NotificacionesModal"
 import { getResumenNotificaciones } from "../../../gestion_convocatorias/services/convocatoriaService"
 import { getResumenAlertas } from "../../../gestion_convocatorias/services/alertaService"
+
+const CLAVE_MENU_OCULTO = "gennova:menu-lateral-oculto"
 
 const ROLE_LABELS = {
     admin: "Administrador del Sistema",
@@ -38,6 +42,41 @@ export default function MainLayout({
 }) {
     // Estado del menú desplegable de perfil
     const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+
+    // Menú lateral: en pantallas pequeñas se abre encima del contenido; en escritorio se puede esconder
+    const [menuMovilAbierto, setMenuMovilAbierto] = useState(false)
+    const [menuEscritorioOculto, setMenuEscritorioOculto] = useState(() => {
+        try {
+            return localStorage.getItem(CLAVE_MENU_OCULTO) === "1"
+        } catch {
+            return false
+        }
+    })
+
+    function alternarMenu() {
+        const esEscritorio = window.matchMedia?.("(min-width: 1024px)").matches
+        if (esEscritorio) {
+            setMenuEscritorioOculto((oculto) => {
+                try {
+                    localStorage.setItem(CLAVE_MENU_OCULTO, oculto ? "0" : "1")
+                } catch {
+                    // Sin almacenamiento disponible: solo se recuerda mientras la página siga abierta
+                }
+                return !oculto
+            })
+        } else {
+            setMenuMovilAbierto((abierto) => !abierto)
+        }
+    }
+
+    useEffect(() => {
+        if (!menuMovilAbierto) return
+        const cerrarConEscape = (e) => {
+            if (e.key === "Escape") setMenuMovilAbierto(false)
+        }
+        document.addEventListener("keydown", cerrarConEscape)
+        return () => document.removeEventListener("keydown", cerrarConEscape)
+    }, [menuMovilAbierto])
 
     // Conexión a la sesión real del usuario autenticado
     const { usuario, rolActivo, logout, switchRole, rolesAsignados } = useAuth()
@@ -141,6 +180,7 @@ export default function MainLayout({
             { id: "iniciativas", label: "Banco de Iniciativas", icon: Lightbulb },
             { id: "indicadores", label: "Métricas e Indicadores", icon: FileText },
             { id: "alertas", label: "Centro de Alertas", icon: Bell },
+            { id: "rubricas", label: "Rúbricas de Evaluación", icon: ClipboardCheck },
         ],
         direccion: [
             { id: "dashboard", label: "Panel de Dirección", icon: Award },
@@ -148,6 +188,7 @@ export default function MainLayout({
             { id: "iniciativas", label: "Banco de Iniciativas", icon: Lightbulb },
             { id: "indicadores", label: "Métricas e Indicadores", icon: FileText },
             { id: "alertas", label: "Centro de Alertas", icon: Bell },
+            { id: "rubricas", label: "Rúbricas de Evaluación", icon: ClipboardCheck },
         ],
     }
 
@@ -196,9 +237,22 @@ export default function MainLayout({
     const currentMenuItems = menuConfigByRole[activeRole] || menuConfigByRole.admin || []
 
     return (
-        <div className="flex h-screen w-full bg-[#f4f5f7] font-sans text-slate-800 antialiased">
+        <div className="flex h-screen w-full bg-[#f4f5f7] font-sans text-slate-800 antialiased supports-[height:100dvh]:h-dvh">
+            {/* Fondo que cierra el menú en pantallas pequeñas */}
+            {menuMovilAbierto && (
+                <div
+                    className="fixed inset-0 z-30 bg-slate-900/40 lg:hidden"
+                    onClick={() => setMenuMovilAbierto(false)}
+                    aria-hidden="true"
+                />
+            )}
+
             {/* 1. SIDEBAR IZQUIERDO INSTITUCIONAL */}
-            <aside className="relative flex w-64 flex-col justify-between border-r border-slate-200 bg-white shadow-sm shrink-0">
+            <aside
+                id="menu-lateral"
+                className={`fixed inset-y-0 left-0 z-40 flex w-64 max-w-[85vw] shrink-0 flex-col justify-between overflow-y-auto border-r border-slate-200 bg-white shadow-xl transition-transform duration-200 ease-out motion-reduce:transition-none lg:static lg:z-auto lg:max-w-none lg:translate-x-0 lg:shadow-sm ${menuMovilAbierto ? "translate-x-0" : "-translate-x-full"
+                    } ${menuEscritorioOculto ? "lg:hidden" : "lg:flex"}`}
+            >
                 <div>
                     {/* Logo UFPS y Marca GENNOVA */}
                     <div className="flex items-center gap-3 px-6 py-6">
@@ -210,6 +264,14 @@ export default function MainLayout({
                         <span className="text-2xl font-semibold tracking-tight text-black">
                             GENNOVA
                         </span>
+                        <button
+                            type="button"
+                            onClick={() => setMenuMovilAbierto(false)}
+                            className="ml-auto flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-800 lg:hidden"
+                            aria-label="Cerrar menú"
+                        >
+                            <X className="h-5 w-5" />
+                        </button>
                     </div>
 
                     {/* Menú de navegación dinámico según el rol activo */}
@@ -226,6 +288,7 @@ export default function MainLayout({
                                     <button
                                         type="button"
                                         onClick={() => {
+                                            setMenuMovilAbierto(false)
                                             if (onModuleChange) {
                                                 onModuleChange(item.id)
                                             }
@@ -268,22 +331,36 @@ export default function MainLayout({
             </aside>
 
             {/* 2. ÁREA DE CONTENIDO */}
-            <div className="flex flex-1 flex-col overflow-hidden">
+            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
                 {/* Navbar superior */}
-                <header className="relative flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white px-8 shrink-0">
+                <header className="relative flex h-16 w-full shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-3 sm:px-6 lg:px-8">
                     <div className="absolute top-0 left-0 right-0 h-1 bg-red-600" />
 
-                    <span className="text-sm font-medium text-slate-700">
-                        Programa de Ingeniería de Sistemas
-                    </span>
+                    <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+                        <button
+                            type="button"
+                            onClick={alternarMenu}
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                            aria-label="Mostrar u ocultar el menú"
+                            aria-controls="menu-lateral"
+                            aria-expanded={menuMovilAbierto}
+                            title="Mostrar u ocultar el menú"
+                        >
+                            <Menu className="h-5 w-5" />
+                        </button>
+                        <span className="truncate text-sm font-medium text-slate-700">
+                            <span className="sm:hidden">GENNOVA</span>
+                            <span className="hidden sm:inline">Programa de Ingeniería de Sistemas</span>
+                        </span>
+                    </div>
 
                     {/* Zona derecha: Notificaciones y Perfil */}
-                    <div className="flex items-center gap-3">
+                    <div className="flex shrink-0 items-center gap-2 sm:gap-3">
                         {/* Campana de Notificaciones Institucionales */}
                         <button
                             type="button"
                             onClick={() => setNotificacionesOpen(true)}
-                            className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-red-300 hover:bg-red-50/50 hover:text-red-600 transition-all focus:outline-none shadow-sm"
+                            className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-red-300 hover:bg-red-50/50 hover:text-red-600 transition-all focus:outline-none shadow-sm"
                             title="Notificaciones institucionales"
                             aria-label="Notificaciones institucionales"
                         >
@@ -300,16 +377,16 @@ export default function MainLayout({
                             <button
                                 type="button"
                                 onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-                                className="flex items-center gap-3 rounded-lg p-1.5 hover:bg-slate-50 transition-colors select-none focus:outline-none"
+                                className="flex min-h-10 items-center gap-2 rounded-xl p-1.5 hover:bg-slate-50 transition-colors select-none focus:outline-none sm:gap-3"
                             >
                                 <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-slate-200 text-xs font-bold text-slate-600">
                                     {initials}
                                 </div>
-                                <div className="text-left hidden sm:block">
-                                    <span className="block text-xs font-bold text-slate-800 leading-tight">
+                                <div className="hidden max-w-[12rem] text-left sm:block">
+                                    <span className="block truncate text-xs font-bold text-slate-800 leading-tight">
                                         {activeRoleLabel}
                                     </span>
-                                    <span className="block text-[10px] text-slate-500">
+                                    <span className="block truncate text-[10px] text-slate-500">
                                         {userName}
                                     </span>
                                 </div>
@@ -318,7 +395,7 @@ export default function MainLayout({
 
                             {/* Dropdown contextual */}
                             {profileMenuOpen && (
-                                <div className="absolute right-0 mt-2 w-64 rounded-xl border border-slate-200 bg-white shadow-lg py-2 z-50 animate-in fade-in zoom-in-95 duration-100">
+                                <div className="absolute right-0 mt-2 w-64 max-w-[calc(100vw-1.5rem)] rounded-xl border border-slate-200 bg-white shadow-lg py-2 z-50 animate-in fade-in zoom-in-95 duration-100">
                                     <div className="px-4 py-2 border-b border-slate-100">
                                         <p className="text-xs font-bold text-slate-900 truncate">{userName}</p>
                                         <p className="text-[11px] text-slate-500 truncate">{userEmail}</p>
@@ -371,7 +448,7 @@ export default function MainLayout({
                 </header>
 
                 {/* 3. CONTENEDOR PRINCIPAL DINÁMICO */}
-                <main className="flex-1 overflow-y-auto p-10 flex flex-col justify-between">
+                <main className="flex flex-1 flex-col justify-between overflow-y-auto p-4 sm:p-6 lg:p-10">
                     {children}
                 </main>
             </div>

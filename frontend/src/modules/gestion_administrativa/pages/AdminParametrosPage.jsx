@@ -4,6 +4,14 @@ import CategoryTab from "../components/CategoryTab"
 import PeriodosTab from "../components/PeriodosTab"
 import RolesTab from "../components/RolesTab"
 import { getPeriodos } from "../services/parametroService"
+import RubricasTab from "../../gestion_evaluacion/components/RubricasTab"
+
+const TABS = [
+  { id: "variables", label: "Variables" },
+  { id: "periodos", label: "Periodos Académicos" },
+  { id: "roles", label: "Roles" },
+  { id: "rubricas", label: "Rúbricas" },
+]
 
 export default function AdminParametrosPage({ onNavigate }) {
   const [activeTab, setActiveTab] = useState("variables")
@@ -32,61 +40,44 @@ export default function AdminParametrosPage({ onNavigate }) {
       }}
     >
       <div className="mx-auto w-full max-w-5xl">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mb-6">
+        <h1 className="mb-6 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
           Módulo de Administración Paramétrica
         </h1>
 
-        {/* Pestañas de navegación tipo carpeta */}
-        <div className="flex items-end">
-          <button
-            type="button"
-            onClick={() => setActiveTab("variables")}
-            className={`w-52 rounded-t-xl py-3 text-center text-sm font-semibold transition-colors border-t border-x ${activeTab === "variables"
-              ? "bg-white text-slate-900 border-slate-200 shadow-sm"
-              : "bg-[#eef0f3] text-slate-600 border-slate-200/80 hover:bg-slate-200/70"
-              }`}
-          >
-            Variables
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("periodos")}
-            className={`w-52 rounded-t-xl py-3 text-center text-sm font-semibold transition-colors border-t border-x ${activeTab === "periodos"
-              ? "bg-white text-slate-900 border-slate-200 shadow-sm"
-              : "bg-[#eef0f3] text-slate-600 border-slate-200/80 hover:bg-slate-200/70"
-              }`}
-          >
-            Periodos Académicos
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("roles")}
-            className={`w-52 rounded-t-xl py-3 text-center text-sm font-semibold transition-colors border-t border-x ${activeTab === "roles"
-              ? "bg-white text-slate-900 border-slate-200 shadow-sm"
-              : "bg-[#eef0f3] text-slate-600 border-slate-200/80 hover:bg-slate-200/70"
-              }`}
-          >
-            Roles
-          </button>
+        {/* Pestañas de navegación tipo carpeta (se deslizan horizontalmente en pantallas pequeñas) */}
+        <div className="flex items-end overflow-x-auto">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex-1 shrink-0 whitespace-nowrap rounded-t-xl px-5 py-3 text-center text-sm font-semibold transition-colors border-t border-x sm:flex-none sm:w-44 lg:w-52 ${activeTab === tab.id
+                ? "bg-white text-slate-900 border-slate-200 shadow-sm"
+                : "bg-[#eef0f3] text-slate-600 border-slate-200/80 hover:bg-slate-200/70"
+                }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
         {/* Contenedor blanco de la pestaña activa */}
-        <div className="rounded-b-2xl rounded-tr-2xl border border-slate-200 bg-white p-6 shadow-sm min-h-[340px]">
+        <div className="rounded-b-2xl rounded-tr-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm min-h-[340px]">
           {activeTab === "variables" && <CategoryTab />}
           {activeTab === "periodos" && <PeriodosTab />}
           {activeTab === "roles" && <RolesTab />}
+          {activeTab === "rubricas" && <RubricasTab />}
         </div>
 
         {/* Tarjeta inferior: Ciclos Académicos Activos */}
         <div className="mt-8 flex justify-center">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <h3 className="text-sm font-bold text-slate-900 mb-3">
               Ciclos Académicos Activos
             </h3>
 
-            <table className="w-full text-left text-xs">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[22rem] text-left text-xs">
               <thead className="bg-[#f0f2f5] text-slate-700 font-semibold">
                 <tr>
                   <th className="px-4 py-2 rounded-l">Año</th>
@@ -123,6 +114,7 @@ export default function AdminParametrosPage({ onNavigate }) {
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       </div>

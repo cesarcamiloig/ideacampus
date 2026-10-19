@@ -195,7 +195,7 @@ export default function RolesTab() {
                 </div>
             ) : viewMode === "usuarios" ? (
                 /* VISTA 1: TABLA DE USUARIOS Y ROLES MÚLTIPLES */
-                <div className="overflow-hidden rounded-xl border border-slate-200">
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
                     <table className="w-full text-left text-xs">
                         <thead className="bg-[#f0f2f5] text-slate-700 font-semibold">
                             <tr>
@@ -276,7 +276,7 @@ export default function RolesTab() {
                 </div>
             ) : (
                 /* VISTA 2: CATÁLOGO DE ROLES DEL SISTEMA */
-                <div className="overflow-hidden rounded-xl border border-slate-200">
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
                     <table className="w-full text-left text-xs">
                         <thead className="bg-[#f0f2f5] text-slate-700 font-semibold">
                             <tr>

@@ -43,6 +43,42 @@ export default {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
+        // Rojo institucional UFPS: acción principal, foco, error y selección
+        ufps: {
+          DEFAULT: "#c81e1e",
+          hover: "#a81919",
+          suave: "#fdf2f2",
+          borde: "#f2c7c7",
+        },
+        // Fondos de trabajo del panel (mismo gris del MainLayout)
+        superficie: {
+          DEFAULT: "#f4f5f7",
+          alta: "#fafafb",
+        },
+      },
+      transitionTimingFunction: {
+        // ease-out fuerte: arranca rápido y se asienta suave
+        "out-suave": "cubic-bezier(0.23, 1, 0.32, 1)",
+      },
+      keyframes: {
+        aparecer: {
+          from: { opacity: "0", transform: "translateY(4px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        confirmar: {
+          from: { opacity: "0", transform: "scale(0.9)" },
+          to: { opacity: "1", transform: "scale(1)" },
+        },
+        // Variante para prefers-reduced-motion: solo opacidad, sin desplazamiento
+        desvanecer: {
+          from: { opacity: "0" },
+          to: { opacity: "1" },
+        },
+      },
+      animation: {
+        aparecer: "aparecer 200ms cubic-bezier(0.23, 1, 0.32, 1) both",
+        confirmar: "confirmar 240ms cubic-bezier(0.23, 1, 0.32, 1) both",
+        desvanecer: "desvanecer 150ms ease both",
       },
     },
   },

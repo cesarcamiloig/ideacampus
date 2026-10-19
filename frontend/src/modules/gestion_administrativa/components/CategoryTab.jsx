@@ -110,7 +110,7 @@ export default function CategoryTab() {
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200">
+      <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="w-full text-left text-xs">
           <thead className="bg-[#f0f2f5] text-slate-700 font-semibold">
             <tr>
