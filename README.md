@@ -106,8 +106,10 @@ Una vez que la terminal indique que los contenedores están "Running", puedes ve
 * Navegación embebida dentro del layout institucional (`MainLayout`) preservando la barra lateral, campana de notificaciones y selector de usuario.
 * Soporte para restablecer el perfil original guardado al cancelar y sincronización directa con el backend.
 
-### Conmutador Dinámico de Roles Institucionales
+### Conmutador Dinámico de Roles y Autenticación JWT Multi-Rol
 * Selector contextual en el menú de usuario de la cabecera superior para alternar dinámicamente entre vistas y permisos asignados (`useAuth.switchRole`) sin requerir cierre de sesión.
+* Soporte nativo en el token JWT para múltiples roles activos simultáneos (`roles` y `rol` en payload, validados contra `UsuarioRol` en base de datos) y verificación transversal en `TieneRolPermitido`.
+* Conservación de contexto de rol `admin` al supervisar el Banco de Emprendimientos y el Centro de Alertas desde el panel administrativo (`ROLE_CONFIG.admin`).
 * Blindaje de interfaz con `ErrorBoundary` para recuperación ante discrepancias de sesión o caché.
 
 ---
@@ -129,7 +131,7 @@ Una vez que la terminal indique que los contenedores están "Running", puedes ve
 ```bash
 docker exec ideacampus_backend python manage.py test
 ```
-*Cubre 45 pruebas unitarias y de integración que validan permisos, reglas de negocio Estudiante-Iniciativa-Equipo, autenticación JWT, ciclo de vida de convocatorias, alertas automáticas y endpoints REST.*
+*Cubre 46 pruebas unitarias y de integración que validan permisos, reglas de negocio Estudiante-Iniciativa-Equipo, autenticación JWT multi-rol, ciclo de vida de convocatorias, alertas automáticas y endpoints REST.*
 
 ### Compilación y Verificación de Tipos del Frontend
 ```bash

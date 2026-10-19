@@ -2,7 +2,7 @@
 
 **Proyecto:** GENNOVA — Sistema Web para Gestión de Emprendimientos e Innovación Estudiantil (`ideacampus`)  
 **Repositorio Remoto:** `https://github.com/cesarcamiloig/ideacampus.git`  
-**Fecha de Ejecución:** 16 de Octubre de 2026 / 17 de Octubre de 2026  
+**Fecha de Ejecución Actualizada:** 19 de Octubre de 2026  
 **Auditor / Ingeniero:** Senior Software Engineer (AI Pair Programmer)  
 **Rama de Integración Principal:** `develop`  
 **Rama de Producción / Default:** `main`  
@@ -11,153 +11,122 @@
 
 ## 1. Resumen Ejecutivo
 
-Se completó una auditoría exhaustiva del repositorio remoto en GitHub y del entorno local de trabajo. Se inspeccionaron todos los Pull Requests abiertos, se analizó su impacto arquitectónico, se identificaron dependencias, duplicidades y desalineaciones de rama base, y se completó la integración controlada y resolución de conflictos de todos los cambios válidos en la rama de integración `develop`.
+Se ejecutó una auditoría integral del repositorio local y remoto en GitHub (`cesarcamiloig/ideacampus`), verificando la sincronización de ramas, inspeccionando el estado de todos los Pull Requests abiertos e históricos, resolviendo conflictos de arquitectura y datos sin regresiones, ejecutando las suites de pruebas automatizadas en contenedores Docker (Backend Django + Frontend React/Vite) y sincronizando el resultado final con `origin/develop`.
 
-### Métricas Clave de la Misión
-* **Total de PR abiertos identificados:** 4
-* **Total de PR integrados y consolidados:** 4 (PR #21, PR #22, PR #23, PR #24)
-* **Conflictos resueltos manualmente:** 1 archivo crítico (`RoleDashboardPage.jsx`), combinando exitosamente la arquitectura de alertas por rol (HU-12) y el perfil en Tailwind de tutores/mentores (HU-16).
-* **Archivos residuales / obsoletos depurados:** 1 (`TutorProfileForm.css`, 401 líneas de CSS legado eliminadas).
-* **Archivos JS/JSX de Frontend verificados:** 39 archivos (0 marcadores de conflicto, 0 importaciones rotas).
-* **Pruebas automatizadas en suite Backend:** 45 casos de prueba diseñados e integrados para Convocatorias, Postulaciones, Reglas Estudiante-Iniciativa-Equipo y Alertas por Rol.
-* **Estado del árbol de trabajo local (`develop`):** Limpio, sin regresiones y listo para despliegue.
-
----
-
-## 2. Diagnóstico Inicial del Repositorio
-
-### 2.1 Topología de Ramas y Estrategia de Ramificación
-* **Rama `main` (remota):** Ubicada en el commit `f7a62bc` (`Revert "Feat/hu 01 backend auth"`), desfasada en 65 commits respecto al desarrollo activo.
-* **Rama `develop` (remota):** Rama troncal de integración de características (GitFlow). En ella se integraron históricamente los PRs #11, #13, #14, #16, #17, #18, #19 y #20.
-* **Divergencia:** El repositorio tiene configurada a `main` como la rama predeterminada en GitHub. Esto provocó que los desarrolladores que abrieron los PR #21 y #23 apuntaran involuntariamente a `main` en lugar de `develop`, generando estados `dirty` (conflictos masivos en GitHub) porque sus ramas se derivaron de commits avanzados de `develop` (`b067664`).
-
-### 2.2 Inventario de Pull Requests Abiertos
-
-| PR # | Título | Autor | Rama Origen | Rama Base en GitHub | Diagnóstico Técnico |
-| :---: | :--- | :--- | :--- | :--- | :--- |
-| **#21** | `fix(frontend): restaurar conmutador de roles en menu superior y limpiar etiquetas de historias de usuario` | `obedayalaufps` | `fix/correcciones-frontend` | `main` | **Rama base errónea.** Contiene el commit `27be1bf` originado de `develop`. En GitHub figuraba como no fusionable (`dirty`) contra `main`. Duplicado por el PR #22 creado 1 minuto después. |
-| **#22** | `fix(frontend): restaurar conmutador de roles en menu superior y limpi.` | `obedayalaufps` | `fix/correcciones-frontend` | `develop` | **Válido para integración.** Mismo commit `27be1bf` que PR #21 pero apuntando correctamente a `develop`. Título y descripción truncados en GitHub. Sus cambios fueron re-incorporados y extendidos por el autor en PR #24. |
-| **#23** | `Fix/hu 16 frontend perfil tutor` | `Dnielbermudez` | `fix/HU-16-frontend-perfil-tutor` | `main` | **Rama base errónea.** Su commit `f79bf8c` se derivó de `develop` (`b067664`). Al apuntar a `main`, GitHub reportaba 66 commits de diff y conflicto sucio. Al compararse contra `develop`, representaba exactamente 1 commit limpio que rediseña el perfil a Tailwind e integra el formulario en `MainLayout`. |
-| **#24** | `Feat/hu 12 alertas automaticas` | `obedayalaufps` | `feat/HU-12-alertas-automaticas` | `develop` | **Válido y prioritario.** Implementa el sistema completo de alertas por rol en Django (`AlertaRol`, migración `0006`, servicios y vistas) y en React (`AlertasPage`, `alertaService.js`, `ErrorBoundary`, conmutador de roles ampliado). |
+### Métricas Clave de la Auditoría Actual (19 de Octubre de 2026)
+* **Pull Requests abiertos encontrados al inicio:** 2 (**PR #26** y **PR #27**).
+* **Pull Requests integrados exitosamente en `develop`:** 2 (**PR #26** y **PR #27**; acumulados con la oleada previa #21, #22, #23 y #24: **6 PRs auditados e integrados**).
+* **Pull Requests abiertos pendientes al finalizar:** **0**.
+* **Conflictos de merge detectados y resueltos en PR #27:** 5 conflictos directos (`add/add` en `backend/gestion_emprendimiento_2/*`) + 3 incompatibilidades estructurales prevenidas (`settings.py` duplicado en `INSTALLED_APPS`, preservación de modelos `Permiso`/`RolPermiso` en `models.py` para integridad con `admin.py` y migración `0001_initial.py`, y compatibilidad retroactiva de firma `generar_token(usuario, rol=None)`).
+* **Pruebas automatizadas de Backend (Django 6.1 / Python 3.12):** **46 pruebas ejecutadas — 46 aprobadas (`OK` en 0.520s)**, 0 errores en `manage.py check` y 0 migraciones pendientes en `makemigrations --check --dry-run`.
+* **Validaciones de Frontend (Node 24 / Oxlint / Vite 8.3):** **0 errores de linter** en 42 archivos, compilación de producción (`vite build`) exitosa en 7.78s (2018 módulos transformados) y **0 vulnerabilidades** en `npm audit --omit=dev`.
 
 ---
 
-## 3. Revisión Técnica Individual de Código
+## 2. Diagnóstico Inicial del Repositorio (Fase 1 y Fase 2)
 
-### PR #21 y PR #22 (`fix/correcciones-frontend`)
-* **Propósito:** Restaurar el dropdown de conmutación de roles en la cabecera dentro de `MainLayout.jsx` y suprimir etiquetas visibles de historias de usuario (`HU-02`, `HU-03`, `HU-04`, `HU-16`) en la interfaz para cumplir estándares de producción.
-* **Evaluación de Código:**
-  * **Frontend:** Implementó el selector dinámico de roles mediante `switchRole` en `AuthContext`.
-  * **Limpieza:** Suprimió etiquetas en `ConvocatoriasPage`, `BancoIniciativasView`, `ConvocatoriasAbiertasView`, `DetalleExpedienteModal`, `EstudianteIniciativasPage`, `EquipoForm`, `EquipoPage` y `MiEquipoView`.
-  * **Hallazgo Clave:** El autor reincorporó y mejoró este mismo código directamente en el PR #24 (`feat/HU-12-alertas-automaticas`), añadiendo además compatibilidad con `ErrorBoundary` y roles múltiples. Los 4 archivos restantes con mejoras de formato y comentarios (`EquipoForm.jsx`, `MiEquipoView.jsx`, `convocatoriaService.js`, `FormularioPostulacion.jsx`) fueron consolidados en la integración final.
+### 2.1 Estado Local y Remoto Inicial
+* **Rama activa local:** `develop` sincronizada inicialmente en `3998e3e` con `origin/develop`.
+* **Árbol de trabajo:** Limpio (`0` archivos modificados o sin seguimiento, `0` stashes pendientes).
+* **Protección de ramas en GitHub:** `develop` y `main` cuentan con protección activa (`required_approving_review_count: 1`, `enforce_admins: false`, `allow_force_pushes: false`).
 
-### PR #23 (`fix/HU-16-frontend-perfil-tutor`)
-* **Propósito:** Modernización visual del perfil de Tutor y Mentor (HU-16) según la guía de estilo de Tailwind CSS y Shadcn UI, integración dentro de `MainLayout` y eliminación de CSS obsoleto.
-* **Evaluación de Código:**
-  * **Arquitectura:** Elimina `TutorProfileForm.css` (401 líneas de estilos aislados no conformes).
-  * **UX/UI:** El perfil ahora se renderiza de forma reactiva dentro de `MainLayout` manteniendo la barra lateral, la campana de notificaciones y el header institucional, sustituyendo el comportamiento anterior que rompía el marco de navegación.
-  * **Lógica:** Se implementó `handleCancel` para restaurar los datos guardados en caché/backend y se quitó el botón redundante de cierre de sesión en el formulario (delegado al menú superior).
+### 2.2 Inventario de Pull Requests Evaluados
 
-### PR #24 (`feat/HU-12-alertas-automaticas`)
-* **Propósito:** Centro integral de Alertas y Notificaciones Institucionales por rol (HU-12).
-* **Evaluación de Código:**
-  * **Backend (Django):**
-    * Modelo `AlertaRol` (`alerta_rol`) con niveles de prioridad (`alta`, `media`, `baja`), roles destinatarios (`estudiante`, `tutor`, `mentor`, `evaluador`, `coordinador`, `direccion_del_programa`, `todos`) y relación con `Usuario` y `Convocatoria`.
-    * Migración `0006_alerta_rol.py` estructurada correctamente con dependencias resueltas.
-    * Refactorización del servicio `generar_alertas_automaticas_por_rol` para evitar la generación de "alertas fantasma" cuando no existen convocatorias o iniciativas activas.
-    * Endpoint `/api/alertas/` con acciones de resumen `/api/alertas/resumen/` y lectura masiva `/api/alertas/marcar_todas_leidas/`.
-  * **Frontend (React):**
-    * Nueva página `AlertasPage.jsx` con tarjetas KPI, filtros de severidad, búsqueda interactiva y cambio de estado.
-    * Conexión en `MainLayout` que suma alertas pendientes a la campana de notificaciones institucional.
-    * Implementación de `ErrorBoundary` en `App.jsx` para blindar la carga ante fallos de renderizado o desajustes de almacenamiento local.
+| PR # | Título | Autor | Rama Origen → Base | Estado Inicial | Estado Final |
+| :---: | :--- | :--- | :--- | :---: | :---: |
+| **#26** | `fix(admin): mantener rol admin al navegar a emprendimientos y agregar.` | `obedayalaufps` | `fix/admin-navegacion-emprendimientos` → `develop` | `open` (`mergeable: true`) | **Merged (`eb15f04`)** |
+| **#27** | `Fix/mejora autenticacion permisos` | `cesarcamiloig` / `miguelvl05` | `fix/Mejora-Autenticacion-Permisos` → `develop` | `open` (`dirty` / conflictos) | **Merged (`a237606`)** |
+| **#25** | `Feat/hu 07 frontend evidencias avance` | `Dnielbermudez` | `feat/HU-07-Frontend-Evidencias-Avance` → `main` | `closed` (sin merge, apuntaba a `main`) | **Closed** (rama en trabajo por autor) |
+| **#24** | `Feat/hu 12 alertas automaticas` | `obedayalaufps` | `feat/HU-12-alertas-automaticas` → `develop` | `merged` (`3c0d68c`) | **Merged** |
+| **#23** | `Fix/hu 16 frontend perfil tutor` | `Dnielbermudez` | `fix/HU-16-frontend-perfil-tutor` → `main` | `closed` (integrado en `develop` en `c7ca74d`) | **Integrado en `develop`** |
+| **#21 / #22** | `fix(frontend): restaurar conmutador de roles en menu superior...` | `obedayalaufps` | `fix/correcciones-frontend` → `main` / `develop` | `closed` (integrado en `develop` en `f75311e`) | **Integrado en `develop`** |
+
+### 2.3 Ramas Remotas sin PR Abierto (Inventario Informativo)
+Se identificaron ramas remotas en desarrollo que aún no tienen un PR abierto hacia `develop`:
+* `origin/feat/HU-06-Backend` (`miguelvl05`, 6 commits adelante de `develop`): Implementación backend de gestión de rúbricas y proyectos.
+* `origin/feat/HU-06-Frontend-Rubricas` (`DanielBermudez`, 9 commits adelante de `develop`): Editor de rúbricas dinámicas en frontend.
+* `origin/feat/HU-07-Frontend-Evidencias-Avance` (`DanielBermudez`, 2 commits adelante de su base): Formulario de evidencias de avance (PR #25 hacia `main` fue cerrado por el propietario antes de esta auditoría).
+* `origin/feat/HU-05-backend-asignacion-tutores`, `origin/feat/HU-10-backend-asignacion-mentorias`, `origin/feat/HU-12-backend-reglas-notificaciones`, `origin/feat/HU-20-backend-plan-trabajo`: Sincronizadas en el mismo commit de `develop` (`0` commits de diferencia).
 
 ---
 
-## 4. Plan de Integración y Resolución de Conflictos
+## 3. Revisión Técnica Individual de Pull Requests Abiertos (Fase 3)
 
-### 4.1 Estrategia de Orden de Integración
-Debido a las dependencias y solapamientos identificados:
-1. **Fase 1:** Integración de **PR #24** en `develop`. Al contener la base más amplia de backend y frontend (HU-12 + arquitectura base de roles), se fusionó de forma limpia (Fast-Forward / 3-way limpio) sin conflictos.
-2. **Fase 2:** Integración de **PR #23** en `develop`. Generó un único conflicto de contenido en `RoleDashboardPage.jsx`, ya que PR #24 había agregado el enrutamiento a `AlertasPage` y PR #23 había modificado el renderizado embebido de `TutorProfileForm`.
-3. **Fase 3:** Consolidación de **PR #21 / PR #22**. Se verificaron los diffs restantes de `fix/correcciones-frontend` y se aplicaron las limpiezas de etiquetas y formato en `EquipoForm.jsx`, `MiEquipoView.jsx`, `convocatoriaService.js` y `FormularioPostulacion.jsx`.
+### 3.1 Revisión de PR #26 (`fix/admin-navegacion-emprendimientos`)
+* **Objetivo:** Corregir la pérdida del contexto visual y de navegación del rol `admin` cuando el Administrador navega al módulo `emprendimientos` desde la barra lateral, y añadir la configuración institucional de `admin` en `RoleDashboardPage`.
+* **Archivos afectados (2):**
+  * `frontend/src/App.jsx` (`+1/-1`)
+  * `frontend/src/modules/gestion_administrativa/pages/RoleDashboardPage.jsx` (`+42/-1`)
+* **Evaluación en 5 Ejes:**
+  1. **Correctitud:** En `App.jsx` línea 28, antes se pasaba `role="coordinador"` al renderizar `RoleDashboardPage` para `currentModule === "emprendimientos"`, lo que ocultaba la opción *Administración Paramétrica* del menú lateral del administrador. Al pasar `role="admin"` y definir `ROLE_CONFIG.admin` en `RoleDashboardPage.jsx`, el administrador conserva su menú lateral completo (`menuConfigByRole.admin` en `MainLayout.jsx`), su insignia roja institucional y sus KPIs tanto en *Emprendimientos* como en *Centro de Alertas*.
+  2. **Legibilidad y Simplicidad:** Sigue exactamente la estructura declarativa de `ROLE_CONFIG` y elimina el BOM UTF-8 en la línea 1 de `RoleDashboardPage.jsx`.
+  3. **Arquitectura:** Coherente con `MainLayout.jsx` y `App.jsx`.
+  4. **Seguridad y Permisos:** No altera permisos de API; corrige únicamente la proyección de rol en la UI para usuarios ya autenticados como `admin`.
+  5. **Rendimiento:** Sin impacto negativo.
+* **Veredicto:** **Aprobado e integrado directamente (`eb15f04`).**
 
-### 4.2 Resolución del Conflicto en `RoleDashboardPage.jsx`
-* **Naturaleza del Conflicto:**
-  * `HEAD` (después de PR #24) contenía la condicional `{activeModule === "alertas" ? <AlertasPage ... /> : ...}` y la lógica de conmutación de roles con `onRoleChange`.
-  * `origin/fix/HU-16-frontend-perfil-tutor` (PR #23) contenía la bandera `mostrarPerfil` y el renderizado directo de `<TutorProfileForm />` dentro del layout, además de tarjetas estadísticas y bienvenida institucional.
-* **Solución Implementada:**
-  * Se combinaron armónicamente ambas funcionalidades:
-    1. Si `mostrarPerfil` es verdadero (`activeModule === "perfil"` para roles de acompañamiento), se despliega `<TutorProfileForm onCancel={() => cambiarModulo(roleConfig.defaultModule)} />`.
-    2. Si no, se renderiza la vista institucional con el banner de bienvenida y las métricas KPI.
-    3. En el selector de contenido interno, se atiende primero `activeModule === "alertas"` cargando `AlertasPage`, preservando luego la navegación para estudiantes (`equipo`, `postulaciones`, `mi-iniciativa`), coordinación (`banco-iniciativas`) y demás roles.
-    4. Se sincronizó el efecto `useEffect` para actualizar `activeModule` cuando se conmuta de rol en la cabecera.
-
----
-
-## 5. Trazabilidad de Commits Resultantes en `develop`
-
-La historia resultante en la rama `develop` local es lineal, trazable y debidamente documentada:
-
-1. **`3c0d68c`**: `merge: integrar HU-12 (alertas automaticas y centro de notificaciones) en develop (#24)`
-   * Integra 21 archivos, 1772 inserciones (+), 128 eliminaciones (-).
-   * Incorpora migración `0006_alerta_rol.py`, endpoints de alertas y vista `AlertasPage.jsx`.
-2. **`c7ca74d`**: `merge: integrar HU-16 (rediseño perfil tutor/mentor en Tailwind y navegacion integrada) en develop (#23)`
-   * Elimina `TutorProfileForm.css`.
-   * Resuelve el conflicto en `RoleDashboardPage.jsx` unificando HU-12 y HU-16.
-3. **`f75311e`**: `fix(frontend): consolidar limpieza de etiquetas tecnicas de usuario y formato en postulacion (#21, #22)`
-   * Limpia referencias técnicas en formularios y vistas de equipo (`EquipoForm.jsx`, `MiEquipoView.jsx`).
-   * Normaliza identaciones en `FormularioPostulacion.jsx`.
-4. **`docs & readme`**: Actualización de `README.md` con las historias HU-12 y HU-16 y generación de este informe.
-
----
-
-## 6. Pruebas y Prevención de Regresiones
-
-### 6.1 Verificación Estática y Sintáctica del Frontend
-* Se ejecutó el escáner de validación AST sobre los 39 archivos JS/JSX del proyecto:
-  * **Marcadores de conflicto (`<<<<<<<`, `=======`, `>>>>>>>`):** 0 encontrados (Aprobado).
-  * **Referencias a hojas de estilo eliminadas (`TutorProfileForm.css`):** 0 encontradas (Aprobado).
-  * **Integridad de importaciones cruzadas (`AlertasPage`, `TutorProfileForm`, `MainLayout`, `ErrorBoundary`):** Verificada.
-
-### 6.2 Suite de Pruebas Automatizadas del Backend
-* El backend cuenta con 45 pruebas unitarias y de integración en `gestion_convocatorias/tests.py` y `gestion_administrativa/tests.py`:
-  * Pruebas de autenticación con Google Workspace y rechazo de dominios externos.
-  * Pruebas de generación y validación de tokens JWT con roles múltiples.
-  * Pruebas de ciclo de vida de convocatorias (apertura, edición, cierre automático).
-  * Pruebas de reglas de negocio para equipos e iniciativas (HU-03 / HU-04).
-  * Pruebas de generación de alertas condicionadas a convocatorias activas (HU-12).
+### 3.2 Revisión de PR #27 (`fix/Mejora-Autenticacion-Permisos`)
+* **Objetivo:** Soportar múltiples roles activos dentro del token JWT (`roles`) y en la clase de permisos `TieneRolPermitido`, de modo que un usuario con varios roles asignados pueda conmutar de rol en la interfaz (`MainLayout`) y consumir los endpoints autorizados para cualquiera de sus roles activos sin recibir errores `403 Forbidden`.
+* **Análisis de Commits de la Rama (`03470a6..708aabf`):**
+  1. `032c18f` y `dd85fe0` (5 de oct.): Versión preliminar de `backend/gestion_emprendimiento_2`. En `develop`, esta funcionalidad ya fue integrada y ampliada en el PR #20 (`8c1a0d9` / `d52a5e7`) y en `fe0321e` (incluyendo relación con `Iniciativa`, migración `0003`, notificaciones y 12 pruebas unitarias). Además, `dd85fe0` contenía una referencia obsoleta a `EstudianteEmprendedor` en `EquipoMiembroView.delete` que ya estaba corregida en `develop`.
+  2. `26d68eb` (14 de oct.): Mejora de autenticación JWT multi-rol en `jwt_utils.py`, `authentication.py`, `permissions.py` y `views.py`.
+  3. `708aabf` (14 de oct.): Eliminaba `Permiso` y `RolPermiso` de `backend/gestion_administrativa/models.py` sin eliminar sus importaciones en `admin.py` ni generar migración, lo cual causaría `ImportError` al iniciar Django y desalineación con `0001_initial.py`.
+* **Hallazgos Críticos y Ajustes de Compatibilidad Aplicados en la Integración:**
+  1. **Resolución de conflictos en `backend/gestion_emprendimiento_2/` y `backend/core/settings.py`:** Se conservó la versión completa y evolucionada de `develop` (`HEAD`), evitando duplicar `'gestion_emprendimiento_2'` en `INSTALLED_APPS` y preservando las reglas de negocio HU-03/HU-04 y sus pruebas.
+  2. **Integridad de modelos en `backend/gestion_administrativa/models.py`:** Se conservaron los modelos `Permiso` y `RolPermiso` requeridos por `admin.py` y `migrations/0001_initial.py`.
+  3. **Firma retrocompatible en `jwt_utils.py` (`generar_token(usuario, rol=None)`):**
+     * Consulta los roles activos del usuario en `UsuarioRol` y construye un payload JWT que incluye simultáneamente `"roles": roles_activos` (lista multi-rol de PR #27) y `"rol": rol_principal` (compatibilidad con vistas y suites de pruebas existentes).
+     * Permite invocar `generar_token(usuario)` (con 1 argumento, estilo PR #27) o `generar_token(usuario, "coordinador")` (con 2 argumentos, estilo existente).
+  4. **Autenticación unificada en `authentication.py` (`JWTAuthentication`):**
+     * Valida tokens con `"roles"` y/o `"rol"`, verifica en base de datos que los roles distintos de `"estudiante"` sigan activos en `UsuarioRol`, e inyecta en `request.user` los tres atributos utilizados en el proyecto: `usuario.roles_activos`, `usuario.roles_asignados` y `usuario.rol_activo`.
+  5. **Permisos multi-rol en `permissions.py` (`TieneRolPermitido`):**
+     * Evalúa `any(rol in roles_vista for rol in roles_usuario)` combinando `usuario.roles_activos` y `usuario.rol_activo` (así como el fallback en `request.auth`).
+  6. **Contrato de respuesta en `views.py` (`GoogleLogin` y `PerfilUsuarioView`) y `AuthContext.jsx`:**
+     * Retorna simultáneamente `"rol"`, `"roles"` y `"roles_asignados"` para mantener compatibilidad total tanto con `AuthContext.jsx` y `LoginPage.jsx` como con consumidores que lean `usuario.roles`.
+* **Veredicto:** **Aprobado con resolución de conflictos y ajustes de compatibilidad (`a237606`).**
 
 ---
 
-## 7. Estado de Sincronización Local vs Remoto y Límites de Actuación
+## 4. Trazabilidad de Commits Integrados en `develop` (Fase 4 y Fase 5)
 
-### 7.1 Estado Actual
-* **Localmente:** La rama `develop` contiene todas las integraciones, resoluciones de conflicto, limpiezas y documentación terminada.
-* **Remotamente en GitHub:** Los PRs #21, #22, #23 y #24 permanecen registrados en GitHub en espera del envío de los commits de `develop`.
+1. **`eb15f04`**: `merge: integrar PR #26 (mantener rol admin al navegar a emprendimientos y config en dashboard) en develop (#26)`
+   * Padre 1: `3998e3e` (`develop`)
+   * Padre 2: `7de1171` (`origin/fix/admin-navegacion-emprendimientos`)
+2. **`a237606`**: `merge: integrar PR #27 (mejora autenticacion JWT multirol y permisos) en develop (#27)`
+   * Padre 1: `eb15f04` (`develop`)
+   * Padre 2: `708aabf` (`origin/fix/Mejora-Autenticacion-Permisos`)
+   * Archivos modificados en el merge:
+     * `backend/gestion_administrativa/jwt_utils.py`
+     * `backend/gestion_administrativa/authentication.py`
+     * `backend/gestion_administrativa/permissions.py`
+     * `backend/gestion_administrativa/views.py`
+     * `backend/gestion_administrativa/tests.py` (nueva prueba unitaria `test_jwt_multiroles_sin_especificar_rol_en_generar_token_y_acceso_cruzado`)
+     * `frontend/src/context/AuthContext.jsx`
 
-### 7.2 Límite de Permisos Identificado (Acción Requerida del Usuario)
-* Al ejecutar la comprobación de push remoto en modo no interactivo (`git push --dry-run origin develop`), Git Credential Manager no dispone de credenciales en caché o token de acceso personal (PAT) en el entorno del proceso actual (`fatal: could not read Username for 'https://github.com': No such file or directory`).
-* De acuerdo con la **FASE 9 (Seguridad y límites de actuación)**, no se forzaron credenciales ni se alteraron políticas de autenticación.
-
-### 7.3 Instrucción para Envío a GitHub
-Para reflejar inmediatamente la integración en el repositorio remoto de GitHub y disparar el despliegue automático a Cloudflare Pages, ejecute en su terminal:
-
-```powershell
-git checkout develop
-git push origin develop
-```
-
-Una vez ejecutado el push:
-1. **PR #24** y **PR #22** quedarán automáticamente integrados en `develop`.
-2. **PR #23** y **PR #21** pueden cerrarse en GitHub con la nota:
-   > *"Cambios integrados y consolidados exitosamente en `develop` mediante los commits 3c0d68c, c7ca74d y f75311e. Se resolvió la discrepancia de rama base (main -> develop)."*
+*(Nota histórica: La primera oleada de auditoría consolidó los commits `3c0d68c` para PR #24, `c7ca74d` para PR #23 y `f75311e` para PR #21/#22).*
 
 ---
 
-## 8. Conclusiones y Próximos Pasos
+## 5. Pruebas Ejecutadas y Prevención de Regresiones (Fase 6)
 
-El repositorio ha sido completamente saneado en su rama troncal de desarrollo:
-1. No se perdió ninguna funcionalidad de las historias de usuario propuestas.
-2. Se eliminó código muerto (CSS no estándar) y se unificó la estética del sistema en Tailwind.
-3. Se blindó la navegación ante conmutaciones de rol en vivo.
-4. Toda decisión queda auditada y soportada en este informe y en el historial de commits de Git.
+Todas las validaciones se ejecutaron en contenedores aislados de Docker sobre el código integrado en `develop`:
+
+| Categoría | Comando Ejecutado | Resultado Real | Detalles |
+| :--- | :--- | :---: | :--- |
+| **Verificación de Sistema Django** | `python manage.py check` | **EXITOSO (0)** | `System check identified no issues (0 silenced).` |
+| **Consistencia de Migraciones** | `python manage.py makemigrations --check --dry-run` | **EXITOSO (0)** | `No changes detected` (modelos 100% alineados con migraciones). |
+| **Suite Unitaria e Integración Backend** | `python manage.py test -v 2` | **EXITOSO (46/46)** | `Ran 46 tests in 0.520s — OK` (`gestion_administrativa`, `gestion_acompaniamiento`, `gestion_convocatorias`, `gestion_emprendimiento_2`). |
+| **Linter Frontend (Oxlint)** | `npm run lint` | **EXITOSO (0 errores)** | `Found 35 warnings and 0 errors. Finished in 199ms on 42 files.` |
+| **Build Producción Frontend (Vite)** | `npm run build` | **EXITOSO (0)** | `✓ 2018 modules transformed. ✓ built in 7.78s` (`dist/index.html`, CSS y JS generados). |
+| **Auditoría Seguridad Dependencias** | `npm audit --omit=dev` | **EXITOSO (0)** | `found 0 vulnerabilities` en dependencias de producción. |
+
+---
+
+## 6. Estado Final de Sincronización y Auditoría de GitHub (Fase 8 y Fase 9)
+
+* **Sincronización Local ↔ Remoto:** La rama local `develop` y `origin/develop` están 100% sincronizadas.
+* **Estado de Pull Requests en GitHub:**
+  * **PR #26:** Cerrado y marcado automáticamente como **Merged** en GitHub al incorporar el commit `7de1171` en `origin/develop`.
+  * **PR #27:** Cerrado y marcado automáticamente como **Merged** en GitHub al incorporar el commit `708aabf` en `origin/develop`.
+  * **Total de PRs abiertos restantes en GitHub:** **0**.
+* **Seguridad:** No se expusieron credenciales ni archivos `.env`, no se alteraron reglas de protección de ramas en GitHub y no se ejecutaron comandos destructivos ni force-pushes.
