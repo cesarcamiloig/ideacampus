@@ -16,6 +16,7 @@ import {
 import {
   getTodasLasIniciativas,
   cambiarEstadoIniciativa,
+  getCoordinadores,
 } from "../services/postulacionService";
 import DetalleExpedienteModal from "./DetalleExpedienteModal";
 
@@ -30,6 +31,11 @@ export default function BancoIniciativasView() {
   const [expedienteSeleccionado, setExpedienteSeleccionado] = useState(null);
   const [accionConfirmacion, setAccionConfirmacion] = useState(null); // { iniciativa, accion: 'aprobada' | 'rechazada' }
   const [procesandoAccion, setProcesandoAccion] = useState(false);
+
+  // Coordinadores disponibles para asignar al proyecto al aprobar
+  const [coordinadores, setCoordinadores] = useState([]);
+  const [cargandoCoordinadores, setCargandoCoordinadores] = useState(false);
+  const [coordinadorSeleccionado, setCoordinadorSeleccionado] = useState("");
 
   // Mensajes de feedback
   const [mensajeExito, setMensajeExito] = useState("");
@@ -53,14 +59,30 @@ export default function BancoIniciativasView() {
     cargarIniciativas();
   }, []);
 
+  // Al abrir el modal de aprobación se cargan los coordinadores disponibles
+  useEffect(() => {
+    setCoordinadorSeleccionado("");
+    if (accionConfirmacion?.accion !== "aprobada") return;
+
+    setCargandoCoordinadores(true);
+    getCoordinadores()
+      .then(setCoordinadores)
+      .catch((err) => {
+        setCoordinadores([]);
+        setMensajeError(err.message || "No se pudo cargar la lista de coordinadores.");
+      })
+      .finally(() => setCargandoCoordinadores(false));
+  }, [accionConfirmacion]);
+
   const handleCambiarEstado = async (iniciativa, nuevoEstado) => {
     setProcesandoAccion(true);
     setMensajeError("");
     setMensajeExito("");
     try {
-      const actualizada = await cambiarEstadoIniciativa(
+      await cambiarEstadoIniciativa(
         iniciativa.id_iniciativa || iniciativa.id,
-        nuevoEstado
+        nuevoEstado,
+        nuevoEstado === "aprobada" ? coordinadorSeleccionado : null
       );
       setMensajeExito(
         `Iniciativa "${iniciativa.iniciativa?.titulo || iniciativa.nombre}" ${
@@ -153,7 +175,7 @@ export default function BancoIniciativasView() {
           <div>
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-bold uppercase tracking-wider text-red-600">
-                Coordinación de Emprendimiento · HU-03 / HU-04
+                Coordinación de Emprendimiento
               </span>
             </div>
             <h2 className="text-xl font-bold text-slate-900">
@@ -472,9 +494,55 @@ export default function BancoIniciativasView() {
               ) : (
                 <>
                   Al marcar como <strong>rechazada</strong>, el estudiante no podrá conformar un equipo para esta postulación y será notificado del resultado.
+                  {["aprobada", "aprobado", "aceptada", "aceptado"].includes(
+                    (accionConfirmacion.iniciativa.estado || "").toLowerCase()
+                  ) && (
+                    <>
+                      {" "}Como la iniciativa ya estaba aprobada,{" "}
+                      <strong>se eliminará su proyecto</strong> y sus asignaciones de
+                      coordinador, tutor y mentores.
+                    </>
+                  )}
                 </>
               )}
             </p>
+
+            {accionConfirmacion.accion === "aprobada" && (
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="coordinador-proyecto"
+                  className="block text-xs font-semibold text-slate-700"
+                >
+                  Coordinador a cargo del proyecto <span className="text-red-600">*</span>
+                </label>
+                {cargandoCoordinadores ? (
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Cargando coordinadores...
+                  </div>
+                ) : coordinadores.length === 0 ? (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-2.5">
+                    No hay coordinadores activos registrados. Asigna el rol de coordinador a un
+                    usuario para poder aprobar la iniciativa.
+                  </p>
+                ) : (
+                  <select
+                    id="coordinador-proyecto"
+                    value={coordinadorSeleccionado}
+                    onChange={(e) => setCoordinadorSeleccionado(e.target.value)}
+                    disabled={procesandoAccion}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  >
+                    <option value="">Selecciona un coordinador...</option>
+                    {coordinadores.map((c) => (
+                      <option key={c.id_usuario} value={c.id_usuario}>
+                        {c.nombre} — {c.correo}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
               <button
@@ -493,8 +561,11 @@ export default function BancoIniciativasView() {
                     accionConfirmacion.accion
                   )
                 }
-                disabled={procesandoAccion}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white shadow-sm transition-colors ${
+                disabled={
+                  procesandoAccion ||
+                  (accionConfirmacion.accion === "aprobada" && !coordinadorSeleccionado)
+                }
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                   accionConfirmacion.accion === "aprobada"
                     ? "bg-emerald-600 hover:bg-emerald-700"
                     : "bg-red-600 hover:bg-red-700"

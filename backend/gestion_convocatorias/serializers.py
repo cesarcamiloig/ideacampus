@@ -1,6 +1,6 @@
 import os
 from rest_framework import serializers
-from .models import Convocatoria, NotificacionConvocatoria, Iniciativa, DocumentoPostulacion
+from .models import Convocatoria, NotificacionConvocatoria, Iniciativa, DocumentoPostulacion, AlertaRol
 
 
 class ConvocatoriaSerializer(serializers.ModelSerializer):
@@ -71,6 +71,49 @@ class NotificacionConvocatoriaSerializer(serializers.ModelSerializer):
 
     def get_convocatoria_nombre(self, obj):
         return obj.convocatoria.nombre if obj.convocatoria else None
+
+
+class AlertaRolSerializer(serializers.ModelSerializer):
+    convocatoria_nombre = serializers.SerializerMethodField(read_only=True)
+    dias_restantes = serializers.SerializerMethodField(read_only=True)
+    esta_vencida = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = AlertaRol
+        fields = [
+            'id_alerta',
+            'usuario',
+            'convocatoria',
+            'convocatoria_nombre',
+            'titulo',
+            'mensaje',
+            'rol_destinatario',
+            'tipo',
+            'prioridad',
+            'fecha_vencimiento',
+            'modulo_destino',
+            'leida',
+            'fecha_creacion',
+            'dias_restantes',
+            'esta_vencida',
+        ]
+        read_only_fields = ['id_alerta', 'usuario', 'fecha_creacion']
+
+    def get_convocatoria_nombre(self, obj):
+        return obj.convocatoria.nombre if obj.convocatoria else None
+
+    def get_dias_restantes(self, obj):
+        if not obj.fecha_vencimiento:
+            return None
+        from django.utils import timezone
+        diff = obj.fecha_vencimiento - timezone.now()
+        return diff.days
+
+    def get_esta_vencida(self, obj):
+        if not obj.fecha_vencimiento:
+            return False
+        from django.utils import timezone
+        return timezone.now() > obj.fecha_vencimiento
 
 
 class DocumentoPostulacionSerializer(serializers.ModelSerializer):

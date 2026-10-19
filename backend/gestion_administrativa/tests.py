@@ -132,6 +132,7 @@ class AuthTests(TestCase):
         self.assertEqual(res_ok.status_code, 200)
         self.assertEqual(res_ok.data["usuario"]["rol"], "admin")
         self.assertCountEqual(res_ok.data["usuario"]["roles_asignados"], ["estudiante", "admin"])
+        self.assertCountEqual(res_ok.data["usuario"]["roles"], ["estudiante", "admin"])
 
         token_admin = res_ok.data["token"]
         req_admin = self.factory.get("/admin-only/", HTTP_AUTHORIZATION=f"Bearer {token_admin}")
@@ -142,6 +143,27 @@ class AuthTests(TestCase):
         req_multi = self.factory.get("/multi/", HTTP_AUTHORIZATION=f"Bearer {token_admin}")
         res_multi = self.multi_role_view(req_multi)
         self.assertEqual(res_multi.status_code, 200)
+
+    def test_jwt_multiroles_sin_especificar_rol_en_generar_token_y_acceso_cruzado(self):
+        usuario_multi = Usuario.objects.create(
+            nombre="Usuario MultiRol",
+            correo="multirole@ufps.edu.co",
+            google_id="google-multi-1",
+            estado="activo",
+        )
+        UsuarioRol.objects.create(usuario=usuario_multi, rol=self.rol_estudiante, estado="activo")
+        UsuarioRol.objects.create(usuario=usuario_multi, rol=self.rol_admin, estado="activo")
+
+        # Generar token invocando generar_token(usuario) sin segundo argumento (PR #27)
+        token = generar_token(usuario_multi)
+        payload = verificar_token(token)
+        self.assertIsNotNone(payload)
+        self.assertCountEqual(payload["roles"], ["estudiante", "admin"])
+
+        # Acceso permitido a vista de admin gracias a la lista de roles activos en el JWT
+        req_admin = self.factory.get("/admin-only/", HTTP_AUTHORIZATION=f"Bearer {token}")
+        res_admin = self.admin_only_view(req_admin)
+        self.assertEqual(res_admin.status_code, 200)
 
 
 from rest_framework import status

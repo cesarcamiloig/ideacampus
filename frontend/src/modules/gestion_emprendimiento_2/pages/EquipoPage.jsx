@@ -89,7 +89,7 @@ export default function EquipoPage({ onIrAConvocatorias }) {
             </div>
             <div>
               <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">
-                Requisito Institucional · HU-03 & HU-04
+                Requisito Institucional
               </span>
               <h3 className="text-lg font-bold text-slate-900 mt-0.5">
                 Iniciativa Aprobada Requerida para Registrar Equipo

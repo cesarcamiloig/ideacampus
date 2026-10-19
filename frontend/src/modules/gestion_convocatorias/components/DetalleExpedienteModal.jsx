@@ -142,7 +142,7 @@ export default function DetalleExpedienteModal({ postulacion, onCerrar }) {
           <div className="rounded-xl border border-slate-200 p-4 space-y-3 bg-slate-50/50">
             <div className="flex items-center gap-2 text-slate-800 font-bold uppercase tracking-wider text-[11px]">
               <GraduationCap className="h-4 w-4 text-red-600" />
-              <span>Declaración de Origen Académico (HU-03)</span>
+              <span>Declaración de Origen Académico</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">

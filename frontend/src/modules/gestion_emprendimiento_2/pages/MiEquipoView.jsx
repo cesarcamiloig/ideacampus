@@ -201,7 +201,7 @@ export default function MiEquipoView({ equipo, onActualizarEquipo }) {
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
                 <Users className="h-3.5 w-3.5" />
-                Equipo Emprendedor Registrado (HU-04)
+                Equipo Emprendedor Registrado
               </span>
               {esLider && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-bold text-amber-700">
@@ -285,7 +285,7 @@ export default function MiEquipoView({ equipo, onActualizarEquipo }) {
           </div>
         </div>
 
-        {/* INICIATIVA APROBADA ASOCIADA (HU-03 / HU-04) */}
+        {/* INICIATIVA APROBADA ASOCIADA */}
         {equipo.iniciativa ? (
           <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -352,7 +352,7 @@ export default function MiEquipoView({ equipo, onActualizarEquipo }) {
             </h3>
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                 <tr>

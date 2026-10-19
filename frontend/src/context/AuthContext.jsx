@@ -24,9 +24,9 @@ export function AuthProvider({ children }) {
   }
 
   const isAuthenticated = Boolean(token);
-  const rolActivo = usuario?.rol || null;
+  const rolActivo = usuario?.rol || ( Array.isArray(usuario?.roles) ? usuario.roles[0] : null ) || null;
   const rolesAsignados =
-    usuario?.roles_asignados || (usuario?.rol ? [usuario.rol] : []);
+    usuario?.roles_asignados || usuario?.roles || (usuario?.rol ? [usuario.rol] : []);
 
   function hasRole(rolesRequeridos) {
     if (!rolActivo) return false;

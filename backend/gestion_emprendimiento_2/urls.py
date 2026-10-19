@@ -5,6 +5,8 @@ from .views import (
     MiEquipoView,
     EquipoDetalleView,
     EquipoMiembroView,
+    EvaluadoresDisponiblesView,
+    AsignarEvaluadorView,
 )
 
 urlpatterns = [
@@ -14,4 +16,6 @@ urlpatterns = [
     path('equipos/<int:id_equipo>/', EquipoDetalleView.as_view(), name='equipo_detalle'),
     path('equipos/<int:id_equipo>/miembros/', EquipoMiembroView.as_view(), name='equipo_agregar_miembro'),
     path('equipos/<int:id_equipo>/miembros/<int:id_usuario>/', EquipoMiembroView.as_view(), name='equipo_eliminar_miembro'),
+    path('proyectos/evaluadores/', EvaluadoresDisponiblesView.as_view(), name='evaluadores_disponibles'),
+    path('proyectos/<int:id_proyecto>/evaluador/', AsignarEvaluadorView.as_view(), name='proyecto_asignar_evaluador'),
 ]

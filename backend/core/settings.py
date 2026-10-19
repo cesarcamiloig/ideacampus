@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'gestion_acompaniamiento',
     'gestion_convocatorias',
     'gestion_emprendimiento_2',
+    'gestion_evaluacion',
     'django.contrib.sites',
     'allauth',
     'allauth.account',

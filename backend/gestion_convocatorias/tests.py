@@ -11,8 +11,13 @@ from .models import (
     DocumentoPostulacion,
     Iniciativa,
     NotificacionConvocatoria,
+    AlertaRol,
 )
-from .services import actualizar_estados_convocatorias, notificar_apertura
+from .services import (
+    actualizar_estados_convocatorias,
+    notificar_apertura,
+    generar_alertas_automaticas_por_rol,
+)
 
 
 class GestionConvocatoriasTests(APITestCase):
@@ -299,8 +304,8 @@ class GestionConvocatoriasTests(APITestCase):
         res = self.client.post("/api/iniciativas/", payload, format="json")
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_coordinador_aprueba_iniciativa_y_notifica_estudiante(self):
-        """El coordinador puede evaluar y aprobar una iniciativa (HU-03)."""
+    def test_direccion_aprueba_iniciativa_y_notifica_estudiante(self):
+        """La Dirección del Programa puede evaluar y aprobar una iniciativa (HU-03)."""
         from .models import Iniciativa
         now = timezone.now()
         conv = Convocatoria.objects.create(
@@ -318,12 +323,27 @@ class GestionConvocatoriasTests(APITestCase):
             estado="pendiente"
         )
 
-        # Coordinador aprueba iniciativa vía cambiar-estado
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_direccion}")
+        url = f"/api/iniciativas/{iniciativa.id_iniciativa}/cambiar-estado/"
+
+        # La lista de coordinadores disponibles incluye al coordinador activo
+        res = self.client.get("/api/iniciativas/coordinadores/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn(self.coordinador.id_usuario, [c["id_usuario"] for c in res.data])
+
+        # Aprobar sin coordinador o con un usuario que no es coordinador se rechaza
+        res = self.client.patch(url, {"estado": "aprobada"}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         res = self.client.patch(
-            f"/api/iniciativas/{iniciativa.id_iniciativa}/cambiar-estado/",
-            {"estado": "aprobada"},
-            format="json"
+            url, {"estado": "aprobada", "id_coordinador": self.estudiante.id_usuario}, format="json"
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        iniciativa.refresh_from_db()
+        self.assertEqual(iniciativa.estado, "pendiente")
+
+        # Dirección del Programa aprueba iniciativa vía cambiar-estado eligiendo coordinador
+        res = self.client.patch(
+            url, {"estado": "aprobada", "id_coordinador": self.coordinador.id_usuario}, format="json"
         )
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["estado"], "aprobada")
@@ -331,10 +351,72 @@ class GestionConvocatoriasTests(APITestCase):
         iniciativa.refresh_from_db()
         self.assertEqual(iniciativa.estado, "aprobada")
 
+        # Al aprobarse se crea oficialmente el proyecto con el coordinador elegido
+        from gestion_emprendimiento_2.models import Proyecto
+        proyecto = Proyecto.objects.get(iniciativa=iniciativa)
+        self.assertEqual(proyecto.nombre_proyecto, "Plataforma de IA")
+        self.assertEqual(proyecto.coordinador, self.coordinador)
+        self.assertIsNone(proyecto.evaluador)
+        self.assertIsNone(proyecto.tutor)
+        self.assertEqual(proyecto.mentores.count(), 0)
+
+        # Aprobar de nuevo no duplica el proyecto
+        self.client.patch(
+            url, {"estado": "aprobada", "id_coordinador": self.coordinador.id_usuario}, format="json"
+        )
+        self.assertEqual(Proyecto.objects.filter(iniciativa=iniciativa).count(), 1)
+
+        # Al rechazarla se elimina el proyecto
+        res = self.client.patch(url, {"estado": "rechazada"}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertFalse(Proyecto.objects.filter(iniciativa=iniciativa).exists())
+
+        # Si se aprueba de nuevo, el proyecto se vuelve a crear
+        res = self.client.patch(
+            url, {"estado": "aprobada", "id_coordinador": self.coordinador.id_usuario}, format="json"
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        proyecto = Proyecto.objects.get(iniciativa=iniciativa)
+        self.assertEqual(proyecto.coordinador, self.coordinador)
+
         # Verificar notificación de felicitación al estudiante
         notif = NotificacionConvocatoria.objects.filter(usuario=self.estudiante, tipo="apertura").first()
         self.assertIsNotNone(notif)
         self.assertIn("Aprobada", notif.titulo)
+
+    def test_aprobar_fuera_de_la_api_tambien_crea_proyecto(self):
+        """Aprobar guardando el modelo directamente (p. ej. desde el admin) crea el proyecto."""
+        from .models import Iniciativa
+        from gestion_emprendimiento_2.models import Proyecto
+        now = timezone.now()
+        conv = Convocatoria.objects.create(
+            nombre="Convocatoria Abierta",
+            fecha_apertura=now - timedelta(days=2),
+            fecha_cierre=now + timedelta(days=10),
+            estado="abierta",
+        )
+        iniciativa = Iniciativa.objects.create(
+            convocatoria=conv,
+            usuario=self.estudiante,
+            nombre="App de Reciclaje",
+            descripcion="Gestión de residuos en el campus",
+            tipo="emprendimiento",
+            origen_academico="asignatura",
+            estado="pendiente"
+        )
+        self.assertFalse(Proyecto.objects.filter(iniciativa=iniciativa).exists())
+
+        iniciativa.estado = "aprobada"
+        iniciativa.save()
+
+        proyecto = Proyecto.objects.get(iniciativa=iniciativa)
+        self.assertEqual(proyecto.nombre_proyecto, "App de Reciclaje")
+        self.assertEqual(proyecto.descripcion, "Gestión de residuos en el campus")
+
+        # Rechazarla fuera de la API también elimina el proyecto
+        iniciativa.estado = "rechazada"
+        iniciativa.save()
+        self.assertFalse(Proyecto.objects.filter(iniciativa=iniciativa).exists())
 
     def test_estudiante_no_puede_autoaprobar_iniciativa(self):
         """Un estudiante NO tiene permiso para aprobar su propia iniciativa."""
@@ -469,3 +551,119 @@ class GestionConvocatoriasTests(APITestCase):
         self.assertIn("attachment", response["Content-Disposition"])
         self.assertIn("propuesta.pdf", response["Content-Disposition"])
         self.assertEqual(b"".join(response.streaming_content), b"%PDF-1.4 prueba")
+
+    # ==========================================
+    # PRUEBAS HU-12: ALERTAS AUTOMÁTICAS POR ROL
+    # ==========================================
+
+    def test_generacion_automatica_alertas_por_vencimiento_convocatoria(self):
+        """Verifica que convocatorias próximas a vencer generen alertas automáticas para estudiantes."""
+        convocatoria_urgente = Convocatoria.objects.create(
+            nombre="Convocatoria Por Vencer",
+            fecha_apertura=timezone.now() - timedelta(days=5),
+            fecha_cierre=timezone.now() + timedelta(hours=20),
+            estado="abierta",
+        )
+        generadas = generar_alertas_automaticas_por_rol(self.estudiante)
+        self.assertGreaterEqual(generadas, 1)
+
+        alerta = AlertaRol.objects.filter(
+            usuario=self.estudiante,
+            convocatoria=convocatoria_urgente,
+            prioridad="alta"
+        ).first()
+        self.assertIsNotNone(alerta)
+        self.assertIn("Vencimiento Crítico", alerta.titulo)
+        self.assertEqual(alerta.rol_destinatario, "estudiante")
+        self.assertFalse(alerta.leida)
+
+    def test_listado_alertas_endpoint_con_filtros(self):
+        """Verifica el endpoint GET /api/alertas/ con filtros por prioridad y lectura."""
+        AlertaRol.objects.create(
+            usuario=self.estudiante,
+            titulo="Alerta Urgente",
+            mensaje="Mensaje urgente",
+            rol_destinatario="estudiante",
+            prioridad="alta",
+            leida=False,
+            fecha_vencimiento=timezone.now() + timedelta(days=1),
+        )
+        AlertaRol.objects.create(
+            usuario=self.estudiante,
+            titulo="Alerta Informativa Leída",
+            mensaje="Mensaje informativo",
+            rol_destinatario="estudiante",
+            prioridad="baja",
+            leida=True,
+            fecha_vencimiento=timezone.now() + timedelta(days=10),
+        )
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_estudiante}")
+
+        # 1. Listar todas
+        res = self.client.get("/api/alertas/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(len(res.data), 2)
+
+        # 2. Filtrar solo no leídas
+        res_no_leidas = self.client.get("/api/alertas/?leida=false")
+        self.assertEqual(res_no_leidas.status_code, status.HTTP_200_OK)
+        for item in res_no_leidas.data:
+            self.assertFalse(item["leida"])
+
+        # 3. Filtrar por prioridad alta
+        res_alta = self.client.get("/api/alertas/?prioridad=alta")
+        self.assertEqual(res_alta.status_code, status.HTTP_200_OK)
+        for item in res_alta.data:
+            self.assertEqual(item["prioridad"], "alta")
+
+    def test_marcar_alerta_leida_y_marcar_todas(self):
+        """Verifica las acciones de marcar como leída individual y masivamente."""
+        alerta1 = AlertaRol.objects.create(
+            usuario=self.estudiante,
+            titulo="Compromiso 1",
+            mensaje="Mensaje 1",
+            prioridad="media",
+            leida=False,
+        )
+        alerta2 = AlertaRol.objects.create(
+            usuario=self.estudiante,
+            titulo="Compromiso 2",
+            mensaje="Mensaje 2",
+            prioridad="alta",
+            leida=False,
+        )
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_estudiante}")
+
+        # Marcar individual
+        res_individual = self.client.patch(f"/api/alertas/{alerta1.id_alerta}/leer/", {"leida": True})
+        self.assertEqual(res_individual.status_code, status.HTTP_200_OK)
+        alerta1.refresh_from_db()
+        self.assertTrue(alerta1.leida)
+
+        # Marcar todas leídas
+        res_todas = self.client.post("/api/alertas/marcar_todas_leidas/")
+        self.assertEqual(res_todas.status_code, status.HTTP_200_OK)
+        alerta2.refresh_from_db()
+        self.assertTrue(alerta2.leida)
+
+    def test_resumen_indicadores_alertas(self):
+        """Verifica el endpoint GET /api/alertas/resumen/ con métricas de alertas."""
+        AlertaRol.objects.create(
+            usuario=self.estudiante,
+            titulo="Alerta Resumen",
+            mensaje="Detalle",
+            prioridad="alta",
+            leida=False,
+            fecha_vencimiento=timezone.now() + timedelta(days=1),
+        )
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_estudiante}")
+        res = self.client.get("/api/alertas/resumen/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn("total", res.data)
+        self.assertIn("no_leidas", res.data)
+        self.assertIn("alta_prioridad", res.data)
+        self.assertGreaterEqual(res.data["total"], 1)
+        self.assertGreaterEqual(res.data["no_leidas"], 1)

@@ -155,3 +155,63 @@ class DocumentoPostulacion(models.Model):
 
     def __str__(self):
         return f"{self.nombre_original} - Iniciativa #{self.iniciativa_id}"
+
+
+class AlertaRol(models.Model):
+    PRIORIDADES = (
+        ('alta', 'Alta'),
+        ('media', 'Media'),
+        ('baja', 'Baja'),
+    )
+
+    ROLES = (
+        ('estudiante', 'Estudiante'),
+        ('tutor', 'Tutor'),
+        ('mentor', 'Mentor'),
+        ('evaluador', 'Evaluador'),
+        ('coordinador', 'Coordinador'),
+        ('direccion_del_programa', 'Dirección del Programa'),
+        ('todos', 'Todos los Roles'),
+    )
+
+    TIPOS = (
+        ('vencimiento_convocatoria', 'Vencimiento de Convocatoria'),
+        ('compromiso_tutoria', 'Compromiso de Tutoría'),
+        ('compromiso_mentoria', 'Compromiso de Mentoría'),
+        ('evaluacion_pendiente', 'Evaluación de Iniciativa Pendiente'),
+        ('entrega_documentacion', 'Entrega de Documentación'),
+        ('cierre_periodo', 'Cierre de Periodo Académico'),
+        ('general', 'Aviso General'),
+    )
+
+    id_alerta = models.AutoField(primary_key=True)
+    usuario = models.ForeignKey(
+        Usuario,
+        on_delete=models.CASCADE,
+        db_column='id_usuario',
+        related_name='alertas_rol'
+    )
+    convocatoria = models.ForeignKey(
+        Convocatoria,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column='id_convocatoria',
+        related_name='alertas'
+    )
+    titulo = models.CharField(max_length=200)
+    mensaje = models.TextField()
+    rol_destinatario = models.CharField(max_length=30, choices=ROLES, default='todos')
+    tipo = models.CharField(max_length=40, choices=TIPOS, default='general')
+    prioridad = models.CharField(max_length=10, choices=PRIORIDADES, default='media')
+    fecha_vencimiento = models.DateTimeField(null=True, blank=True)
+    modulo_destino = models.CharField(max_length=50, null=True, blank=True)
+    leida = models.BooleanField(default=False)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'alerta_rol'
+        ordering = ['-fecha_creacion']
+
+    def __str__(self):
+        return f"[{self.prioridad.upper()}] {self.titulo} - Rol: {self.rol_destinatario} ({'Leída' if self.leida else 'No leída'})"

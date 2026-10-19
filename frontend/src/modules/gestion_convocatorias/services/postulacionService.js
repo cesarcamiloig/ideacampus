@@ -3,23 +3,9 @@ import { getConvocatorias, getConvocatoriaById } from "./convocatoriaService";
 
 const STORAGE_PREFIX = "ideacampus:postulaciones:";
 
-const CONVOCATORIAS_FALLBACK = [
-  {
-    id_convocatoria: 1,
-    nombre: "Convocatoria Institucional de Proyectos UFPS 2026",
-    descripcion:
-      "Convocatoria abierta para postulación y registro de iniciativas con declaración de origen académico del Programa de Ingeniería de Sistemas UFPS.",
-    categoria: "Software & Innovación",
-    requisitos_documentacion:
-      "1. Ficha técnica de la solución (PDF)\n2. Carta de aval o soporte de origen académico\n3. Enlace a repositorio o prototipo funcional",
-    criterios_evaluacion:
-      "Innovación técnica (40%), Trazabilidad de origen académico (30%), Madurez tecnológica inicial TRL (30%)",
-    fecha_apertura: "2026-03-01T08:00:00Z",
-    fecha_cierre: "2026-05-30T23:59:59Z",
-    estado: "abierta",
-    periodo_nombre: "Periodo Académico 2026-1",
-  },
-];
+// ==========================================
+// Gestión de Postulaciones e Iniciativas
+// ==========================================
 
 /**
  * Normaliza un objeto devuelto por el backend /iniciativas/ al formato
@@ -85,13 +71,16 @@ function normalizarIniciativaParaUI(item) {
 export async function getConvocatoriasAbiertas(params = {}) {
   try {
     const data = await getConvocatorias({ estado: "abierta", ...params });
-    if (Array.isArray(data) && data.length > 0) {
+    if (Array.isArray(data)) {
       return data;
     }
-    return CONVOCATORIAS_FALLBACK;
+    if (data && Array.isArray(data.results)) {
+      return data.results;
+    }
+    return [];
   } catch (err) {
-    console.warn("Usando catálogo de convocatorias institucionales fallback:", err.message);
-    return CONVOCATORIAS_FALLBACK;
+    console.error("Error al obtener convocatorias abiertas:", err.message);
+    throw err;
   }
 }
 
@@ -105,26 +94,22 @@ export async function getMisPostulaciones(usuario) {
   try {
     const remoteData = await apiClient.get("/iniciativas/");
     const lista = Array.isArray(remoteData) ? remoteData : remoteData?.results || [];
-    if (lista.length > 0) {
-      const normalizadas = lista.map(normalizarIniciativaParaUI);
-      localStorage.setItem(key, JSON.stringify(normalizadas));
-      return normalizadas;
-    }
+    const normalizadas = lista.map(normalizarIniciativaParaUI);
+    localStorage.setItem(key, JSON.stringify(normalizadas));
+    return normalizadas;
   } catch (err) {
     console.warn("No se pudo conectar a /iniciativas/, verificando caché local:", err?.message);
-  }
-
-  // Fallback a almacenamiento local si estuviera sin conexión
-  try {
-    const local = localStorage.getItem(key);
-    if (local) {
-      return JSON.parse(local);
+    // Fallback a almacenamiento local SOLO si hubo error de conexión
+    try {
+      const local = localStorage.getItem(key);
+      if (local) {
+        return JSON.parse(local);
+      }
+    } catch (storageErr) {
+      console.error("Error leyendo postulaciones locales:", storageErr);
     }
-  } catch (err) {
-    console.error("Error leyendo postulaciones locales:", err);
+    return [];
   }
-
-  return [];
 }
 
 /**
@@ -144,12 +129,22 @@ export async function getTodasLasIniciativas() {
 /**
  * Cambia el estado de una iniciativa (aprobada, rechazada, etc.) por parte del coordinador o admin.
  */
-export async function cambiarEstadoIniciativa(idIniciativa, nuevoEstado) {
+export async function cambiarEstadoIniciativa(idIniciativa, nuevoEstado, idCoordinador = null) {
   const id = String(idIniciativa).replace(/^ini-/, "");
-  const response = await apiClient.patch(`/iniciativas/${id}/cambiar-estado/`, {
-    estado: nuevoEstado,
-  });
+  const payload = { estado: nuevoEstado };
+  if (idCoordinador) {
+    payload.id_coordinador = idCoordinador;
+  }
+  const response = await apiClient.patch(`/iniciativas/${id}/cambiar-estado/`, payload);
   return normalizarIniciativaParaUI(response);
+}
+
+/**
+ * Lista los coordinadores activos que pueden asignarse al proyecto al aprobar una iniciativa.
+ */
+export async function getCoordinadores() {
+  const data = await apiClient.get("/iniciativas/coordinadores/");
+  return Array.isArray(data) ? data : [];
 }
 
 /**

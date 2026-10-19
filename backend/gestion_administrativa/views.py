@@ -99,12 +99,11 @@ class GoogleLogin(APIView):
                     status=status.HTTP_403_FORBIDDEN
                 )
 
-            if created:
-                UsuarioRol.objects.get_or_create(
-                    usuario=usuario,
-                    rol=rol_estudiante,
-                    defaults={"estado": "activo"}
-                )
+            UsuarioRol.objects.get_or_create(
+                usuario=usuario,
+                rol=rol_estudiante,
+                defaults={"estado": "activo"}
+            )
 
             if rol.nombre_rol == "estudiante":
                 UsuarioRol.objects.update_or_create(
@@ -139,6 +138,7 @@ class GoogleLogin(APIView):
                 "nombre": usuario.nombre,
                 "correo": usuario.correo,
                 "rol": rol.nombre_rol,
+                "roles": roles_asignados,
                 "roles_asignados": roles_asignados,
             },
             "created": created,
@@ -152,13 +152,18 @@ class PerfilUsuarioView(APIView):
 
     def get(self, request):
         usuario = request.user
-        rol_activo = getattr(usuario, "rol_activo", None)
+        roles_asignados = obtener_roles_activos(usuario)
+        roles_activos = getattr(usuario, "roles_activos", None) or roles_asignados
+        rol_activo = getattr(usuario, "rol_activo", None) or (
+            roles_activos[0] if roles_activos else None
+        )
         return Response({
             "id_usuario": usuario.id_usuario,
             "nombre": usuario.nombre,
             "correo": usuario.correo,
             "rol": rol_activo,
-            "roles_asignados": obtener_roles_activos(usuario),
+            "roles": roles_activos,
+            "roles_asignados": roles_asignados,
         })
 
 

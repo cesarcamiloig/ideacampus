@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { AlertCircle, CheckCircle2, ChevronDown, Save } from "lucide-react";
 import { useAuth } from "../../../context/AuthContext";
 import {
   getCachedTutorProfile,
   getTutorProfile,
   registerTutorProfile,
 } from "../services/tutorService";
-import "./TutorProfileForm.css";
 
 const NIVELES_ACADEMICOS = ["Pregrado", "Especializacion", "Maestria", "Doctorado"];
 
@@ -23,6 +23,16 @@ const initialState = {
   enlacePerfil: "",
   disponibilidad: "",
 };
+
+const INPUT_CLASS =
+  "w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-red-600 focus:outline-none focus:ring-1 focus:ring-red-600 aria-[invalid=true]:border-red-500";
+const READONLY_CLASS =
+  "w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500";
+const LABEL_CLASS = "text-xs font-semibold text-slate-700";
+const HINT_CLASS = "text-[11px] text-slate-500";
+const ERROR_CLASS = "text-xs font-medium text-red-600";
+const SECTION_CLASS =
+  "mb-4 border-b border-slate-100 pb-2 text-[11px] font-bold uppercase tracking-wider text-red-600";
 
 function mapProfileToForm(perfil, esMentor) {
   if (!perfil) return initialState;
@@ -60,16 +70,12 @@ function validate(form, esMentor) {
   return errors;
 }
 
-function ChevronDown() {
-  return (
-    <svg className="tutor-select-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <path d="M4 6l4 4 4-4" stroke="#6B7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
+function Required() {
+  return <span className="text-red-600">*</span>;
 }
 
 function TutorProfileForm() {
-  const { usuario, logout } = useAuth();
+  const { usuario } = useAuth();
   const rolActivo = usuario?.rol?.trim().toLowerCase();
   const esMentor = rolActivo === "mentor";
   const hasEditedForm = useRef(false);
@@ -113,6 +119,20 @@ function TutorProfileForm() {
     const { name, value } = e.target;
     hasEditedForm.current = true;
     setForm((prev) => ({ ...prev, [name]: value }));
+    setStatus("idle");
+  }
+
+  function handleCancel() {
+    hasEditedForm.current = false;
+    setForm(
+      mapProfileToForm(
+        getCachedTutorProfile(rolActivo, usuario?.id_usuario),
+        esMentor
+      )
+    );
+    setErrors({});
+    setStatus("idle");
+    setServerError("");
   }
 
   async function handleSubmit(e) {
@@ -134,6 +154,7 @@ function TutorProfileForm() {
         enlace_perfil: form.enlacePerfil,
         ...(esMentor && { disponibilidad: form.disponibilidad }),
       }, rolActivo, usuario?.id_usuario);
+      hasEditedForm.current = false;
       setStatus("success");
     } catch (err) {
       setStatus("error");
@@ -142,206 +163,218 @@ function TutorProfileForm() {
   }
 
   return (
-    <div className="tutor-page">
-      <header className="tutor-header">
-        <div className="tutor-brand">
-          <div className="tutor-brand-mark">U</div>
-          <div>
-            <div className="tutor-brand-name">GENNOVA</div>
-            <div className="tutor-brand-sub">Universidad Francisco de Paula Santander</div>
-          </div>
-        </div>
-        <div className="tutor-header-actions">
-          <span className="tutor-breadcrumb">
-            HU-16 · Perfil de {esMentor ? "Mentor" : "Tutor"}
-          </span>
-          <button type="button" className="tutor-logout" onClick={logout}>
-            Cerrar sesión
-          </button>
-        </div>
-      </header>
+    <div className="mx-auto w-full max-w-5xl">
+      <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+        {esMentor ? "Mi Perfil Profesional" : "Mi Perfil Académico"}
+      </h1>
+      <p className="mt-1 mb-6 text-sm text-slate-600">
+        Esta información se usa para asignarte a iniciativas acordes a tu área y
+        experiencia. Puedes actualizarla cuando quieras.
+      </p>
 
-      <main className="tutor-layout">
-        <aside className="tutor-aside">
-          <h1>Completa tu perfil académico</h1>
-          <p className="tutor-aside-text">
-            Esta información se usa para asignarte a iniciativas acordes a tu
-            área y experiencia. Puedes actualizarla cuando quieras.
-          </p>
-
-          <div className="tutor-steps">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Guía del formulario */}
+        <aside className="h-fit space-y-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="text-sm font-bold text-slate-900">¿Qué debes completar?</h3>
+          <ol className="space-y-4">
             {STEPS.map((step) => (
-              <div key={step.number} className="tutor-step">
-                <span className="tutor-step-number">{step.number}</span>
+              <li key={step.number} className="flex gap-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-50 text-xs font-bold text-red-600 ring-1 ring-red-200">
+                  {step.number}
+                </span>
                 <div>
-                  <div className="tutor-step-title">{step.title}</div>
-                  <div className="tutor-step-desc">{step.subtitle}</div>
+                  <p className="text-sm font-semibold text-slate-800">{step.title}</p>
+                  <p className="text-xs leading-relaxed text-slate-500">{step.subtitle}</p>
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
-
-          <div className="tutor-required-note">
-            <p>
-              Los campos marcados con <span>*</span> son obligatorios para
-              poder asignarte a una iniciativa.
-            </p>
-          </div>
+          </ol>
+          <p className="rounded-lg border border-slate-100 bg-[#f4f5f7] p-3 text-xs leading-relaxed text-slate-600">
+            Los campos marcados con <Required /> son obligatorios para poder
+            asignarte a una iniciativa.
+          </p>
         </aside>
 
-        <section className="tutor-card">
-          <form onSubmit={handleSubmit} noValidate>
-            <div className="tutor-section-label">Cuenta institucional</div>
-            <div className="tutor-grid-2">
-              <div className="tutor-field">
-                <label id="nombre-label">Nombre completo</label>
-                <div
-                  className="tutor-readonly-name"
-                  role="textbox"
-                  aria-readonly="true"
-                  aria-labelledby="nombre-label"
-                >
-                  {usuario?.nombre || ""}
+        {/* Formulario */}
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
+          <form onSubmit={handleSubmit} noValidate className="space-y-8">
+            <div>
+              <h2 className={SECTION_CLASS}>Cuenta institucional</h2>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <label htmlFor="nombre" className={LABEL_CLASS}>Nombre completo</label>
+                  <input id="nombre" type="text" value={usuario?.nombre || ""} disabled className={READONLY_CLASS} />
                 </div>
-              </div>
-              <div className="tutor-field">
-                <label htmlFor="correo">Correo institucional</label>
-                <input id="correo" type="text" value={usuario?.correo || ""} disabled />
+                <div className="space-y-1">
+                  <label htmlFor="correo" className={LABEL_CLASS}>Correo institucional</label>
+                  <input id="correo" type="text" value={usuario?.correo || ""} disabled className={READONLY_CLASS} />
+                </div>
               </div>
             </div>
 
-            <div className="tutor-section-label">Perfil académico</div>
-            {profileLoadError && (
-              <p className="tutor-error-banner" role="alert">{profileLoadError}</p>
-            )}
+            <div className="space-y-4">
+              <h2 className={SECTION_CLASS}>
+                {esMentor ? "Perfil profesional" : "Perfil académico"}
+              </h2>
 
-            <div className="tutor-field">
-              <label htmlFor="areaEspecializacion">
-                Área de conocimiento o especialización <span className="required">*</span>
-              </label>
-              <input
-                id="areaEspecializacion"
-                name="areaEspecializacion"
-                type="text"
-                placeholder="Ej. Desarrollo de software, Finanzas, Marketing digital"
-                value={form.areaEspecializacion}
-                onChange={handleChange}
-                aria-invalid={Boolean(errors.areaEspecializacion)}
-              />
-              <span className="tutor-hint">Esta es la base para asignarte iniciativas afines.</span>
-              {errors.areaEspecializacion && (
-                <span className="tutor-error" role="alert">{errors.areaEspecializacion}</span>
+              {profileLoadError && (
+                <p className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700" role="alert">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  {profileLoadError}
+                </p>
               )}
-            </div>
 
-            <div className="tutor-grid-2">
-              <div className="tutor-field">
-                <label htmlFor="nivelAcademico">
-                  Nivel académico <span className="required">*</span>
-                </label>
-                <div className="tutor-select-wrap">
-                  <select
-                    id="nivelAcademico"
-                    name="nivelAcademico"
-                    value={form.nivelAcademico}
-                    onChange={handleChange}
-                    aria-invalid={Boolean(errors.nivelAcademico)}
-                  >
-                    <option value="">Selecciona una opción</option>
-                    {NIVELES_ACADEMICOS.map((nivel) => (
-                      <option key={nivel} value={nivel}>{nivel}</option>
-                    ))}
-                  </select>
-                  <ChevronDown />
-                </div>
-                {errors.nivelAcademico && (
-                  <span className="tutor-error" role="alert">{errors.nivelAcademico}</span>
-                )}
-              </div>
-              <div className="tutor-field">
-                <label htmlFor="aniosExperiencia">
-                  Años de experiencia <span className="required">*</span>
+              <div className="space-y-1">
+                <label htmlFor="areaEspecializacion" className={LABEL_CLASS}>
+                  Área de conocimiento o especialización <Required />
                 </label>
                 <input
-                  id="aniosExperiencia"
-                  name="aniosExperiencia"
-                  type="number"
-                  min="0"
-                  max="50"
-                  placeholder="0"
-                  value={form.aniosExperiencia}
-                  onChange={handleChange}
-                  aria-invalid={Boolean(errors.aniosExperiencia)}
-                />
-                {errors.aniosExperiencia && (
-                  <span className="tutor-error" role="alert">{errors.aniosExperiencia}</span>
-                )}
-              </div>
-            </div>
-
-            {esMentor && (
-              <div className="tutor-field">
-                <label htmlFor="disponibilidad">
-                  Disponibilidad <span className="required">*</span>
-                </label>
-                <input
-                  id="disponibilidad"
-                  name="disponibilidad"
+                  id="areaEspecializacion"
+                  name="areaEspecializacion"
                   type="text"
-                  placeholder="Ej. Martes y jueves en la tarde"
-                  value={form.disponibilidad}
+                  placeholder="Ej. Desarrollo de software, Finanzas, Marketing digital"
+                  value={form.areaEspecializacion}
                   onChange={handleChange}
-                  aria-invalid={Boolean(errors.disponibilidad)}
+                  aria-invalid={Boolean(errors.areaEspecializacion)}
+                  className={INPUT_CLASS}
                 />
-                <span className="tutor-hint">Días y horarios en los que puedes acompañar iniciativas.</span>
-                {errors.disponibilidad && (
-                  <span className="tutor-error" role="alert">{errors.disponibilidad}</span>
+                <p className={HINT_CLASS}>Esta es la base para asignarte iniciativas afines.</p>
+                {errors.areaEspecializacion && (
+                  <p className={ERROR_CLASS} role="alert">{errors.areaEspecializacion}</p>
                 )}
               </div>
-            )}
 
-            <div className="tutor-field">
-              <label htmlFor="biografia">Biografía o resumen profesional</label>
-              <textarea
-                id="biografia"
-                name="biografia"
-                rows={4}
-                placeholder="Cuéntanos brevemente tu trayectoria como mentor o tutor..."
-                value={form.biografia}
-                onChange={handleChange}
-              />
-              <span className="tutor-hint">Opcional · visible para quien revise tu asignación.</span>
-            </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <label htmlFor="nivelAcademico" className={LABEL_CLASS}>
+                    Nivel académico <Required />
+                  </label>
+                  <div className="relative">
+                    <select
+                      id="nivelAcademico"
+                      name="nivelAcademico"
+                      value={form.nivelAcademico}
+                      onChange={handleChange}
+                      aria-invalid={Boolean(errors.nivelAcademico)}
+                      className={`${INPUT_CLASS} appearance-none pr-9`}
+                    >
+                      <option value="">Selecciona una opción</option>
+                      {NIVELES_ACADEMICOS.map((nivel) => (
+                        <option key={nivel} value={nivel}>{nivel}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  </div>
+                  {errors.nivelAcademico && (
+                    <p className={ERROR_CLASS} role="alert">{errors.nivelAcademico}</p>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor="aniosExperiencia" className={LABEL_CLASS}>
+                    Años de experiencia <Required />
+                  </label>
+                  <input
+                    id="aniosExperiencia"
+                    name="aniosExperiencia"
+                    type="number"
+                    min="0"
+                    max="50"
+                    placeholder="0"
+                    value={form.aniosExperiencia}
+                    onChange={handleChange}
+                    aria-invalid={Boolean(errors.aniosExperiencia)}
+                    className={INPUT_CLASS}
+                  />
+                  {errors.aniosExperiencia && (
+                    <p className={ERROR_CLASS} role="alert">{errors.aniosExperiencia}</p>
+                  )}
+                </div>
+              </div>
 
-            <div className="tutor-field">
-              <label htmlFor="enlacePerfil">Enlace a CV o LinkedIn</label>
-              <input
-                id="enlacePerfil"
-                name="enlacePerfil"
-                type="url"
-                placeholder="https://"
-                value={form.enlacePerfil}
-                onChange={handleChange}
-              />
-              <span className="tutor-hint">Opcional.</span>
-            </div>
+              {esMentor && (
+                <div className="space-y-1">
+                  <label htmlFor="disponibilidad" className={LABEL_CLASS}>
+                    Disponibilidad <Required />
+                  </label>
+                  <input
+                    id="disponibilidad"
+                    name="disponibilidad"
+                    type="text"
+                    placeholder="Ej. Martes y jueves en la tarde"
+                    value={form.disponibilidad}
+                    onChange={handleChange}
+                    aria-invalid={Boolean(errors.disponibilidad)}
+                    className={INPUT_CLASS}
+                  />
+                  <p className={HINT_CLASS}>Días y horarios en los que puedes acompañar iniciativas.</p>
+                  {errors.disponibilidad && (
+                    <p className={ERROR_CLASS} role="alert">{errors.disponibilidad}</p>
+                  )}
+                </div>
+              )}
 
-            <div className="tutor-actions">
-              <button type="button" className="tutor-cancel">Cancelar</button>
-              <button type="submit" className="tutor-submit" disabled={status === "loading"}>
-                {status === "loading" ? "Guardando..." : "Guardar perfil"}
-              </button>
+              <div className="space-y-1">
+                <label htmlFor="biografia" className={LABEL_CLASS}>Biografía o resumen profesional</label>
+                <textarea
+                  id="biografia"
+                  name="biografia"
+                  rows={4}
+                  placeholder="Cuéntanos brevemente tu trayectoria como mentor o tutor..."
+                  value={form.biografia}
+                  onChange={handleChange}
+                  className={`${INPUT_CLASS} resize-none`}
+                />
+                <p className={HINT_CLASS}>Opcional · visible para quien revise tu asignación.</p>
+              </div>
+
+              <div className="space-y-1">
+                <label htmlFor="enlacePerfil" className={LABEL_CLASS}>Enlace a CV o LinkedIn</label>
+                <input
+                  id="enlacePerfil"
+                  name="enlacePerfil"
+                  type="url"
+                  placeholder="https://"
+                  value={form.enlacePerfil}
+                  onChange={handleChange}
+                  className={INPUT_CLASS}
+                />
+                <p className={HINT_CLASS}>Opcional.</p>
+              </div>
             </div>
 
             {status === "success" && (
-              <p className="tutor-success">Tu perfil se guardó correctamente.</p>
+              <p className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                Tu perfil se guardó correctamente.
+              </p>
             )}
             {status === "error" && (
-              <p className="tutor-error-banner" role="alert">{serverError}</p>
+              <p className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700" role="alert">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                {serverError}
+              </p>
             )}
+
+            <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={status === "loading"}
+                className="inline-flex items-center gap-2 rounded-lg bg-[#c81e1e] px-4 py-2 text-xs font-semibold text-white shadow transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Save className="h-4 w-4" />
+                {status === "loading" ? "Guardando..." : "Guardar perfil"}
+              </button>
+            </div>
           </form>
         </section>
-      </main>
+      </div>
     </div>
   );
 }
