@@ -95,6 +95,11 @@ Una vez que la terminal indique que los contenedores están "Running", puedes ve
   5. **Mínimo de integrantes:** Requiere al menos un integrante adicional además del estudiante líder.
   6. **Ciclo de vida y disolución:** El líder puede retirar integrantes o disolver el equipo por completo, liberando a los miembros y permitiendo volver a conformar un equipo para la iniciativa cuando lo requiera.
 
+### HU-06 · Gestión de Rúbricas Dinámicas y Creación Automática de Proyectos
+* Módulo de evaluación multicriterio (`gestion_evaluacion`) con soporte para rúbricas por tipo de iniciativa (`emprendimiento`, `innovacion`), estructuradas en hitos (`SubRubrica`) y criterios (`CriterioRubrica`) con validación estricta de ponderaciones al 100 %.
+* Protección de integridad histórica: impide modificar ponderaciones o eliminar criterios que ya cuenten con calificaciones registradas (`NotaCriterio`).
+* Creación automática de `Proyecto` mediante señales (`post_save`) al aprobar una iniciativa y asignación formal de coordinador y evaluador activos.
+
 ### HU-12 · Centro de Alertas y Notificaciones Institucionales por Rol
 * Centro de alertas automatizadas parametrizadas por rol activo (estudiante, tutor, mentor, evaluador, coordinador, dirección, admin).
 * Filtrado en tiempo real por prioridad (alta, media, baja), estado (leída/no leída) y búsqueda textual.
@@ -118,7 +123,7 @@ Una vez que la terminal indique que los contenedores están "Running", puedes ve
 * Campana de notificaciones institucional en la barra de navegación superior con contador de mensajes no leídos en tiempo real.
 * Notificaciones generadas automáticamente ante eventos clave:
   - Radicación exitosa de iniciativa.
-  - Aprobación o rechazo por la coordinación.
+  - Aprobación o rechazo por la coordinación / dirección del programa.
   - Creación de equipo emprendedor (notificación al líder e integrantes).
   - Incorporación o retiro de un estudiante de un equipo.
   - Disolución de equipo emprendedor.
@@ -131,7 +136,7 @@ Una vez que la terminal indique que los contenedores están "Running", puedes ve
 ```bash
 docker exec ideacampus_backend python manage.py test
 ```
-*Cubre 46 pruebas unitarias y de integración que validan permisos, reglas de negocio Estudiante-Iniciativa-Equipo, autenticación JWT multi-rol, ciclo de vida de convocatorias, alertas automáticas y endpoints REST.*
+*Cubre 71 pruebas unitarias y de integración que validan permisos, reglas de negocio Estudiante-Iniciativa-Equipo, creación de proyectos, asignación de coordinadores y evaluadores, edición y validación de rúbricas (HU-06), autenticación JWT multi-rol, ciclo de vida de convocatorias, alertas automáticas y endpoints REST.*
 
 ### Compilación y Verificación de Tipos del Frontend
 ```bash
