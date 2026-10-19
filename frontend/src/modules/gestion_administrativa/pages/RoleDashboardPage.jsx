@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   CheckCircle2,
   Clock,
@@ -249,6 +249,47 @@ const ROLE_CONFIG = {
       { label: "Programa", value: "Ing. de Sistemas", subtext: "UFPS Cúcuta" },
       { label: "Acreditación", value: "Alta Calidad", subtext: "Métricas longitudinales" },
       { label: "Plataforma", value: "GENNOVA", subtext: "Ecosistema Institucional" },
+    ],
+  },
+  admin: {
+    roleName: "Administrador del Sistema",
+    defaultModule: "parametros",
+    icon: ShieldCheck,
+    badgeColor: "bg-red-100 text-red-800 border-red-200",
+    subtitle:
+      "Supervisión integral de parámetros institucionales, convocatorias, iniciativas y usuarios.",
+    description:
+      "Control maestro y auditoría de la plataforma institucional GENNOVA UFPS.",
+    modules: {
+      parametros: {
+        title: "Administración Paramétrica",
+        desc: "Gestión de variables, periodos académicos y asignación de roles.",
+        details: "Control maestro del sistema.",
+        actionLabel: "Gestionar parámetros",
+      },
+      convocatorias: {
+        title: "Convocatorias Institucionales",
+        desc: "Supervisión y control de las convocatorias.",
+        details: "Monitoreo del ciclo de vida.",
+        actionLabel: "Ver convocatorias",
+      },
+      emprendimientos: {
+        title: "Banco de Emprendimientos",
+        desc: "Supervisión de iniciativas y expedientes de innovación.",
+        details: "Inventario centralizado de iniciativas.",
+        actionLabel: "Explorar iniciativas",
+      },
+      alertas: {
+        title: "Centro de Alertas",
+        desc: "Notificaciones y compromisos del sistema.",
+        details: "Monitoreo de compromisos y plazos.",
+        actionLabel: "Ver alertas",
+      },
+    },
+    stats: [
+      { label: "Rol Institucional", value: "Administrador", subtext: "Control Maestro" },
+      { label: "Ecosistema", value: "GENNOVA", subtext: "UFPS Cúcuta" },
+      { label: "Plataforma", value: "En línea", subtext: "Auditoría activa" },
     ],
   },
 };

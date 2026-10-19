@@ -25,7 +25,7 @@ function AppContent() {
       return <ConvocatoriasPage key="admin-convocatorias" onNavigate={setCurrentModule} activeModule="convocatorias" />;
     }
     if (currentModule === "emprendimientos") {
-      return <RoleDashboardPage key="admin-emprendimientos" role="coordinador" onNavigate={setCurrentModule} defaultModule="emprendimientos" />;
+      return <RoleDashboardPage key="admin-emprendimientos" role="admin" onNavigate={setCurrentModule} defaultModule="emprendimientos" />;
     }
     if (currentModule === "alertas") {
       return <RoleDashboardPage key="admin-alertas" role="admin" onNavigate={setCurrentModule} defaultModule="alertas" />;
