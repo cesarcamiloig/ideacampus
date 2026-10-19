@@ -66,9 +66,9 @@ const ROLE_CONFIG = {
     icon: Layers,
     badgeColor: "bg-emerald-100 text-emerald-800 border-emerald-200",
     subtitle:
-      "Administración integral de convocatorias, banco de iniciativas y métricas de impacto.",
+      "Administración integral de convocatorias y métricas de impacto.",
     description:
-      "Supervisa el ciclo de vida de las convocatorias, coordina la asignación de evaluadores y acompaña el banco de proyectos del Programa de Ingeniería de Sistemas.",
+      "Supervisa el ciclo de vida de las convocatorias y coordina la asignación de evaluadores del Programa de Ingeniería de Sistemas.",
     modules: {
       convocatorias: {
         title: "Gestión de Convocatorias",
@@ -77,14 +77,6 @@ const ROLE_CONFIG = {
         details:
           "Configuración de fechas de apertura, límite de postulación y cierre automático con notificación.",
         actionLabel: "Gestionar convocatorias",
-      },
-      emprendimientos: {
-        title: "Banco de Emprendimientos",
-        tag: "HU-04 / HU-05",
-        desc: "Inventario centralizado de iniciativas estudiantiles registradas, clasificadas por TRL y área.",
-        details:
-          "Acceso a los expedientes digitales únicos de todos los equipos del programa.",
-        actionLabel: "Explorar iniciativas",
       },
       reportes: {
         title: "Métricas e Impacto",
@@ -98,7 +90,7 @@ const ROLE_CONFIG = {
     stats: [
       { label: "Ciclo Académico", value: "Vigente", subtext: "Configurado en Parámetros" },
       { label: "Convocatorias", value: "En línea", subtext: "Monitoreo continuo" },
-      { label: "Banco de Proyectos", value: "Habilitado", subtext: "Ingeniería de Sistemas" },
+      { label: "Programa", value: "Habilitado", subtext: "Ingeniería de Sistemas" },
     ],
   },
   tutor: {
@@ -423,7 +415,8 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
                 }}
               />
             )
-          ) : activeModule === "emprendimientos" || activeModule === "iniciativas" ? (
+          ) : normalizedRole !== "coordinador" &&
+            (activeModule === "emprendimientos" || activeModule === "iniciativas") ? (
             <BancoIniciativasView key="banco-iniciativas" />
           ) : (
             /* DETALLE DEL MÓDULO SELECCIONADO (PARA OTROS ROLES) */

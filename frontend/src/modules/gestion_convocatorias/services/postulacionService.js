@@ -129,12 +129,22 @@ export async function getTodasLasIniciativas() {
 /**
  * Cambia el estado de una iniciativa (aprobada, rechazada, etc.) por parte del coordinador o admin.
  */
-export async function cambiarEstadoIniciativa(idIniciativa, nuevoEstado) {
+export async function cambiarEstadoIniciativa(idIniciativa, nuevoEstado, idCoordinador = null) {
   const id = String(idIniciativa).replace(/^ini-/, "");
-  const response = await apiClient.patch(`/iniciativas/${id}/cambiar-estado/`, {
-    estado: nuevoEstado,
-  });
+  const payload = { estado: nuevoEstado };
+  if (idCoordinador) {
+    payload.id_coordinador = idCoordinador;
+  }
+  const response = await apiClient.patch(`/iniciativas/${id}/cambiar-estado/`, payload);
   return normalizarIniciativaParaUI(response);
+}
+
+/**
+ * Lista los coordinadores activos que pueden asignarse al proyecto al aprobar una iniciativa.
+ */
+export async function getCoordinadores() {
+  const data = await apiClient.get("/iniciativas/coordinadores/");
+  return Array.isArray(data) ? data : [];
 }
 
 /**

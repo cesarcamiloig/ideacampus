@@ -126,7 +126,6 @@ export default function MainLayout({
         ],
         coordinador: [
             { id: "convocatorias", label: "Gestión de Convocatorias", icon: FileText },
-            { id: "emprendimientos", label: "Banco de Emprendimientos", icon: Lightbulb },
             { id: "reportes", label: "Métricas e Impacto", icon: Award },
             { id: "alertas", label: "Centro de Alertas", icon: Bell },
         ],

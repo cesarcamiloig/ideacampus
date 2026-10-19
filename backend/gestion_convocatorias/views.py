@@ -1,3 +1,4 @@
+from django.db import transaction
 from datetime import timedelta
 from django.db.models import Q
 from django.http import FileResponse
@@ -10,6 +11,10 @@ from rest_framework.response import Response
 
 from gestion_administrativa.authentication import JWTAuthentication
 from gestion_administrativa.permissions import TieneRolPermitido
+from gestion_emprendimiento_2.services import (
+    coordinadores_activos,
+    crear_proyecto_desde_iniciativa,
+)
 from .models import Convocatoria, Iniciativa, NotificacionConvocatoria, AlertaRol
 from .serializers import (
     ConvocatoriaSerializer,
@@ -360,7 +365,7 @@ class IniciativaViewSet(viewsets.ModelViewSet):
     """
     Gestión de postulaciones e iniciativas de estudiantes (HU-03).
     - Los estudiantes solo pueden consultar sus propias postulaciones y radicar si son estudiantes activos.
-    - Los coordinadores y administradores pueden ver todas las iniciativas y aprobarlas/rechazarlas.
+    - La Dirección del Programa y los administradores pueden ver todas las iniciativas y aprobarlas/rechazarlas.
     - Notifica automáticamente al estudiante tras radicar o tras cambio de estado.
     """
     authentication_classes = [JWTAuthentication]
@@ -371,8 +376,10 @@ class IniciativaViewSet(viewsets.ModelViewSet):
     def _es_gestor(self, usuario):
         roles_usuario = getattr(usuario, 'roles_asignados', [])
         rol_activo = getattr(usuario, 'rol_activo', '')
-        return ('admin' in roles_usuario or 'coordinador' in roles_usuario or
-                rol_activo in ['admin', 'coordinador'])
+        roles_gestores = ['admin', 'direccion_del_programa', 'direccion']
+        return any(rol in roles_usuario for rol in roles_gestores) or (
+            rol_activo in roles_gestores
+        )
 
     def get_queryset(self):
         usuario = self.request.user
@@ -412,14 +419,16 @@ class IniciativaViewSet(viewsets.ModelViewSet):
         # Si el usuario NO es gestor y pretende cambiar el estado, se rechaza
         if 'estado' in request.data and not es_gestor:
             return Response(
-                {"error": "Solo un coordinador o administrador puede modificar el estado de evaluación de una iniciativa."},
+                {"error": "Solo la Dirección del Programa o un administrador puede modificar el estado de evaluación de una iniciativa."},
                 status=status.HTTP_403_FORBIDDEN
             )
 
         estado_anterior = instance.estado
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
-        iniciativa = serializer.save()
+        # Si queda aprobada, la señal post_save crea su Proyecto en la misma transacción
+        with transaction.atomic():
+            iniciativa = serializer.save()
 
         # Si cambió el estado, notificar al estudiante
         if es_gestor and 'estado' in request.data and iniciativa.estado != estado_anterior:
@@ -431,7 +440,7 @@ class IniciativaViewSet(viewsets.ModelViewSet):
         nuevo_norm = nuevo.lower().strip()
         if nuevo_norm in ['aprobada', 'aprobado', 'aceptada', 'aceptado', 'validada', 'validado']:
             titulo = "¡Iniciativa Aprobada!"
-            mensaje = f"¡Felicitaciones! Tu iniciativa '{iniciativa.nombre}' ha sido aprobada por la Coordinación. Ya puedes proceder a conformar y registrar tu Equipo Emprendedor."
+            mensaje = f"¡Felicitaciones! Tu iniciativa '{iniciativa.nombre}' ha sido aprobada por la Dirección del Programa. Ya puedes proceder a conformar y registrar tu Equipo Emprendedor."
             tipo = "apertura"
         elif nuevo_norm in ['rechazada', 'rechazado']:
             titulo = "Iniciativa No Seleccionada"
@@ -455,7 +464,7 @@ class IniciativaViewSet(viewsets.ModelViewSet):
         iniciativa = self.get_object()
         if not self._es_gestor(request.user):
             return Response(
-                {"error": "Solo un coordinador o administrador puede modificar el estado de una iniciativa."},
+                {"error": "Solo la Dirección del Programa o un administrador puede modificar el estado de una iniciativa."},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -474,13 +483,47 @@ class IniciativaViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Al aprobar se debe elegir el coordinador que quedará a cargo del proyecto
+        coordinador = None
+        if nuevo_estado == 'aprobada':
+            id_coordinador = request.data.get('id_coordinador')
+            if not id_coordinador:
+                return Response(
+                    {"error": "Debe seleccionar un coordinador para aprobar la iniciativa."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            coordinador = coordinadores_activos().filter(pk=id_coordinador).first()
+            if coordinador is None:
+                return Response(
+                    {"error": "El usuario seleccionado no es un coordinador activo."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
         estado_anterior = iniciativa.estado
         iniciativa.estado = nuevo_estado
-        iniciativa.save(update_fields=['estado', 'fecha_actualizacion'])
+        # Al aprobarse, la señal post_save crea oficialmente su Proyecto
+        with transaction.atomic():
+            iniciativa.save(update_fields=['estado', 'fecha_actualizacion'])
+            if coordinador is not None:
+                crear_proyecto_desde_iniciativa(iniciativa, coordinador=coordinador)
 
         self._notificar_cambio_estado(iniciativa, estado_anterior, nuevo_estado)
 
         return Response(self.get_serializer(iniciativa).data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'], url_path='coordinadores')
+    def coordinadores(self, request):
+        """Lista de coordinadores activos para asignar al proyecto al aprobar una iniciativa."""
+        if not self._es_gestor(request.user):
+            return Response(
+                {"error": "Solo la Dirección del Programa o un administrador puede consultar los coordinadores."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        data = [
+            {"id_usuario": u.id_usuario, "nombre": u.nombre, "correo": u.correo}
+            for u in coordinadores_activos()
+        ]
+        return Response(data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['get'], url_path='mis-aprobadas')
     def mis_aprobadas(self, request):
