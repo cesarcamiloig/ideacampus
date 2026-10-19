@@ -1,6 +1,9 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 
+from gestion_administrativa.models import Usuario
+from gestion_emprendimiento_2.models import usuarios_con_rol_activo
+
 
 class Rubrica(models.Model):
     nombre = models.CharField(max_length=150)
@@ -56,13 +59,17 @@ class CriterioRubrica(models.Model):
 
 class Evaluacion(models.Model):
     proyecto = models.ForeignKey(
-        "Proyecto", on_delete=models.PROTECT, related_name="evaluaciones"
+        "gestion_emprendimiento_2.Proyecto", on_delete=models.PROTECT, related_name="evaluaciones"
     )
     subrubrica = models.ForeignKey(
         SubRubrica, on_delete=models.PROTECT, related_name="evaluaciones"
     )
+    # El evaluador es un Usuario con el rol "evaluador" (no existe modelo propio)
     evaluador = models.ForeignKey(
-        "Evaluador", on_delete=models.PROTECT, related_name="evaluaciones"
+        Usuario,
+        on_delete=models.PROTECT,
+        related_name="evaluaciones",
+        limit_choices_to=usuarios_con_rol_activo("evaluador"),
     )
     nota_final = models.DecimalField(
         max_digits=5, decimal_places=2, null=True, blank=True
@@ -80,6 +87,9 @@ class Evaluacion(models.Model):
         ]
 
     def clean(self):
+        # Si falta algún campo, su propia validación ya reporta el error
+        if not (self.subrubrica_id and self.proyecto_id):
+            return
         if self.subrubrica.rubrica.tipo_iniciativa != self.proyecto.iniciativa.tipo:
             raise ValidationError(
                 "La subrúbrica no corresponde al tipo de iniciativa del proyecto."

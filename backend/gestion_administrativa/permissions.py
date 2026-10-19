@@ -9,6 +9,8 @@ class TieneRolPermitido(BasePermission):
     Uso en cualquier APIView o ViewSet:
         permission_classes = [TieneRolPermitido]
         roles_permitidos = ["admin", "coordinador"]
+
+    Si la vista no declara roles permitidos, se deniega el acceso.
     """
     message = "No tienes permisos con tu rol actual para realizar esta acción."
     roles_permitidos = ()
@@ -19,12 +21,13 @@ class TieneRolPermitido(BasePermission):
             return False
 
         rol_activo = getattr(usuario, "rol_activo", None)
-        if not rol_activo and isinstance(getattr(request, "auth", None), dict):
-            rol_activo = request.auth.get("rol")
+        auth = getattr(request, "auth", None)
+        if not rol_activo and auth is not None and hasattr(auth, "get"):
+            rol_activo = auth.get("rol")
 
         roles_vista = getattr(view, "roles_permitidos", None) or self.roles_permitidos
         if not roles_vista:
-            return True
+            return False
 
         return rol_activo in roles_vista
 
