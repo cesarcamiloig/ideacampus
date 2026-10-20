@@ -11,6 +11,7 @@ import {
     Award,
     Bell,
     Check,
+    FileUp,
     FolderKanban,
     Menu,
     X,
@@ -40,6 +41,7 @@ export default function MainLayout({
     onNavigate,
     activeRole: propActiveRole,
     onRoleChange,
+    modulosOcultos = [],
 }) {
     // Estado del menú desplegable de perfil
     const [profileMenuOpen, setProfileMenuOpen] = useState(false)
@@ -170,7 +172,15 @@ export default function MainLayout({
             { id: "alertas", label: "Centro de Alertas", icon: Bell },
         ],
         estudiante: [
-            { id: "equipo", label: "Equipo Emprendedor", icon: Users },
+            {
+                id: "proyecto",
+                label: "Proyecto",
+                icon: FolderKanban,
+                children: [
+                    { id: "equipo", label: "Equipo Emprendedor", icon: Users },
+                    { id: "evidencias", label: "Evidencias de Avance", icon: FileUp },
+                ],
+            },
             { id: "postulaciones", label: "Convocatorias Abiertas", icon: FileText },
             { id: "mi-iniciativa", label: "Mis Iniciativas", icon: Lightbulb },
             { id: "alertas", label: "Centro de Alertas", icon: Bell },
@@ -250,7 +260,93 @@ export default function MainLayout({
 
     const activeRoleLabel = ROLE_LABELS[activeRole] || (typeof activeRole === "string" ? activeRole.replace(/_/g, " ").toUpperCase() : "ROL")
 
-    const currentMenuItems = menuConfigByRole[activeRole] || menuConfigByRole.admin || []
+    // Se quitan los apartados que el usuario no puede ver; un grupo sin apartados visibles desaparece
+    const currentMenuItems = (menuConfigByRole[activeRole] || menuConfigByRole.admin || [])
+        .filter((item) => !modulosOcultos.includes(item.id))
+        .map((item) =>
+            item.children
+                ? { ...item, children: item.children.filter((hijo) => !modulosOcultos.includes(hijo.id)) }
+                : item
+        )
+        .filter((item) => !item.children || item.children.length > 0)
+
+    // Grupos del menú lateral (p. ej. "Proyecto"): se abren solos si contienen el apartado activo
+    const [gruposAbiertos, setGruposAbiertos] = useState({})
+
+    useEffect(() => {
+        const grupoActivo = currentMenuItems.find((item) => item.children?.some((hijo) => hijo.id === activeModule))
+        if (grupoActivo) {
+            setGruposAbiertos((prev) => (prev[grupoActivo.id] ? prev : { ...prev, [grupoActivo.id]: true }))
+        }
+    }, [activeModule, activeRole])
+
+    function navegarA(id) {
+        setMenuMovilAbierto(false)
+        if (onModuleChange) {
+            onModuleChange(id)
+        }
+        if (onNavigate) {
+            onNavigate(id)
+        }
+    }
+
+    function renderItemMenu(item, esHijo = false) {
+        const Icon = item.icon
+        const isActive = item.id === activeModule
+
+        return (
+            <div key={item.id} className="relative flex items-center">
+                {isActive && (
+                    <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-red-600 rounded-r" />
+                )}
+                <button
+                    type="button"
+                    onClick={() => navegarA(item.id)}
+                    className={`flex w-full items-center gap-3 py-3.5 text-left text-sm transition-colors ${esHijo ? "pl-12 pr-6" : "px-6"} ${isActive
+                        ? "bg-red-50/40 font-semibold text-slate-900"
+                        : "font-medium text-slate-600 hover:bg-slate-50"
+                        }`}
+                >
+                    <Icon
+                        className={`h-5 w-5 ${isActive ? "text-red-600" : "text-slate-400"
+                            }`}
+                    />
+                    <span className="leading-tight">{item.label}</span>
+                </button>
+            </div>
+        )
+    }
+
+    function renderGrupoMenu(grupo) {
+        const Icon = grupo.icon
+        const abierto = !!gruposAbiertos[grupo.id]
+        const contieneActivo = grupo.children.some((hijo) => hijo.id === activeModule)
+        const idSubmenu = `submenu-${grupo.id}`
+
+        return (
+            <div key={grupo.id}>
+                <button
+                    type="button"
+                    onClick={() => setGruposAbiertos((prev) => ({ ...prev, [grupo.id]: !prev[grupo.id] }))}
+                    aria-expanded={abierto}
+                    aria-controls={idSubmenu}
+                    className={`flex w-full items-center gap-3 px-6 py-3.5 text-left text-sm transition-colors hover:bg-slate-50 ${contieneActivo ? "font-semibold text-slate-900" : "font-medium text-slate-600"
+                        }`}
+                >
+                    <Icon className={`h-5 w-5 ${contieneActivo ? "text-red-600" : "text-slate-400"}`} />
+                    <span className="flex-1 leading-tight">{grupo.label}</span>
+                    <ChevronDown
+                        className={`h-4 w-4 text-slate-400 transition-transform motion-reduce:transition-none ${abierto ? "rotate-180" : ""}`}
+                    />
+                </button>
+                {abierto && (
+                    <div id={idSubmenu} className="flex flex-col space-y-1">
+                        {grupo.children.map((hijo) => renderItemMenu(hijo, true))}
+                    </div>
+                )}
+            </div>
+        )
+    }
 
     return (
         <div className="flex h-screen w-full bg-[#f4f5f7] font-sans text-slate-800 antialiased supports-[height:100dvh]:h-dvh">
@@ -292,40 +388,9 @@ export default function MainLayout({
 
                     {/* Menú de navegación dinámico según el rol activo */}
                     <nav className="mt-2 flex flex-col space-y-1">
-                        {currentMenuItems.map((item) => {
-                            const Icon = item.icon
-                            const isActive = item.id === activeModule
-
-                            return (
-                                <div key={item.id} className="relative flex items-center">
-                                    {isActive && (
-                                        <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-red-600 rounded-r" />
-                                    )}
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setMenuMovilAbierto(false)
-                                            if (onModuleChange) {
-                                                onModuleChange(item.id)
-                                            }
-                                            if (onNavigate) {
-                                                onNavigate(item.id)
-                                            }
-                                        }}
-                                        className={`flex w-full items-center gap-3 px-6 py-3.5 text-left text-sm transition-colors ${isActive
-                                            ? "bg-red-50/40 font-semibold text-slate-900"
-                                            : "font-medium text-slate-600 hover:bg-slate-50"
-                                            }`}
-                                    >
-                                        <Icon
-                                            className={`h-5 w-5 ${isActive ? "text-red-600" : "text-slate-400"
-                                                }`}
-                                        />
-                                        <span className="leading-tight">{item.label}</span>
-                                    </button>
-                                </div>
-                            )
-                        })}
+                        {currentMenuItems.map((item) =>
+                            item.children ? renderGrupoMenu(item) : renderItemMenu(item)
+                        )}
                     </nav>
                 </div>
 

@@ -277,8 +277,11 @@ class MiEquipoView(APIView):
         iniciativa_data = None
         if hasattr(equipo, 'iniciativa') and equipo.iniciativa:
             ini = equipo.iniciativa
+            # El proyecto se crea al aprobar la iniciativa; el front lo necesita para subir evidencias (HU-07)
+            proyecto = Proyecto.objects.filter(iniciativa=ini).only('id_proyecto').first()
             iniciativa_data = {
                 "id_iniciativa": ini.id_iniciativa,
+                "id_proyecto": proyecto.id_proyecto if proyecto else None,
                 "nombre": ini.nombre,
                 "tipo": ini.tipo,
                 "estado": ini.estado,
@@ -376,8 +379,11 @@ class EquipoDetalleView(APIView):
         iniciativa_data = None
         if hasattr(equipo, 'iniciativa') and equipo.iniciativa:
             ini = equipo.iniciativa
+            # El proyecto se crea al aprobar la iniciativa; el front lo necesita para subir evidencias (HU-07)
+            proyecto = Proyecto.objects.filter(iniciativa=ini).only('id_proyecto').first()
             iniciativa_data = {
                 "id_iniciativa": ini.id_iniciativa,
+                "id_proyecto": proyecto.id_proyecto if proyecto else None,
                 "nombre": ini.nombre,
                 "tipo": ini.tipo,
                 "estado": ini.estado,

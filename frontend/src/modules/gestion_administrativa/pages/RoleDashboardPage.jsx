@@ -9,12 +9,15 @@ import {
   Layers,
   Award,
   BookOpen,
+  Loader2,
 } from "lucide-react";
+import { obtenerMiEquipo, obtenerMisIniciativasAprobadas } from "../../gestion_emprendimiento_2/services/equipoService";
 import MainLayout from "../components/layout/MainLayout";
 import { useAuth } from "../../../context/AuthContext";
 import TutorProfileForm from "../../gestion_acompaniamiento/pages/TutorProfileForm";
 import EstudianteIniciativasPage from "../../gestion_convocatorias/pages/EstudianteIniciativasPage";
 import EquipoPage from "../../gestion_emprendimiento_2/pages/EquipoPage";
+import EvidenciaForm from "../../gestion_emprendimiento_2/pages/EvidenciaForm";
 import BancoIniciativasView from "../../gestion_convocatorias/components/BancoIniciativasView";
 import AlertasPage from "../../gestion_convocatorias/pages/AlertasPage";
 import RubricasTab from "../../gestion_evaluacion/components/RubricasTab";
@@ -52,6 +55,13 @@ const ROLE_CONFIG = {
         details:
           "Trazabilidad longitudinal del origen académico (asignaturas, semilleros, proyectos de grado), integrantes y estado de la solución.",
         actionLabel: "Ver mis radicados",
+      },
+      evidencias: {
+        title: "Evidencias de Avance",
+        desc: "Adjunta documentos, enlaces, prototipos y presentaciones que respalden el avance de tu iniciativa.",
+        details:
+          "Registro de evidencias al finalizar cada etapa para la trazabilidad de la madurez tecnológica.",
+        actionLabel: "Registrar evidencia",
       },
     },
     stats: [
@@ -306,6 +316,48 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
     setActiveModule(defaultModule || roleConfig.defaultModule);
   }, [normalizedRole, defaultModule, roleConfig.defaultModule]);
 
+  // Acceso al apartado "Proyecto" del estudiante:
+  // - Equipo Emprendedor: si ya pertenece a un equipo o tiene una iniciativa aprobada con la cual crearlo.
+  // - Evidencias de Avance: solo si pertenece a un equipo.
+  const esEstudiante = normalizedRole === "estudiante";
+  const [accesoProyecto, setAccesoProyecto] = useState({ cargando: esEstudiante, tieneEquipo: false, tieneAprobada: false });
+
+  async function cargarAccesoProyecto() {
+    try {
+      const [dataEquipo, aprobadas] = await Promise.all([
+        obtenerMiEquipo().catch(() => null),
+        obtenerMisIniciativasAprobadas().catch(() => []),
+      ]);
+      setAccesoProyecto({
+        cargando: false,
+        tieneEquipo: Boolean(dataEquipo?.tiene_equipo && dataEquipo?.equipo),
+        tieneAprobada: Array.isArray(aprobadas) && aprobadas.length > 0,
+      });
+    } catch {
+      setAccesoProyecto({ cargando: false, tieneEquipo: false, tieneAprobada: false });
+    }
+  }
+
+  useEffect(() => {
+    if (esEstudiante) {
+      cargarAccesoProyecto();
+    }
+  }, [esEstudiante]);
+
+  const modulosOcultos = [];
+  if (esEstudiante) {
+    if (!accesoProyecto.tieneEquipo) modulosOcultos.push("evidencias");
+    if (!accesoProyecto.tieneEquipo && !accesoProyecto.tieneAprobada) modulosOcultos.push("equipo");
+  }
+  const moduloBloqueado = modulosOcultos.includes(activeModule);
+
+  // Si llega a un apartado que no puede ver (módulo por defecto, notificación, etc.), se le envía a sus iniciativas
+  useEffect(() => {
+    if (esEstudiante && !accesoProyecto.cargando && moduloBloqueado) {
+      cambiarModulo("mi-iniciativa");
+    }
+  }, [esEstudiante, accesoProyecto.cargando, moduloBloqueado]);
+
   const esAcompanante = normalizedRole === "tutor" || normalizedRole === "mentor";
   const mostrarPerfil = esAcompanante && activeModule === "perfil";
 
@@ -328,6 +380,7 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
       onModuleChange={cambiarModulo}
       onNavigate={onNavigate}
       activeRole={normalizedRole}
+      modulosOcultos={modulosOcultos}
       onRoleChange={() => {
         if (onNavigate) {
           onNavigate(null);
@@ -406,8 +459,14 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
               <RubricasTab key="rubricas" />
             </section>
           ) : normalizedRole === "estudiante" ? (
-            activeModule === "equipo" ? (
-              <EquipoPage key="equipo" />
+            moduloBloqueado || (accesoProyecto.cargando && (activeModule === "equipo" || activeModule === "evidencias")) ? (
+              <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white p-16 shadow-sm">
+                <Loader2 className="h-8 w-8 animate-spin text-red-600" />
+              </div>
+            ) : activeModule === "equipo" ? (
+              <EquipoPage key="equipo" onEstadoEquipoCambiado={cargarAccesoProyecto} />
+            ) : activeModule === "evidencias" ? (
+              <EvidenciaForm key="evidencias" />
             ) : (
               <EstudianteIniciativasPage
                 key={activeModule}
