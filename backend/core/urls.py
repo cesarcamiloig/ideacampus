@@ -11,6 +11,7 @@ urlpatterns = [
     path('api/', include('gestion_convocatorias.urls')),
     path('api/', include('gestion_emprendimiento_2.urls')),
     path('api/', include('gestion_evaluacion.urls')),
+    path('api/', include('gestion_evidencia.urls')),
 ]
 
 if settings.DEBUG:

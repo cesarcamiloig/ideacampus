@@ -67,6 +67,16 @@ class SubRubricaSerializer(serializers.ModelSerializer):
         return suma_ponderaciones(obj.criterios.all())
 
 
+class HitoListaSerializer(serializers.ModelSerializer):
+    """Vista liviana de un hito, sin descripción, ponderación ni criterios."""
+    tipo_iniciativa = serializers.CharField(source="rubrica.tipo_iniciativa", read_only=True)
+
+    class Meta:
+        model = SubRubrica
+        fields = ["id", "numero_hito", "nombre", "tipo_iniciativa"]
+        read_only_fields = fields
+
+
 class RubricaSerializer(serializers.ModelSerializer):
     subrubricas = SubRubricaSerializer(many=True, read_only=True)
 
