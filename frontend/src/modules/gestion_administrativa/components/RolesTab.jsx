@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react"
 import { Shield, Search, Mail, Check, AlertCircle, Lock, Loader2, RefreshCw } from "lucide-react"
+import { useAuth } from "../../../context/AuthContext"
 import {
     getRolesCatalogo,
     getUsuarios,
@@ -19,6 +20,8 @@ const ROLE_COLORS = {
 }
 
 export default function RolesTab() {
+    const { usuario, updateCurrentUserRoles, refreshSession, updateUsuario } = useAuth()
+
     const [viewMode, setViewMode] = useState("usuarios") // "usuarios" | "catalogo"
     const [searchTerm, setSearchTerm] = useState("")
 
@@ -97,14 +100,63 @@ export default function RolesTab() {
         setModalError("")
         try {
             const updated = await updateUsuarioRoles(selectedUser.id_usuario, selectedRoles)
+            const updatedData = updated?.data || updated
+
             setUsers((prev) =>
                 prev.map((u) =>
-                    u.id_usuario === selectedUser.id_usuario ? (updated?.data || updated) : u
+                    u.id_usuario === selectedUser.id_usuario ? updatedData : u
                 )
             )
             // Actualizar catálogo de roles con el nuevo conteo
             const rolesRes = await getRolesCatalogo()
             setRolesCatalog(Array.isArray(rolesRes) ? rolesRes : rolesRes?.data || [])
+
+            // Verificar si el usuario editado es el usuario autenticado actualmente en la sesión
+            const isCurrentUser = Boolean(
+                usuario &&
+                selectedUser &&
+                (
+                    (usuario.id_usuario != null && selectedUser.id_usuario != null && String(usuario.id_usuario) === String(selectedUser.id_usuario)) ||
+                    (usuario.correo && selectedUser.email && usuario.correo.trim().toLowerCase() === selectedUser.email.trim().toLowerCase()) ||
+                    (usuario.correo && selectedUser.correo && usuario.correo.trim().toLowerCase() === selectedUser.correo.trim().toLowerCase()) ||
+                    (usuario.email && selectedUser.email && usuario.email.trim().toLowerCase() === selectedUser.email.trim().toLowerCase()) ||
+                    (usuario.email && selectedUser.correo && usuario.email.trim().toLowerCase() === selectedUser.correo.trim().toLowerCase()) ||
+                    (usuario.id && selectedUser.id && usuario.id === selectedUser.id)
+                )
+            )
+
+            if (isCurrentUser) {
+                // Obtener lista completa de roles activos (incluye admin si lo tenía)
+                const newRoles = Array.isArray(updatedData?.roles)
+                    ? updatedData.roles
+                    : Array.from(new Set([
+                        ...(usuario.roles?.includes("admin") || usuario.rol === "admin" ? ["admin"] : []),
+                        ...selectedRoles
+                    ]))
+
+                if (updateCurrentUserRoles) {
+                    updateCurrentUserRoles(newRoles)
+                } else if (updateUsuario) {
+                    const currentRol = usuario.rol
+                    const nextRol = newRoles.includes(currentRol) ? currentRol : (newRoles[0] || "estudiante")
+                    updateUsuario({
+                        ...usuario,
+                        rol: nextRol,
+                        roles: newRoles,
+                        roles_asignados: newRoles,
+                    })
+                }
+
+                // Refrescar en segundo plano con el backend para sincronización completa
+                if (refreshSession) {
+                    refreshSession()
+                }
+            }
+
+            // Notificar a toda la aplicación para sincronizar componentes dependientes de roles
+            window.dispatchEvent(new CustomEvent("gennova:session-updated", {
+                detail: { id_usuario: selectedUser.id_usuario }
+            }))
 
             setIsModalOpen(false)
             setSelectedUser(null)

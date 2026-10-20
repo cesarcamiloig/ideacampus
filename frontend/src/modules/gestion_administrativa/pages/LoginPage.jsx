@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { authenticateWithGoogle } from "../services/authService";
 import "./LoginPage.css";
 
+const LOGO_UFPS_URL =
+  "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRLYRDeAyduSAIcGYXU8zMh8ydMIRvGXAL5zj9GN-qG_SU9Be1tSneByVo&s=10";
+
 const DEFAULT_GOOGLE_CLIENT_ID = "260735986909-fu7gptlsfojfho3kmaj212djjf8k6p60.apps.googleusercontent.com";
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID;
 
@@ -10,15 +13,6 @@ function InstitutionIcon() {
     <svg aria-hidden="true" viewBox="0 0 24 24">
       <path d="M3 9.2 12 4l9 5.2-9 5.2-9-5.2Z" />
       <path d="M6.5 11.5v4.7c2.9 2.1 8.1 2.1 11 0v-4.7M20.5 10v5" />
-    </svg>
-  );
-}
-
-function SupportIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 24 24">
-      <path d="M4 14v-2a8 8 0 0 1 16 0v2" />
-      <path d="M6.5 18H6a2 2 0 0 1-2-2v-2h2.5v4Zm11 0h.5a2 2 0 0 0 2-2v-2h-2.5v4ZM17.5 18c-.6 1.3-1.8 2-3.5 2" />
     </svg>
   );
 }
@@ -81,7 +75,13 @@ function LoginCard({ status, errorMessage, googleButtonRef, rolSeleccionado, set
   return (
     <main className="login-card" aria-labelledby="gennova-title">
       <header className="brand">
-        <div className="brand-mark" aria-hidden="true">U</div>
+        <img
+          className="login-logo"
+          src={LOGO_UFPS_URL}
+          alt="Universidad Francisco de Paula Santander"
+          width="72"
+          height="72"
+        />
         <h1 id="gennova-title">GENNOVA</h1>
         <p className="tagline">Gestión de emprendimientos e<br />innovación estudiantil</p>
         <p className="university">Universidad Francisco de Paula Santander</p>
@@ -117,16 +117,6 @@ function LoginCard({ status, errorMessage, googleButtonRef, rolSeleccionado, set
           <strong>@ufps.edu.co</strong>
         </div>
       </section>
-
-      <div className="separator" />
-
-      <footer className="support">
-        <SupportIcon />
-        <div>
-          <p>¿Problemas para ingresar?</p>
-          <a href="mailto:soporte@ufps.edu.co">Contacta a soporte</a>
-        </div>
-      </footer>
     </main>
   );
 }

@@ -458,6 +458,251 @@ class AsignacionEvaluadorProyectoTests(APITestCase):
         self.proyecto.full_clean()
 
 
+class AsignacionTutorProyectoTests(APITestCase):
+    """
+    HU-05: Pruebas unitarias y de integración para la asignación manual de tutores
+    a iniciativas validadas y proyectos institucionales.
+    Cubre escenarios exitosos y fallidos (permisos, estados inválidos, alertas).
+    """
+
+    def setUp(self):
+        self.rol_estudiante, _ = Rol.objects.get_or_create(
+            nombre_rol="estudiante", defaults={"descripcion": "Estudiante"}
+        )
+        self.rol_coordinador, _ = Rol.objects.get_or_create(
+            nombre_rol="coordinador", defaults={"descripcion": "Coordinador"}
+        )
+        self.rol_direccion, _ = Rol.objects.get_or_create(
+            nombre_rol="direccion_del_programa", defaults={"descripcion": "Dirección"}
+        )
+        self.rol_tutor, _ = Rol.objects.get_or_create(
+            nombre_rol="tutor", defaults={"descripcion": "Tutor Académico"}
+        )
+
+        # 1. Usuarios con roles
+        self.estudiante = Usuario.objects.create(
+            nombre="Camilo Estudiante",
+            correo="camilo@ufps.edu.co",
+            google_id="gid-camilo",
+            estado="activo",
+        )
+        UsuarioRol.objects.create(
+            usuario=self.estudiante, rol=self.rol_estudiante, estado="activo"
+        )
+        self.token_estudiante = generar_token(self.estudiante, "estudiante")
+
+        self.coordinador = Usuario.objects.create(
+            nombre="Claudia Coordinadora",
+            correo="claudia@ufps.edu.co",
+            google_id="gid-claudia",
+            estado="activo",
+        )
+        UsuarioRol.objects.create(
+            usuario=self.coordinador, rol=self.rol_coordinador, estado="activo"
+        )
+        self.token_coordinador = generar_token(self.coordinador, "coordinador")
+
+        self.direccion = Usuario.objects.create(
+            nombre="Diana Dirección",
+            correo="diana_dir@ufps.edu.co",
+            google_id="gid-diana-dir",
+            estado="activo",
+        )
+        UsuarioRol.objects.create(
+            usuario=self.direccion, rol=self.rol_direccion, estado="activo"
+        )
+        self.token_direccion = generar_token(self.direccion, "direccion_del_programa")
+
+        # 2. Tutores (uno activo, uno inactivo)
+        from gestion_acompaniamiento.models import Tutor
+
+        self.usuario_tutor = Usuario.objects.create(
+            nombre="Profesor Carlos Tutor",
+            correo="carlostutor@ufps.edu.co",
+            google_id="gid-carlos-tutor",
+            estado="activo",
+        )
+        UsuarioRol.objects.create(
+            usuario=self.usuario_tutor, rol=self.rol_tutor, estado="activo"
+        )
+        self.tutor_activo = Tutor.objects.create(
+            usuario=self.usuario_tutor,
+            area_conocimiento="Ingeniería de Software",
+            nivel_academico="maestria",
+            estado="activo",
+        )
+
+        self.usuario_tutor_inactivo = Usuario.objects.create(
+            nombre="Profesor Inactivo",
+            correo="inactivo@ufps.edu.co",
+            google_id="gid-inactivo",
+            estado="inactivo",
+        )
+        UsuarioRol.objects.create(
+            usuario=self.usuario_tutor_inactivo, rol=self.rol_tutor, estado="inactivo"
+        )
+        self.tutor_inactivo = Tutor.objects.create(
+            usuario=self.usuario_tutor_inactivo,
+            area_conocimiento="Base de Datos",
+            estado="inactivo",
+        )
+
+        # 3. Convocatoria e Iniciativa Validada (Aprobada) con Proyecto
+        now = timezone.now()
+        self.conv = Convocatoria.objects.create(
+            nombre="Convocatoria 2026-I",
+            fecha_apertura=now - timedelta(days=5),
+            fecha_cierre=now + timedelta(days=20),
+            estado="abierta",
+        )
+        self.iniciativa_aprobada = Iniciativa.objects.create(
+            convocatoria=self.conv,
+            usuario=self.estudiante,
+            nombre="Plataforma de AgroTech",
+            tipo="innovacion",
+            origen_academico="asignatura",
+            estado="aprobada",
+        )
+        self.proyecto = Proyecto.objects.get(iniciativa=self.iniciativa_aprobada)
+        self.url = f"/api/proyectos/{self.proyecto.id_proyecto}/tutor/"
+
+    def test_listado_tutores_disponibles_solo_activos(self):
+        """Verifica que el endpoint /api/proyectos/tutores/ liste solo tutores activos con rol tutor."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+        res = self.client.get("/api/proyectos/tutores/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        ids_tutores = [t["id_tutor"] for t in res.data]
+        self.assertIn(self.tutor_activo.id_tutor, ids_tutores)
+        self.assertNotIn(self.tutor_inactivo.id_tutor, ids_tutores)
+
+    def test_asignacion_y_desasignacion_exitosa_por_coordinador(self):
+        """Escenario exitoso: Coordinador asigna un tutor académico y luego lo desasigna."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+
+        # Asignar
+        res = self.client.patch(self.url, {"id_tutor": self.tutor_activo.id_tutor}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["id_tutor"], self.tutor_activo.id_tutor)
+        self.assertEqual(res.data["tutor_nombre"], "Profesor Carlos Tutor")
+        self.proyecto.refresh_from_db()
+        self.assertEqual(self.proyecto.tutor, self.tutor_activo)
+
+        # Desasignar (id_tutor: null)
+        res_desasig = self.client.patch(self.url, {"id_tutor": None}, format="json")
+        self.assertEqual(res_desasig.status_code, status.HTTP_200_OK)
+        self.assertIsNone(res_desasig.data["id_tutor"])
+        self.proyecto.refresh_from_db()
+        self.assertIsNone(self.proyecto.tutor)
+
+    def test_asignacion_exitosa_por_direccion_del_programa(self):
+        """Escenario exitoso: Dirección del Programa asigna tutor a iniciativa validada."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_direccion}")
+        res = self.client.patch(self.url, {"id_tutor": self.tutor_activo.id_tutor}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.proyecto.refresh_from_db()
+        self.assertEqual(self.proyecto.tutor, self.tutor_activo)
+
+    def test_emite_alerta_y_notificacion_al_asignar_tutor(self):
+        """HU-05 + HU-12: Asignar un tutor genera una alerta automática de acompañamiento."""
+        from gestion_convocatorias.models import AlertaRol, NotificacionConvocatoria
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+        res = self.client.patch(self.url, {"id_tutor": self.tutor_activo.id_tutor}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+        # 1. Alerta automática para el tutor
+        alerta = AlertaRol.objects.filter(
+            usuario=self.usuario_tutor,
+            tipo="compromiso_tutoria",
+        ).first()
+        self.assertIsNotNone(alerta)
+        self.assertIn("Asignación de Tutoría", alerta.titulo)
+        self.assertEqual(alerta.rol_destinatario, "tutor")
+
+        # 2. Notificación para el estudiante autor
+        notif = NotificacionConvocatoria.objects.filter(
+            usuario=self.estudiante,
+            titulo="Tutor Académico Asignado",
+        ).first()
+        self.assertIsNotNone(notif)
+        self.assertIn("Profesor Carlos Tutor", notif.mensaje)
+
+    def test_asignacion_falla_por_permisos_estudiante(self):
+        """Escenario fallido: Un estudiante no tiene permisos para asignar tutores."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_estudiante}")
+        res = self.client.patch(self.url, {"id_tutor": self.tutor_activo.id_tutor}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.proyecto.refresh_from_db()
+        self.assertIsNone(self.proyecto.tutor)
+
+    def test_asignacion_falla_con_tutor_invalido_o_inactivo(self):
+        """Escenario fallido: Se rechaza la asignación de tutores inexistentes o inactivos."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+
+        # ID que no existe
+        res_inexistente = self.client.patch(self.url, {"id_tutor": 999999}, format="json")
+        self.assertEqual(res_inexistente.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Tutor inactivo
+        res_inactivo = self.client.patch(
+            self.url, {"id_tutor": self.tutor_inactivo.id_tutor}, format="json"
+        )
+        self.assertEqual(res_inactivo.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Usuario con perfil Tutor pero sin rol institucional de tutor (un estudiante)
+        tutor_sin_rol = Tutor.objects.create(
+            usuario=self.estudiante,
+            area_conocimiento="Ninguna",
+            estado="activo",
+        )
+        res_no_tutor = self.client.patch(
+            self.url, {"id_tutor": tutor_sin_rol.id_tutor}, format="json"
+        )
+        self.assertEqual(res_no_tutor.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_asignacion_falla_si_iniciativa_no_esta_validada_o_aprobada(self):
+        """Escenario fallido: No se puede asignar tutor si la iniciativa no está validada/aprobada."""
+        self.iniciativa_aprobada.estado = "en_revision"
+        self.iniciativa_aprobada.save(update_fields=["estado"])
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+        res = self.client.patch(self.url, {"id_tutor": self.tutor_activo.id_tutor}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("validadas y aprobadas", res.data["error"])
+
+    def test_asignacion_falla_falta_campo_id_tutor(self):
+        """Escenario fallido: La petición no envía 'id_tutor'."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+        res = self.client.patch(self.url, {}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("id_tutor", res.data["error"])
+
+    def test_asignacion_falla_proyecto_inexistente(self):
+        """Escenario fallido: Proyecto con id inexistente retorna 404."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+        res = self.client.patch(
+            "/api/proyectos/999999/tutor/", {"id_tutor": self.tutor_activo.id_tutor}, format="json"
+        )
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_asignacion_a_traves_de_iniciativa_action(self):
+        """Verifica la asignación y consulta a través de /api/iniciativas/<id>/tutor/."""
+        url_iniciativa = f"/api/iniciativas/{self.iniciativa_aprobada.id_iniciativa}/tutor/"
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+
+        # Asignar mediante action de iniciativa
+        res_patch = self.client.patch(
+            url_iniciativa, {"id_tutor": self.tutor_activo.id_tutor}, format="json"
+        )
+        self.assertEqual(res_patch.status_code, status.HTTP_200_OK)
+
+        # Consultar mediante GET
+        res_get = self.client.get(url_iniciativa)
+        self.assertEqual(res_get.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_get.data["id_tutor"], self.tutor_activo.id_tutor)
+        self.assertEqual(res_get.data["tutor_nombre"], "Profesor Carlos Tutor")
+
+
 class PlanTrabajoEntregablesTests(APITestCase):
     """
     HU-20: Pruebas backend para la Gestión del Plan de Trabajo y Entregables (GENNOVA-89).
@@ -747,4 +992,232 @@ class PlanTrabajoEntregablesTests(APITestCase):
         self.assertEqual(res.data["actividades_completadas"], 2)
         self.assertEqual(res.data["porcentaje_avance"], 50.0)
 
+
+# ==============================================================================
+# GENNOVA-80: Tests de Asignación y Gestión de Mentores en Proyectos
+# ==============================================================================
+
+class AsignarMentorProyectoTests(APITestCase):
+    def setUp(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from gestion_convocatorias.models import Convocatoria, Iniciativa
+        from gestion_acompaniamiento.models import Mentor
+        from .models import ProyectoMentor
+
+        # 1. Configurar Roles
+        self.rol_coordinador, _ = Rol.objects.get_or_create(
+            nombre_rol="coordinador", defaults={"descripcion": "Coordinador"}
+        )
+        self.rol_estudiante, _ = Rol.objects.get_or_create(
+            nombre_rol="estudiante", defaults={"descripcion": "Estudiante"}
+        )
+        self.rol_mentor, _ = Rol.objects.get_or_create(
+            nombre_rol="mentor", defaults={"descripcion": "Mentor"}
+        )
+
+        # 2. Usuarios
+        self.coordinador = Usuario.objects.create(
+            nombre="Coordinador Carlos",
+            correo="carlos.coord@ufps.edu.co",
+            google_id="gid-coord-80",
+            estado="activo",
+        )
+        UsuarioRol.objects.create(usuario=self.coordinador, rol=self.rol_coordinador, estado="activo")
+        self.token_coordinador = generar_token(self.coordinador, "coordinador")
+
+        self.estudiante = Usuario.objects.create(
+            nombre="Estudiante Pedro",
+            correo="pedro.est@ufps.edu.co",
+            google_id="gid-est-80",
+            estado="activo",
+        )
+        UsuarioRol.objects.create(usuario=self.estudiante, rol=self.rol_estudiante, estado="activo")
+        self.token_estudiante = generar_token(self.estudiante, "estudiante")
+
+        # Usuarios y perfiles de Mentores
+        self.u_mentor1 = Usuario.objects.create(
+            nombre="Dra. Elena Mentor",
+            correo="elena.mentor@ufps.edu.co",
+            google_id="gid-mentor-1",
+            estado="activo",
+        )
+        UsuarioRol.objects.create(usuario=self.u_mentor1, rol=self.rol_mentor, estado="activo")
+        self.mentor1 = Mentor.objects.create(
+            usuario=self.u_mentor1,
+            area_especializacion="Inteligencia Artificial",
+            nivel_academico="doctorado",
+            anios_experiencia=8,
+            disponibilidad="10 horas/semana",
+            estado="activo",
+        )
+
+        self.u_mentor2 = Usuario.objects.create(
+            nombre="Ing. Roberto Mentor",
+            correo="roberto.mentor@ufps.edu.co",
+            google_id="gid-mentor-2",
+            estado="activo",
+        )
+        UsuarioRol.objects.create(usuario=self.u_mentor2, rol=self.rol_mentor, estado="activo")
+        self.mentor2 = Mentor.objects.create(
+            usuario=self.u_mentor2,
+            area_especializacion="Finanzas y Modelo de Negocio",
+            nivel_academico="maestria",
+            anios_experiencia=5,
+            disponibilidad="5 horas/semana",
+            estado="activo",
+        )
+
+        self.u_mentor_inactivo = Usuario.objects.create(
+            nombre="Inactivo Mentor",
+            correo="inactivo@ufps.edu.co",
+            google_id="gid-mentor-inactivo",
+            estado="inactivo",
+        )
+        self.mentor_inactivo = Mentor.objects.create(
+            usuario=self.u_mentor_inactivo,
+            area_especializacion="Marketing",
+            estado="inactivo",
+        )
+
+        # 3. Convocatoria, Iniciativa y Proyecto
+        now = timezone.now()
+        conv = Convocatoria.objects.create(
+            nombre="Convocatoria 2026-I",
+            fecha_apertura=now - timedelta(days=2),
+            fecha_cierre=now + timedelta(days=10),
+            estado="abierta",
+        )
+        self.iniciativa = Iniciativa.objects.create(
+            convocatoria=conv,
+            usuario=self.estudiante,
+            nombre="Plataforma de AgroTecnología",
+            tipo="emprendimiento",
+            origen_academico="asignatura",
+            estado="aprobada",
+        )
+        # El signal o service crea el Proyecto al aprobarse la iniciativa
+        self.proyecto = Proyecto.objects.get(iniciativa=self.iniciativa)
+
+    def test_listar_mentores_disponibles(self):
+        """El coordinador puede listar mentores activos; excluye inactivos."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+        res = self.client.get("/api/proyectos/mentores/disponibles/")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        ids_mentores = [m["id_mentor"] for m in res.data]
+        self.assertIn(self.mentor1.id_mentor, ids_mentores)
+        self.assertIn(self.mentor2.id_mentor, ids_mentores)
+        self.assertNotIn(self.mentor_inactivo.id_mentor, ids_mentores)
+
+    def test_filtrar_mentores_disponibles_excluye_asignados(self):
+        """Al filtrar con id_proyecto, excluye mentores ya asignados activamente a ese proyecto."""
+        from .services import asignar_mentor_a_proyecto
+        asignar_mentor_a_proyecto(self.proyecto.id_proyecto, self.mentor1.id_mentor)
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+        res = self.client.get(f"/api/proyectos/mentores/disponibles/?id_proyecto={self.proyecto.id_proyecto}")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        ids_mentores = [m["id_mentor"] for m in res.data]
+        self.assertNotIn(self.mentor1.id_mentor, ids_mentores)
+        self.assertIn(self.mentor2.id_mentor, ids_mentores)
+
+    def test_coordinador_asigna_mentor_exitosamente(self):
+        """El coordinador puede asignar un mentor a un proyecto (HTTP 201)."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+        payload = {
+            "id_proyecto": self.proyecto.id_proyecto,
+            "id_mentor": self.mentor1.id_mentor,
+        }
+        res = self.client.post("/api/proyectos/asignar-mentor/", payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertIn("asignacion", res.data)
+        self.assertTrue(res.data["asignacion"]["activo"])
+        self.assertEqual(res.data["asignacion"]["id_mentor"], self.mentor1.id_mentor)
+
+    def test_asignar_mentor_ya_activo_retorna_400(self):
+        """Si el mentor ya está activo en el proyecto, lanza error de validación (HTTP 400)."""
+        from .services import asignar_mentor_a_proyecto
+        asignar_mentor_a_proyecto(self.proyecto.id_proyecto, self.mentor1.id_mentor)
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+        payload = {
+            "id_proyecto": self.proyecto.id_proyecto,
+            "id_mentor": self.mentor1.id_mentor,
+        }
+        res = self.client.post("/api/proyectos/asignar-mentor/", payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("error", str(res.data))
+
+    def test_desasignar_mentor_soft_delete(self):
+        """DELETE o PATCH desasigna al mentor actualizando activo=False (soft delete)."""
+        from .models import ProyectoMentor
+        from .services import asignar_mentor_a_proyecto
+        asignar_mentor_a_proyecto(self.proyecto.id_proyecto, self.mentor1.id_mentor)
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+        # Probar endpoint DELETE RESTful
+        res = self.client.delete(f"/api/proyectos/{self.proyecto.id_proyecto}/mentores/{self.mentor1.id_mentor}/")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        relacion = ProyectoMentor.objects.get(proyecto=self.proyecto, mentor=self.mentor1)
+        self.assertFalse(relacion.activo)
+
+    def test_reactivar_mentor_previamente_desasignado(self):
+        """Si un mentor estaba inactivo, asignar de nuevo lo reactiva (activo=True)."""
+        from .models import ProyectoMentor
+        from .services import asignar_mentor_a_proyecto, desasignar_mentor_de_proyecto
+        asignar_mentor_a_proyecto(self.proyecto.id_proyecto, self.mentor1.id_mentor)
+        desasignar_mentor_de_proyecto(self.proyecto.id_proyecto, self.mentor1.id_mentor)
+
+        rel = ProyectoMentor.objects.get(proyecto=self.proyecto, mentor=self.mentor1)
+        self.assertFalse(rel.activo)
+
+        # Coordinador vuelve a asignarlo
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+        payload = {
+            "id_proyecto": self.proyecto.id_proyecto,
+            "id_mentor": self.mentor1.id_mentor,
+        }
+        res = self.client.post("/api/proyectos/asignar-mentor/", payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        rel.refresh_from_db()
+        self.assertTrue(rel.activo)
+
+    def test_desasignar_mentor_ya_inactivo_retorna_400(self):
+        """Intentar desasignar un mentor que ya está inactivo retorna HTTP 400."""
+        from .services import asignar_mentor_a_proyecto, desasignar_mentor_de_proyecto
+        asignar_mentor_a_proyecto(self.proyecto.id_proyecto, self.mentor1.id_mentor)
+        desasignar_mentor_de_proyecto(self.proyecto.id_proyecto, self.mentor1.id_mentor)
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+        res = self.client.patch(f"/api/proyectos/{self.proyecto.id_proyecto}/mentores/{self.mentor1.id_mentor}/")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_usuario_no_coordinador_es_rechazado_403(self):
+        """Un usuario sin rol 'coordinador' (ej. estudiante) recibe HTTP 403 Forbidden."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_estudiante}")
+        payload = {
+            "id_proyecto": self.proyecto.id_proyecto,
+            "id_mentor": self.mentor1.id_mentor,
+        }
+        res = self.client.post("/api/proyectos/asignar-mentor/", payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+        res_del = self.client.delete(f"/api/proyectos/{self.proyecto.id_proyecto}/mentores/{self.mentor1.id_mentor}/")
+        self.assertEqual(res_del.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_asignar_mentor_inexistente_retorna_400(self):
+        """Validación de serializador y servicio ante IDs inexistentes."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+        payload = {
+            "id_proyecto": 99999,
+            "id_mentor": self.mentor1.id_mentor,
+        }
+        res = self.client.post("/api/proyectos/asignar-mentor/", payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 

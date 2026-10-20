@@ -173,7 +173,8 @@ else:
         }
     }
 
-if 'test' in sys.argv:
+db_host = os.getenv('DB_HOST', '')
+if 'test' in sys.argv or (any(cmd in sys.argv for cmd in ['makemigrations', 'check']) and (not db_host or 'ingresa_aqui' in db_host)):
     DATABASES['default'] = {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': ':memory:',

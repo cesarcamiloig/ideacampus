@@ -17,7 +17,13 @@ from .models import (
     ActividadPlanTrabajo,
     EntregableActividad,
 )
-from .services import evaluadores_activos
+from .services import (
+    evaluadores_activos,
+    tutores_activos,
+    obtener_mentores_disponibles,
+    asignar_mentor_a_proyecto,
+    desasignar_mentor_de_proyecto,
+)
 from .serializers import (
     EstudianteDisponibleSerializer,
     CrearEquipoSerializer,
@@ -27,6 +33,10 @@ from .serializers import (
     HitoPlanTrabajoSerializer,
     ActividadPlanTrabajoSerializer,
     EntregableSerializer,
+    MentorDisponibleSerializer,
+    AsignarMentorSerializer,
+    DesasignarMentorSerializer,
+    ProyectoMentorDetalleSerializer,
 )
 
 
@@ -626,6 +636,143 @@ class AsignarEvaluadorView(APIView):
             },
             status=status.HTTP_200_OK
         )
+
+
+ROLES_GESTORES_TUTOR = ('admin', 'direccion_del_programa', 'direccion', 'coordinador')
+
+
+class TutoresDisponiblesView(APIView):
+    """
+    HU-05: Lista de tutores académicos activos disponibles para ser asignados
+    a iniciativas validadas y proyectos institucionales.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [TieneRolPermitido]
+    roles_permitidos = ROLES_GESTORES_TUTOR
+
+    def get(self, request):
+        tutores = tutores_activos()
+        data = [
+            {
+                "id_tutor": t.id_tutor,
+                "id_usuario": t.usuario.id_usuario,
+                "nombre": t.usuario.nombre,
+                "correo": t.usuario.correo,
+                "area_conocimiento": t.area_conocimiento,
+                "nivel_academico": t.nivel_academico,
+                "anios_experiencia": t.anios_experiencia,
+                "enlace_perfil": t.enlace_perfil,
+                "biografia": t.biografia,
+            }
+            for t in tutores
+        ]
+        return Response(data, status=status.HTTP_200_OK)
+
+
+class AsignarTutorView(APIView):
+    """
+    HU-05: Asigna o desasigna (enviando id_tutor = null) el tutor académico
+    a un proyecto correspondiente a una iniciativa validada/aprobada.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [TieneRolPermitido]
+    roles_permitidos = ROLES_GESTORES_TUTOR
+
+    def patch(self, request, id_proyecto):
+        proyecto = (
+            Proyecto.objects.select_related("iniciativa__convocatoria", "iniciativa__usuario", "tutor__usuario")
+            .filter(pk=id_proyecto)
+            .first()
+        )
+        if proyecto is None:
+            return Response({"error": "Proyecto no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Regla de negocio HU-05: Solo se pueden asignar tutores a iniciativas validadas / aprobadas
+        ESTADOS_VALIDADOS = ("aprobada", "aceptada", "validada")
+        if proyecto.iniciativa.estado.lower().strip() not in ESTADOS_VALIDADOS:
+            return Response(
+                {
+                    "error": (
+                        f"Solo se pueden asignar tutores a iniciativas validadas y aprobadas "
+                        f"(estado actual: '{proyecto.iniciativa.estado}')."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if "id_tutor" not in request.data:
+            return Response(
+                {"error": "Debe enviar el campo 'id_tutor'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        id_tutor = request.data.get("id_tutor")
+        tutor = None
+        if id_tutor is not None:
+            tutor = tutores_activos().filter(pk=id_tutor).first()
+            if tutor is None:
+                return Response(
+                    {"error": "El tutor seleccionado no es un tutor académico activo o no existe."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        tutor_anterior = proyecto.tutor
+        proyecto.tutor = tutor
+        proyecto.save(update_fields=["tutor"])
+
+        # HU-12: Emisión automática de alertas institucionales al asignar tutor
+        if tutor is not None and (tutor_anterior is None or tutor_anterior.pk != tutor.pk):
+            from gestion_convocatorias.models import AlertaRol, NotificacionConvocatoria
+            from django.utils import timezone
+            from datetime import timedelta
+
+            # Alerta para el tutor académico asignado
+            AlertaRol.objects.create(
+                usuario=tutor.usuario,
+                convocatoria=proyecto.iniciativa.convocatoria,
+                titulo=f"Asignación de Tutoría: {proyecto.nombre_proyecto}",
+                mensaje=(
+                    f"Has sido asignado formalmente como tutor académico de la iniciativa validada '{proyecto.nombre_proyecto}'. "
+                    f"Inicia el cronograma de acompañamiento y registro de bitácoras."
+                ),
+                rol_destinatario="tutor",
+                tipo="compromiso_tutoria",
+                prioridad="alta",
+                fecha_vencimiento=timezone.now() + timedelta(days=7),
+                modulo_destino="acompanamiento",
+            )
+
+            # Notificación institucional al estudiante autor/líder
+            if proyecto.iniciativa.usuario and proyecto.iniciativa.convocatoria:
+                NotificacionConvocatoria.objects.create(
+                    convocatoria=proyecto.iniciativa.convocatoria,
+                    usuario=proyecto.iniciativa.usuario,
+                    titulo="Tutor Académico Asignado",
+                    mensaje=(
+                        f"Se ha asignado a {tutor.usuario.nombre} como tutor académico "
+                        f"de tu iniciativa '{proyecto.nombre_proyecto}'."
+                    ),
+                    tipo="actualizacion",
+                )
+
+        return Response(
+            {
+                "id_proyecto": proyecto.id_proyecto,
+                "id_iniciativa": proyecto.iniciativa_id,
+                "nombre_proyecto": proyecto.nombre_proyecto,
+                "id_tutor": tutor.id_tutor if tutor else None,
+                "tutor_nombre": tutor.usuario.nombre if tutor else None,
+                "tutor_correo": tutor.usuario.correo if tutor else None,
+                "area_conocimiento": tutor.area_conocimiento if tutor else None,
+                "message": (
+                    "Tutor académico asignado exitosamente."
+                    if tutor
+                    else "Tutor académico desasignado exitosamente."
+                ),
+            },
+            status=status.HTTP_200_OK,
+        )
+
 
 # =========================================================================
 # HU-20: GESTIÓN DEL PLAN DE TRABAJO, HITOS, ACTIVIDADES Y ENTREGABLES
@@ -1261,4 +1408,120 @@ class EntregableActividadDetailView(APIView):
 
         entregable.delete()
         return Response({"message": "Entregable eliminado exitosamente."}, status=status.HTTP_200_OK)
+
+
+# ==============================================================================
+# GENNOVA-80: Vistas para Asignación y Gestión de Mentores en Proyectos
+# ==============================================================================
+
+class MentoresDisponiblesView(APIView):
+    """
+    GENNOVA-80: Retorna la lista de mentores disponibles consultando la entidad correspondiente.
+    Soporta filtrado opcional mediante el parámetro 'id_proyecto' (en URL o query param)
+    para excluir a los mentores que ya cuenten con asignación activa en dicho proyecto.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [TieneRolPermitido]
+    roles_permitidos = ["coordinador", "Coordinador", "admin", "direccion_del_programa", "direccion"]
+
+    def get(self, request, id_proyecto=None):
+        proyecto_id = id_proyecto or request.query_params.get("id_proyecto")
+        if proyecto_id:
+            try:
+                proyecto_id = int(proyecto_id)
+            except (ValueError, TypeError):
+                return Response(
+                    {"error": "El parámetro 'id_proyecto' debe ser un número entero válido."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        mentores = obtener_mentores_disponibles(id_proyecto=proyecto_id)
+        serializer = MentorDisponibleSerializer(mentores, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class AsignarMentorProyectoView(APIView):
+    """
+    GENNOVA-80: Asigna un mentor a un proyecto invocando la capa de servicios.
+    Restringido exclusivamente al rol 'Coordinador' mediante TieneRolPermitido.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [TieneRolPermitido]
+    roles_permitidos = ["coordinador", "Coordinador"]
+
+    def post(self, request, id_proyecto=None):
+        data = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+        if id_proyecto is not None:
+            data["id_proyecto"] = id_proyecto
+
+        serializer = AsignarMentorSerializer(data=data)
+        serializer.is_valid(raise_exception=True)
+
+        id_proy = serializer.validated_data["id_proyecto"]
+        id_ment = serializer.validated_data["id_mentor"]
+
+        asignacion, fue_creado = asignar_mentor_a_proyecto(
+            id_proyecto=id_proy,
+            id_mentor=id_ment
+        )
+
+        return Response(
+            {
+                "message": (
+                    "Mentor asignado exitosamente al proyecto."
+                    if fue_creado
+                    else "Asignación de mentor reactivada exitosamente."
+                ),
+                "asignacion": ProyectoMentorDetalleSerializer(asignacion).data,
+            },
+            status=status.HTTP_201_CREATED if fue_creado else status.HTTP_200_OK
+        )
+
+
+class DesasignarMentorProyectoView(APIView):
+    """
+    GENNOVA-80: Desasigna o desactiva (soft delete) un mentor de un proyecto.
+    Permite métodos HTTP DELETE o PATCH, restringido exclusivamente al rol 'Coordinador'.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [TieneRolPermitido]
+    roles_permitidos = ["coordinador", "Coordinador"]
+
+    def _procesar_desasignacion(self, request, id_proyecto=None, id_mentor=None):
+        target_proyecto = id_proyecto or request.data.get("id_proyecto")
+        target_mentor = id_mentor or request.data.get("id_mentor")
+
+        if not target_proyecto or not target_mentor:
+            return Response(
+                {"error": "Debe especificar 'id_proyecto' e 'id_mentor' para desasignar al mentor."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            target_proyecto = int(target_proyecto)
+            target_mentor = int(target_mentor)
+        except (ValueError, TypeError):
+            return Response(
+                {"error": "'id_proyecto' e 'id_mentor' deben ser números enteros válidos."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        asignacion = desasignar_mentor_de_proyecto(
+            id_proyecto=target_proyecto,
+            id_mentor=target_mentor
+        )
+
+        return Response(
+            {
+                "message": "Mentor desasignado exitosamente del proyecto.",
+                "asignacion": ProyectoMentorDetalleSerializer(asignacion).data,
+            },
+            status=status.HTTP_200_OK
+        )
+
+    def delete(self, request, id_proyecto=None, id_mentor=None):
+        return self._procesar_desasignacion(request, id_proyecto, id_mentor)
+
+    def patch(self, request, id_proyecto=None, id_mentor=None):
+        return self._procesar_desasignacion(request, id_proyecto, id_mentor)
 

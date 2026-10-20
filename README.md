@@ -150,7 +150,7 @@ Una vez que la terminal indique que los contenedores están "Running", puedes ve
 ```bash
 docker exec ideacampus_backend python manage.py test
 ```
-*Cubre 93 pruebas unitarias y de integración que validan permisos, reglas de negocio Estudiante-Iniciativa-Equipo, creación de proyectos, asignación de coordinadores y evaluadores, edición y validación de rúbricas (HU-06), autenticación JWT multi-rol, ciclo de vida de convocatorias, alertas automáticas y endpoints REST.*
+*Cubre 102 pruebas unitarias y de integración que validan permisos, reglas de negocio Estudiante-Iniciativa-Equipo, creación de proyectos, asignación de coordinadores, evaluadores, tutores (HU-05) y mentores (HU-10), edición y validación de rúbricas (HU-06), plan de trabajo y entregables (HU-20), autenticación JWT multi-rol, ciclo de vida de convocatorias, alertas automáticas por rol (HU-12) y endpoints REST.*
 
 ### Compilación y Verificación de Tipos del Frontend
 ```bash
