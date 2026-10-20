@@ -235,3 +235,41 @@ class DescargaDocumentoEvidenciaTests(EvidenciaBaseTests):
         res = self.descargar(self.titular, documento=antiguo)
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
         self.assertIn("volver a cargarse", res.data["error"])
+
+
+class EliminarEvidenciaTests(EvidenciaBaseTests):
+    """Solo el líder del equipo del proyecto elimina evidencias (en los datos base, el integrante es el líder)."""
+
+    def setUp(self):
+        super().setUp()
+        # La sube el titular, que no es el líder del equipo
+        res = self.subir(self.titular, self.iniciativa)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
+        self.evidencia_id = res.data["id"]
+
+    def eliminar(self, usuario, rol="estudiante", evidencia_id=None):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {generar_token(usuario, rol)}")
+        return self.client.delete(f"{self.URL}{evidencia_id or self.evidencia_id}/")
+
+    def test_lider_elimina_la_evidencia_aunque_la_haya_subido_otro(self):
+        res = self.eliminar(self.integrante)
+        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Evidencia.objects.filter(pk=self.evidencia_id).exists())
+        self.assertFalse(DocumentoEvidencia.objects.filter(evidencia_id=self.evidencia_id).exists())
+
+    def test_quien_no_es_lider_recibe_403_aunque_la_haya_subido(self):
+        res = self.eliminar(self.titular)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(Evidencia.objects.filter(pk=self.evidencia_id).exists())
+
+    def test_estudiante_ajeno_y_otros_roles_no_eliminan(self):
+        self.assertEqual(self.eliminar(self.ajeno).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.eliminar(self.tutor, rol="tutor").status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(Evidencia.objects.filter(pk=self.evidencia_id).exists())
+
+    def test_proyecto_sin_equipo_no_tiene_lider_que_elimine(self):
+        res = self.subir(self.titular, self.iniciativa_sin_equipo)
+        self.assertEqual(self.eliminar(self.titular, evidencia_id=res.data["id"]).status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_evidencia_inexistente_da_404(self):
+        self.assertEqual(self.eliminar(self.integrante, evidencia_id=999999).status_code, status.HTTP_404_NOT_FOUND)

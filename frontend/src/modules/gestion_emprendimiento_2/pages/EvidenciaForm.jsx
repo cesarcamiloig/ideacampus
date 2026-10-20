@@ -103,6 +103,7 @@ function EvidenciaForm() {
   // El proyecto lleva el nombre de la iniciativa aprobada del equipo, y sus etapas son
   // los hitos de la rúbrica del mismo tipo de iniciativa (configurada en Rúbricas).
   const [proyecto, setProyecto] = useState(null); // { id, nombre, tipo }
+  const [esLider, setEsLider] = useState(false);
   const [etapas, setEtapas] = useState([]);
   const [cargandoProyecto, setCargandoProyecto] = useState(true);
   const [cargandoEtapas, setCargandoEtapas] = useState(true);
@@ -175,6 +176,7 @@ function EvidenciaForm() {
         const idProyecto =
           iniciativa?.id_proyecto ?? equipo?.id_proyecto ?? equipo?.proyecto?.id_proyecto ?? lista[0]?.proyecto ?? null;
         setProyecto(iniciativa ? { id: idProyecto, nombre: iniciativa.nombre, tipo: iniciativa.tipo } : null);
+        setEsLider(Boolean(equipo?.es_lider));
         setCargandoProyecto(false);
 
         if (!iniciativa?.tipo) return;
@@ -662,6 +664,8 @@ function EvidenciaForm() {
         cargando={cargandoRegistradas}
         error={registradasError}
         onReintentar={cargarRegistradas}
+        puedeEliminar={esLider}
+        onEliminada={(id) => setRegistradas((prev) => prev.filter((ev) => ev.id !== id))}
       />
     </div>
   );

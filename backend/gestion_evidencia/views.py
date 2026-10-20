@@ -9,6 +9,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from gestion_administrativa.authentication import JWTAuthentication
 from gestion_administrativa.permissions import TieneRolPermitido
+from gestion_emprendimiento_2.models import EquipoEmprendedor
 from .models import DocumentoEvidencia, Evidencia
 from .serializers import (
     EvidenciaCrearSerializer,
@@ -22,6 +23,15 @@ from .serializers import (
 DOCUMENTOS_SIN_CONTENIDO = Prefetch(
     "documentos", queryset=DocumentoEvidencia.objects.defer("contenido")
 )
+
+
+def es_lider_del_proyecto(usuario, proyecto):
+    """Solo el líder del equipo emprendedor del proyecto puede eliminar sus evidencias."""
+    try:
+        equipo = proyecto.iniciativa.equipo
+    except EquipoEmprendedor.DoesNotExist:
+        return False
+    return equipo.estudiante_lider.usuario_id == usuario.pk
 
 
 class EvidenciaViewSet(mixins.CreateModelMixin,
@@ -40,7 +50,7 @@ class EvidenciaViewSet(mixins.CreateModelMixin,
 
     @property
     def roles_permitidos(self):
-        if self.action == "create":
+        if self.action in ("create", "destroy"):
             return self.roles_crear
         if self.action == "mi_proyecto":
             return self.roles_mi_proyecto
@@ -68,6 +78,28 @@ class EvidenciaViewSet(mixins.CreateModelMixin,
         evidencia = serializer.save()
         salida = EvidenciaSerializer(evidencia, context={"request": request})
         return Response(salida.data, status=status.HTTP_201_CREATED)
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        Elimina una evidencia con todos sus adjuntos. Solo puede hacerlo el líder del equipo
+        del proyecto, sea quien sea el integrante que la subió.
+        """
+        evidencia = (Evidencia.objects
+                     .select_related("proyecto__iniciativa__equipo__estudiante_lider")
+                     .filter(pk=kwargs.get("pk"))
+                     .first())
+        if not evidencia:
+            return Response({"error": "Evidencia no encontrada."}, status=status.HTTP_404_NOT_FOUND)
+        if not es_lider_del_proyecto(request.user, evidencia.proyecto):
+            return Response(
+                {"error": "Solo el líder del equipo puede eliminar las evidencias del proyecto."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        # Los adjuntos antiguos guardados en disco también se borran del almacenamiento
+        for documento in evidencia.documentos.exclude(archivo="").exclude(archivo__isnull=True):
+            documento.archivo.delete(save=False)
+        evidencia.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=["get"], url_path="mi-proyecto")
     def mi_proyecto(self, request):

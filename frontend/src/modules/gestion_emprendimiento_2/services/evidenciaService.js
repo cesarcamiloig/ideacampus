@@ -22,6 +22,11 @@ export async function descargarDocumentoEvidencia(idDocumento) {
   return apiClient.download(`/evidencias/documentos/${idDocumento}/descargar/`);
 }
 
+// Solo el líder del equipo del proyecto; responde 204 sin contenido
+export async function eliminarEvidencia(idEvidencia) {
+  return apiClient.delete(`/evidencias/${idEvidencia}/`);
+}
+
 // Evidencias de los proyectos en los que participa el estudiante (las suyas y las de su equipo).
 // GET /evidencias/ en cambio solo devuelve las que subió el propio estudiante.
 export async function getEvidencias() {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Download, ExternalLink, FileText, Link2, Loader2, RefreshCw, X } from "lucide-react";
-import { descargarDocumentoEvidencia } from "../services/evidenciaService";
+import { AlertCircle, Download, ExternalLink, FileText, Link2, Loader2, RefreshCw, Trash2, X } from "lucide-react";
+import { descargarDocumentoEvidencia, eliminarEvidencia } from "../services/evidenciaService";
 
 const FILTROS = [
   { id: "todas", label: "Todas" },
@@ -96,9 +96,36 @@ function DocumentoAdjunto({ doc }) {
 }
 
 // Panel lateral flotante con las evidencias ya cargadas en el proyecto del equipo
-export default function EvidenciasCargadasPanel({ open, onClose, evidencias, cargando, error, onReintentar }) {
+// Solo el líder del equipo ve el botón de eliminar (el backend también lo valida)
+export default function EvidenciasCargadasPanel({
+  open,
+  onClose,
+  evidencias,
+  cargando,
+  error,
+  onReintentar,
+  puedeEliminar = false,
+  onEliminada,
+}) {
   const [filtro, setFiltro] = useState("todas");
   const botonCerrarRef = useRef(null);
+  const [confirmandoId, setConfirmandoId] = useState(null);
+  const [eliminandoId, setEliminandoId] = useState(null);
+  const [errorEliminar, setErrorEliminar] = useState({});
+
+  async function confirmarEliminar(id) {
+    setEliminandoId(id);
+    setErrorEliminar({});
+    try {
+      await eliminarEvidencia(id);
+      setConfirmandoId(null);
+      onEliminada?.(id);
+    } catch (err) {
+      setErrorEliminar({ [id]: err.message || "No se pudo eliminar la evidencia." });
+    } finally {
+      setEliminandoId(null);
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -206,10 +233,55 @@ export default function EvidenciasCargadasPanel({ open, onClose, evidencias, car
                       {[ev.etapa_nombre, ev.usuario_nombre, formatFecha(ev.creado)].filter(Boolean).join(" · ")}
                     </p>
                   </div>
-                  <span className="w-fit shrink-0 rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold text-red-700">
-                    {ETIQUETA_TIPO[ev.tipo] || ev.tipo}
-                  </span>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="w-fit rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold text-red-700">
+                      {ETIQUETA_TIPO[ev.tipo] || ev.tipo}
+                    </span>
+                    {puedeEliminar && confirmandoId !== ev.id && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConfirmandoId(ev.id);
+                          setErrorEliminar({});
+                        }}
+                        className="rounded-md p-1 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                        title="Eliminar evidencia"
+                        aria-label={`Eliminar la evidencia ${ev.titulo}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
+                {confirmandoId === ev.id && (
+                  <div className="mt-3 flex flex-col gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-xs font-medium text-red-800">
+                      ¿Eliminar esta evidencia y todos sus adjuntos? No se puede deshacer.
+                    </p>
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setConfirmandoId(null)}
+                        disabled={eliminandoId === ev.id}
+                        className="rounded-md border border-slate-300 bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => confirmarEliminar(ev.id)}
+                        disabled={eliminandoId === ev.id}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-red-700 disabled:cursor-wait disabled:opacity-60"
+                      >
+                        {eliminandoId === ev.id && <Loader2 className="h-3 w-3 animate-spin" />}
+                        {eliminandoId === ev.id ? "Eliminando..." : "Eliminar"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {errorEliminar[ev.id] && (
+                  <p className="mt-2 text-[11px] font-medium text-red-600" role="alert">{errorEliminar[ev.id]}</p>
+                )}
                 {ev.descripcion && (
                   <p className="mt-2 whitespace-pre-line text-xs leading-relaxed text-slate-600">{ev.descripcion}</p>
                 )}
