@@ -376,7 +376,7 @@ class IniciativaViewSet(viewsets.ModelViewSet):
     def _es_gestor(self, usuario):
         roles_usuario = getattr(usuario, 'roles_asignados', [])
         rol_activo = getattr(usuario, 'rol_activo', '')
-        roles_gestores = ['admin', 'direccion_del_programa', 'direccion']
+        roles_gestores = ['admin', 'direccion_del_programa', 'direccion', 'coordinador']
         return any(rol in roles_usuario for rol in roles_gestores) or (
             rol_activo in roles_gestores
         )
@@ -563,3 +563,50 @@ class IniciativaViewSet(viewsets.ModelViewSet):
             filename=documento.nombre_original,
             content_type='application/pdf',
         )
+
+    @action(detail=True, methods=['get', 'patch'], url_path='tutor')
+    def tutor(self, request, pk=None):
+        """
+        HU-05: Consulta o asigna el tutor académico de una iniciativa validada.
+        """
+        iniciativa = self.get_object()
+        es_gestor = self._es_gestor(request.user) or (
+            'coordinador' in getattr(request.user, 'roles_asignados', [])
+            or getattr(request.user, 'rol_activo', '') == 'coordinador'
+        )
+
+        if not es_gestor:
+            return Response(
+                {"error": "No tienes permisos para gestionar tutores de iniciativas."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        proyecto = getattr(iniciativa, 'proyecto', None)
+        if not proyecto:
+            return Response(
+                {
+                    "error": (
+                        "La iniciativa no tiene un proyecto activo o no ha sido aprobada. "
+                        "Solo las iniciativas validadas y aprobadas permiten asignación de tutor."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if request.method == 'GET':
+            tutor = proyecto.tutor
+            return Response(
+                {
+                    "id_iniciativa": iniciativa.id_iniciativa,
+                    "id_proyecto": proyecto.id_proyecto,
+                    "id_tutor": tutor.id_tutor if tutor else None,
+                    "tutor_nombre": tutor.usuario.nombre if tutor else None,
+                    "tutor_correo": tutor.usuario.correo if tutor else None,
+                    "area_conocimiento": tutor.area_conocimiento if tutor else None,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        from gestion_emprendimiento_2.views import AsignarTutorView
+        view = AsignarTutorView()
+        return view.patch(request, proyecto.id_proyecto)
