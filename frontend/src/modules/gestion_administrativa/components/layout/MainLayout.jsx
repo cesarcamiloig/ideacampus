@@ -11,6 +11,7 @@ import {
     Award,
     Bell,
     Check,
+    FolderKanban,
     Menu,
     X,
 } from "lucide-react"
@@ -164,7 +165,7 @@ export default function MainLayout({
             { id: "alertas", label: "Centro de Alertas", icon: Bell },
         ],
         coordinador: [
-            { id: "convocatorias", label: "Gestión de Convocatorias", icon: FileText },
+            { id: "iniciativas", label: "Proyectos", icon: FolderKanban },
             { id: "reportes", label: "Métricas e Impacto", icon: Award },
             { id: "alertas", label: "Centro de Alertas", icon: Bell },
         ],

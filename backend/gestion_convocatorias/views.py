@@ -392,9 +392,12 @@ class IniciativaViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         usuario = self.request.user
+        # 'proyecto' y sus mentores se precargan para el resumen del serializer (sin N+1)
+        relaciones = ('convocatoria', 'usuario', 'proyecto')
+        precargas = ('documentos', 'proyecto__asignaciones_mentor')
         if self._es_gestor(usuario):
-            return Iniciativa.objects.all().select_related('convocatoria', 'usuario').prefetch_related('documentos').order_by('-fecha_postulacion')
-        return Iniciativa.objects.filter(usuario=usuario).select_related('convocatoria', 'usuario').prefetch_related('documentos').order_by('-fecha_postulacion')
+            return Iniciativa.objects.all().select_related(*relaciones).prefetch_related(*precargas).order_by('-fecha_postulacion')
+        return Iniciativa.objects.filter(usuario=usuario).select_related(*relaciones).prefetch_related(*precargas).order_by('-fecha_postulacion')
 
     def perform_create(self, serializer):
         usuario = self.request.user

@@ -1152,31 +1152,45 @@ class AsignarMentorProyectoTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("error", str(res.data))
 
-    def test_desasignar_mentor_soft_delete(self):
-        """DELETE o PATCH desasigna al mentor actualizando activo=False (soft delete)."""
+    def test_desasignar_mentor_elimina_el_registro(self):
+        """DELETE desasigna al mentor eliminando su registro de proyecto_mentor."""
         from .models import ProyectoMentor
         from .services import asignar_mentor_a_proyecto
-        asignar_mentor_a_proyecto(self.proyecto.id_proyecto, self.mentor1.id_mentor)
+        asignacion, _ = asignar_mentor_a_proyecto(self.proyecto.id_proyecto, self.mentor1.id_mentor)
 
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
-        # Probar endpoint DELETE RESTful
         res = self.client.delete(f"/api/proyectos/{self.proyecto.id_proyecto}/mentores/{self.mentor1.id_mentor}/")
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        relacion = ProyectoMentor.objects.get(proyecto=self.proyecto, mentor=self.mentor1)
-        self.assertFalse(relacion.activo)
+        self.assertFalse(ProyectoMentor.objects.filter(proyecto=self.proyecto, mentor=self.mentor1).exists())
+        # La respuesta conserva el formato: id original y activo=False
+        self.assertEqual(res.data["asignacion"]["id"], asignacion.pk)
+        self.assertFalse(res.data["asignacion"]["activo"])
 
-    def test_reactivar_mentor_previamente_desasignado(self):
-        """Si un mentor estaba inactivo, asignar de nuevo lo reactiva (activo=True)."""
+    def test_reasignar_mentor_quitado_crea_una_asignacion_nueva(self):
+        """Tras quitar al mentor, volver a asignarlo crea un registro nuevo (201)."""
         from .models import ProyectoMentor
         from .services import asignar_mentor_a_proyecto, desasignar_mentor_de_proyecto
         asignar_mentor_a_proyecto(self.proyecto.id_proyecto, self.mentor1.id_mentor)
         desasignar_mentor_de_proyecto(self.proyecto.id_proyecto, self.mentor1.id_mentor)
 
-        rel = ProyectoMentor.objects.get(proyecto=self.proyecto, mentor=self.mentor1)
-        self.assertFalse(rel.activo)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+        payload = {
+            "id_proyecto": self.proyecto.id_proyecto,
+            "id_mentor": self.mentor1.id_mentor,
+        }
+        res = self.client.post("/api/proyectos/asignar-mentor/", payload, format="json")
 
-        # Coordinador vuelve a asignarlo
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(ProyectoMentor.objects.get(proyecto=self.proyecto, mentor=self.mentor1).activo)
+
+    def test_reactivar_registro_inactivo_heredado(self):
+        """Un registro inactivo de cuando la desasignación era soft delete se reactiva (200)."""
+        from .models import ProyectoMentor
+        rel = ProyectoMentor.objects.create(
+            proyecto=self.proyecto, mentor=self.mentor1, fecha_asignacion="2026-01-15", activo=False
+        )
+
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
         payload = {
             "id_proyecto": self.proyecto.id_proyecto,
@@ -1189,7 +1203,7 @@ class AsignarMentorProyectoTests(APITestCase):
         self.assertTrue(rel.activo)
 
     def test_desasignar_mentor_ya_inactivo_retorna_400(self):
-        """Intentar desasignar un mentor que ya está inactivo retorna HTTP 400."""
+        """Intentar desasignar un mentor que ya fue quitado retorna HTTP 400."""
         from .services import asignar_mentor_a_proyecto, desasignar_mentor_de_proyecto
         asignar_mentor_a_proyecto(self.proyecto.id_proyecto, self.mentor1.id_mentor)
         desasignar_mentor_de_proyecto(self.proyecto.id_proyecto, self.mentor1.id_mentor)
@@ -1210,6 +1224,25 @@ class AsignarMentorProyectoTests(APITestCase):
 
         res_del = self.client.delete(f"/api/proyectos/{self.proyecto.id_proyecto}/mentores/{self.mentor1.id_mentor}/")
         self.assertEqual(res_del.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_listado_de_iniciativas_resume_los_roles_del_proyecto(self):
+        """El listado trae id_proyecto y qué roles tiene asignados, para avisar los que faltan."""
+        from .services import asignar_mentor_a_proyecto
+
+        def resumen():
+            res = self.client.get("/api/iniciativas/")
+            self.assertEqual(res.status_code, status.HTTP_200_OK)
+            lista = res.data if isinstance(res.data, list) else res.data["results"]
+            fila = next(i for i in lista if i["id_iniciativa"] == self.proyecto.iniciativa_id)
+            return fila["proyecto"]
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+        self.assertEqual(
+            resumen(),
+            {"id_proyecto": self.proyecto.id_proyecto, "tiene_tutor": False, "tiene_evaluador": False, "mentores_asignados": 0},
+        )
+        asignar_mentor_a_proyecto(self.proyecto.id_proyecto, self.mentor1.id_mentor)
+        self.assertEqual(resumen()["mentores_asignados"], 1)
 
     def test_asignar_mentor_inexistente_retorna_400(self):
         """Validación de serializador y servicio ante IDs inexistentes."""
