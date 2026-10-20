@@ -24,6 +24,8 @@ function normalizarIniciativaParaUI(item) {
     tiene_equipo: Boolean(item.tiene_equipo),
     equipo_id: item.equipo_id || null,
     equipo_nombre: item.equipo_nombre || null,
+    // { id_proyecto, tiene_tutor, tiene_evaluador, mentores_asignados } o null si aún no hay proyecto
+    proyecto: item.proyecto || null,
     convocatoria: {
       id_convocatoria: item.convocatoria,
       nombre: item.convocatoria_nombre || "Convocatoria Institucional UFPS",

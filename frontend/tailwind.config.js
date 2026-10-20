@@ -59,6 +59,8 @@ export default {
       transitionTimingFunction: {
         // ease-out fuerte: arranca rápido y se asienta suave
         "out-suave": "cubic-bezier(0.23, 1, 0.32, 1)",
+        // Curva de panel lateral (tipo iOS): entra decidido y se asienta sin rebote
+        panel: "cubic-bezier(0.32, 0.72, 0, 1)",
       },
       keyframes: {
         aparecer: {

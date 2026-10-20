@@ -12,15 +12,68 @@ import {
   RefreshCw,
   AlertCircle,
   ExternalLink,
+  Users,
+  GraduationCap,
+  ClipboardCheck,
 } from "lucide-react";
+import { useAuth } from "../../../context/AuthContext";
 import {
   getTodasLasIniciativas,
   cambiarEstadoIniciativa,
   getCoordinadores,
 } from "../services/postulacionService";
 import DetalleExpedienteModal from "./DetalleExpedienteModal";
+import MentoresPanel from "../../gestion_acompaniamiento/components/MentoresPanel";
 
-export default function BancoIniciativasView() {
+const ESTADOS_APROBADOS = ["aprobada", "aprobado", "aceptada", "aceptado"];
+
+function esAprobada(item) {
+  return ESTADOS_APROBADOS.includes((item.estado || "").toLowerCase());
+}
+
+const ROL_SINGULAR = { mentores: "mentor", tutor: "tutor", evaluador: "evaluador" };
+
+// Botón de un rol del proyecto (mentores, tutor, evaluador). Todos miden lo mismo; si al
+// proyecto le falta ese rol, lleva un punto ámbar y lo dice en el título y al lector de pantalla.
+function BotonRol({ etiqueta, Icono, falta, onClick, proximamente = false }) {
+  const rol = etiqueta.toLowerCase();
+  const titulo = [
+    falta ? `Falta asignar ${ROL_SINGULAR[rol] || rol}` : null,
+    proximamente ? "Disponible próximamente" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <button
+      type="button"
+      onClick={proximamente ? undefined : onClick}
+      aria-haspopup={proximamente ? undefined : "dialog"}
+      aria-disabled={proximamente ? "true" : undefined}
+      title={titulo || `Ver ${rol} del proyecto`}
+      className={`relative inline-flex w-28 items-center justify-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg border bg-white text-slate-700 hover:bg-slate-50 transition-colors ${
+        falta ? "border-amber-300" : "border-slate-200"
+      }`}
+    >
+      <Icono className="h-3.5 w-3.5 text-slate-500" />
+      <span>{etiqueta}</span>
+      {falta && (
+        <>
+          <span
+            className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-amber-500 ring-2 ring-white"
+            aria-hidden="true"
+          />
+          <span className="sr-only"> (falta asignar)</span>
+        </>
+      )}
+    </button>
+  );
+}
+
+// titulo: el coordinador ve esta vista como "Proyectos"
+export default function BancoIniciativasView({ titulo = "Banco de Iniciativas y Emprendimientos" }) {
+  const { rolActivo } = useAuth();
+  const esCoordinador = (rolActivo || "").trim().toLowerCase() === "coordinador";
   const [iniciativas, setIniciativas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
@@ -31,6 +84,9 @@ export default function BancoIniciativasView() {
   const [expedienteSeleccionado, setExpedienteSeleccionado] = useState(null);
   const [accionConfirmacion, setAccionConfirmacion] = useState(null); // { iniciativa, accion: 'aprobada' | 'rechazada' }
   const [procesandoAccion, setProcesandoAccion] = useState(false);
+
+  // HU-10: panel de mentores del proyecto de una iniciativa aprobada
+  const [iniciativaMentores, setIniciativaMentores] = useState(null);
 
   // Coordinadores disponibles para asignar al proyecto al aprobar
   const [coordinadores, setCoordinadores] = useState([]);
@@ -178,9 +234,7 @@ export default function BancoIniciativasView() {
                 Coordinación de Emprendimiento
               </span>
             </div>
-            <h2 className="text-xl font-bold text-slate-900">
-              Banco de Iniciativas y Emprendimientos
-            </h2>
+            <h2 className="text-xl font-bold text-slate-900">{titulo}</h2>
             <p className="text-xs text-slate-500 mt-0.5">
               Revisión, validación de origen académico y habilitación para conformación de equipos emprendedores.
             </p>
@@ -222,7 +276,7 @@ export default function BancoIniciativasView() {
 
         <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm">
           <span className="text-[11px] font-bold uppercase text-emerald-700">
-            Aprobadas (Habilitadas HU-04)
+            Aprobadas
           </span>
           <div className="mt-1 text-2xl font-bold text-emerald-900">{conteoAprobadas}</div>
           <span className="text-[11px] text-emerald-600 mt-0.5 block">
@@ -272,7 +326,7 @@ export default function BancoIniciativasView() {
             type="text"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por radicado, título, estudiante o correo..."
+            placeholder="Buscar por título, estudiante o correo..."
             className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all"
           />
         </div>
@@ -314,7 +368,6 @@ export default function BancoIniciativasView() {
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200">
                 <tr>
-                  <th className="px-5 py-3.5">Radicado / Fecha</th>
                   <th className="px-5 py-3.5">Iniciativa / Categoría</th>
                   <th className="px-5 py-3.5">Estudiante Postulante</th>
                   <th className="px-5 py-3.5">Origen Académico</th>
@@ -330,15 +383,6 @@ export default function BancoIniciativasView() {
 
                   return (
                     <tr key={item.id || item.id_iniciativa} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="px-5 py-4 align-top">
-                        <span className="font-mono text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-100 block w-fit">
-                          {item.radicado}
-                        </span>
-                        <span className="text-[10px] text-slate-400 block mt-1">
-                          {new Date(item.fecha_radicacion).toLocaleDateString("es-CO")}
-                        </span>
-                      </td>
-
                       <td className="px-5 py-4 align-top max-w-xs">
                         <div className="font-bold text-slate-900 leading-snug">
                           {item.iniciativa?.titulo || item.nombre}
@@ -391,48 +435,78 @@ export default function BancoIniciativasView() {
                         )}
                       </td>
 
-                      <td className="px-5 py-4 align-top text-right space-x-1.5 whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => setExpedienteSeleccionado(item)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
-                          title="Ver Expediente Digital"
-                        >
-                          <Eye className="h-3.5 w-3.5 text-slate-500" />
-                          <span>Expediente</span>
-                        </button>
+                      <td className="px-5 py-4 align-top">
+                        <div className="flex flex-col items-end gap-2.5">
+                          <div className="flex flex-wrap items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setExpedienteSeleccionado(item)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
+                              title="Ver Expediente Digital"
+                            >
+                              <Eye className="h-3.5 w-3.5 text-slate-500" />
+                              <span>Expediente</span>
+                            </button>
 
-                        {/* Botón de Aprobación */}
-                        {!["aprobada", "aprobado", "aceptada", "aceptado"].includes(
-                          (item.estado || "").toLowerCase()
-                        ) && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setAccionConfirmacion({ iniciativa: item, accion: "aprobada" })
-                            }
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-sm"
-                            title="Aprobar iniciativa para que el estudiante conforme equipo"
-                          >
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            <span>Aprobar</span>
-                          </button>
-                        )}
+                            {/* Botón de Aprobación */}
+                            {!esAprobada(item) && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setAccionConfirmacion({ iniciativa: item, accion: "aprobada" })
+                                }
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-sm"
+                                title="Aprobar iniciativa para que el estudiante conforme equipo"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                <span>Aprobar</span>
+                              </button>
+                            )}
 
-                        {/* Botón de Rechazo */}
-                        {(item.estado || "").toLowerCase() !== "rechazada" && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setAccionConfirmacion({ iniciativa: item, accion: "rechazada" })
-                            }
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
-                            title="Rechazar postulación"
-                          >
-                            <XCircle className="h-3.5 w-3.5" />
-                            <span>Rechazar</span>
-                          </button>
-                        )}
+                            {/* Botón de Rechazo (el coordinador no puede rechazar iniciativas) */}
+                            {!esCoordinador && (item.estado || "").toLowerCase() !== "rechazada" && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setAccionConfirmacion({ iniciativa: item, accion: "rechazada" })
+                                }
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+                                title="Rechazar postulación"
+                              >
+                                <XCircle className="h-3.5 w-3.5" />
+                                <span>Rechazar</span>
+                              </button>
+                            )}
+
+                            {/* Mentores del proyecto (solo iniciativas aprobadas) */}
+                            {esAprobada(item) && (
+                              <BotonRol
+                                etiqueta="Mentores"
+                                Icono={Users}
+                                falta={!item.proyecto || !item.proyecto.mentores_asignados}
+                                onClick={() => setIniciativaMentores(item)}
+                              />
+                            )}
+                          </div>
+
+                          {/* Tutor y Evaluador: mismo aspecto que "Mentores", sin funcionalidad todavía */}
+                          {esAprobada(item) && (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <BotonRol
+                                etiqueta="Tutor"
+                                Icono={GraduationCap}
+                                falta={!item.proyecto?.tiene_tutor}
+                                proximamente
+                              />
+                              <BotonRol
+                                etiqueta="Evaluador"
+                                Icono={ClipboardCheck}
+                                falta={!item.proyecto?.tiene_evaluador}
+                                proximamente
+                              />
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -448,6 +522,23 @@ export default function BancoIniciativasView() {
         <DetalleExpedienteModal
           postulacion={expedienteSeleccionado}
           onCerrar={() => setExpedienteSeleccionado(null)}
+        />
+      )}
+
+      {iniciativaMentores && (
+        <MentoresPanel
+          key={iniciativaMentores.id_iniciativa}
+          iniciativa={iniciativaMentores}
+          onClose={() => setIniciativaMentores(null)}
+          onAsignadosCambiados={(cantidad) =>
+            setIniciativas((prev) =>
+              prev.map((i) =>
+                i.id_iniciativa === iniciativaMentores.id_iniciativa && i.proyecto
+                  ? { ...i, proyecto: { ...i.proyecto, mentores_asignados: cantidad } }
+                  : i
+              )
+            )
+          }
         />
       )}
 
@@ -489,7 +580,7 @@ export default function BancoIniciativasView() {
                 <>
                   Al <strong>aprobar</strong> la iniciativa{" "}
                   <em>"{accionConfirmacion.iniciativa.iniciativa?.titulo || accionConfirmacion.iniciativa.nombre}"</em>,
-                  el estudiante líder recibirá una notificación institucional y quedará <strong>autorizado para conformar su Equipo Emprendedor (HU-04)</strong>.
+                  el estudiante líder recibirá una notificación institucional y quedará <strong>autorizado para conformar su Equipo Emprendedor</strong>.
                 </>
               ) : (
                 <>

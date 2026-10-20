@@ -35,10 +35,9 @@ function AppContent() {
 
   // 2. Coordinador de Emprendimiento
   if (rolActivo === "coordinador") {
-    const activeModule = currentModule || "convocatorias";
-    if (activeModule === "convocatorias") {
-      return <ConvocatoriasPage key="coord-convocatorias" onNavigate={setCurrentModule} activeModule="convocatorias" />;
-    }
+    // El coordinador no gestiona convocatorias: entra a Proyectos (también si una
+    // notificación o alerta intenta llevarlo a convocatorias)
+    const activeModule = !currentModule || currentModule === "convocatorias" ? "iniciativas" : currentModule;
     return <RoleDashboardPage key={`coord-${activeModule}`} role={rolActivo} onNavigate={setCurrentModule} defaultModule={activeModule} />;
   }
 

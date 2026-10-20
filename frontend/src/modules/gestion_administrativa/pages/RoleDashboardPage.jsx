@@ -32,7 +32,6 @@ const ROLE_CONFIG = {
     modules: {
       equipo: {
         title: "Equipo Emprendedor",
-        tag: "HU-04",
         desc: "Registra y gestiona tu equipo de trabajo, asigna al líder e incorpora a estudiantes activos para postular iniciativas.",
         details:
           "Formaliza la participación colectiva de tu iniciativa con integrantes registrados en la plataforma.",
@@ -63,25 +62,22 @@ const ROLE_CONFIG = {
   },
   coordinador: {
     roleName: "Coordinador de Emprendimiento",
-    defaultModule: "convocatorias",
+    defaultModule: "iniciativas",
     icon: Layers,
     badgeColor: "bg-emerald-100 text-emerald-800 border-emerald-200",
     subtitle:
-      "Administración integral de convocatorias y métricas de impacto.",
+      "Seguimiento de los proyectos de emprendimiento y métricas de impacto.",
     description:
-      "Supervisa el ciclo de vida de las convocatorias y coordina la asignación de evaluadores del Programa de Ingeniería de Sistemas.",
+      "Acompaña los proyectos aprobados y coordina la asignación de mentores del Programa de Ingeniería de Sistemas.",
     modules: {
-      convocatorias: {
-        title: "Gestión de Convocatorias",
-        tag: "HU-02",
-        desc: "Apertura, cronograma, cierre y publicación de resultados de los ciclos de postulación.",
-        details:
-          "Configuración de fechas de apertura, límite de postulación y cierre automático con notificación.",
-        actionLabel: "Gestionar convocatorias",
+      iniciativas: {
+        title: "Proyectos",
+        desc: "Iniciativas recibidas en las convocatorias y mentores de los proyectos aprobados.",
+        details: "Revisión de expedientes y asignación de mentores a los proyectos.",
+        actionLabel: "Ver iniciativas",
       },
       reportes: {
         title: "Métricas e Impacto",
-        tag: "HU-14",
         desc: "Generación de indicadores longitudinales y reportes estadísticos para procesos de acreditación.",
         details:
           "Consolidados de participación, tasa de avance tecnológico e impacto por cohorte.",
@@ -182,7 +178,6 @@ const ROLE_CONFIG = {
     modules: {
       evaluaciones: {
         title: "Iniciativas por Evaluar",
-        tag: "HU-06",
         desc: "Listado de iniciativas asignadas pendientes de calificación en la convocatoria activa.",
         details:
           "Acceso a la documentación, resumen ejecutivo y rúbrica de ponderación por criterios.",
@@ -190,7 +185,6 @@ const ROLE_CONFIG = {
       },
       rubricas: {
         title: "Historial de Calificaciones",
-        tag: "HU-07",
         desc: "Consulta de evaluaciones emitidas, observaciones cuantitativas y cualitativas.",
         details:
           "Trazabilidad de dictámenes remitidos a la coordinación de convocatorias.",
@@ -215,7 +209,6 @@ const ROLE_CONFIG = {
     modules: {
       dashboard: {
         title: "Panel Estratégico",
-        tag: "HU-14",
         desc: "Consolidado gerencial de iniciativas activas, tasa de éxito y evolución del ecosistema.",
         details:
           "Monitoreo de la transición de niveles de madurez tecnológica (M0 a M9).",
@@ -223,7 +216,6 @@ const ROLE_CONFIG = {
       },
       iniciativas: {
         title: "Banco de Iniciativas del Programa",
-        tag: "HU-04",
         desc: "Trazabilidad completa de proyectos nacidos en asignaturas, semilleros y trabajos de grado.",
         details:
           "Historial acumulado de emprendimientos estudiantiles.",
@@ -427,9 +419,11 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
                 }}
               />
             )
-          ) : normalizedRole !== "coordinador" &&
-            (activeModule === "emprendimientos" || activeModule === "iniciativas") ? (
-            <BancoIniciativasView key="banco-iniciativas" />
+          ) : activeModule === "emprendimientos" || activeModule === "iniciativas" ? (
+            <BancoIniciativasView
+              key="banco-iniciativas"
+              titulo={normalizedRole === "coordinador" ? "Proyectos" : undefined}
+            />
           ) : (
             /* DETALLE DEL MÓDULO SELECCIONADO (PARA OTROS ROLES) */
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
