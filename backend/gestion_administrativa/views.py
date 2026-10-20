@@ -162,7 +162,7 @@ class PerfilUsuarioView(APIView):
             "nombre": usuario.nombre,
             "correo": usuario.correo,
             "rol": rol_activo,
-            "roles": roles_activos,
+            "roles": roles_asignados,
             "roles_asignados": roles_asignados,
         })
 
