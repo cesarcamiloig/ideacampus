@@ -112,6 +112,12 @@ class PermisoSubirEvidenciaTests(EvidenciaBaseTests):
         res = self.subir(self.tutor, self.iniciativa, rol="tutor")
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_mi_equipo_entrega_el_id_del_proyecto_para_subir_evidencias(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {generar_token(self.integrante, 'estudiante')}")
+        res = self.client.get("/api/equipos/mi-equipo/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["equipo"]["iniciativa"]["id_proyecto"], self.iniciativa.proyecto.pk)
+
 
 class EvidenciasMiProyectoTests(EvidenciaBaseTests):
     URL_MI_PROYECTO = "/api/evidencias/mi-proyecto/"
