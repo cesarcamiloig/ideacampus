@@ -14,7 +14,7 @@ from gestion_convocatorias.models import Convocatoria, Iniciativa
 from gestion_emprendimiento_2.models import EquipoEmprendedor, Estudiante
 from gestion_evaluacion.models import Rubrica, SubRubrica
 
-from .models import Evidencia
+from .models import DocumentoEvidencia, Evidencia
 
 MEDIA_TEMPORAL = tempfile.mkdtemp()
 
@@ -181,3 +181,57 @@ class EvidenciasMiProyectoTests(EvidenciaBaseTests):
             self.client.get(self.URL_MI_PROYECTO).status_code,
             (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN),
         )
+
+
+class DescargaDocumentoEvidenciaTests(EvidenciaBaseTests):
+    """El archivo se guarda en la base de datos: lo descargan todos los que tienen acceso al proyecto."""
+
+    def setUp(self):
+        super().setUp()
+        # El titular sube al proyecto que comparte con el equipo del integrante
+        res = self.subir(self.titular, self.iniciativa)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
+        self.documento = DocumentoEvidencia.objects.get()
+
+    def descargar(self, usuario, rol="estudiante", documento=None):
+        documento = documento or self.documento
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {generar_token(usuario, rol)}")
+        return self.client.get(f"{self.URL}documentos/{documento.pk}/descargar/")
+
+    def test_el_contenido_queda_en_la_base_de_datos_y_no_en_disco(self):
+        self.assertEqual(bytes(self.documento.contenido), b"%PDF-1.4 avance")
+        self.assertFalse(self.documento.archivo)
+
+    def test_la_respuesta_entrega_la_url_de_descarga_de_la_api(self):
+        res = self.subir(self.titular, self.iniciativa)
+        url = res.data["documentos"][0]["archivo"]
+        self.assertTrue(url.endswith(f"/api/evidencias/documentos/{res.data['documentos'][0]['id']}/descargar/"))
+
+    def test_otro_integrante_del_equipo_descarga_el_archivo_de_quien_lo_subio(self):
+        res = self.descargar(self.integrante)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.content, b"%PDF-1.4 avance")
+        self.assertEqual(res["Content-Type"], "application/pdf")
+        self.assertIn('filename="avance.pdf"', res["Content-Disposition"])
+
+    def test_estudiante_ajeno_al_proyecto_recibe_403(self):
+        self.assertEqual(self.descargar(self.ajeno).status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_enlace_o_documento_inexistente_da_404(self):
+        enlace = DocumentoEvidencia.objects.create(
+            evidencia=self.documento.evidencia, enlace="https://example.com"
+        )
+        self.assertEqual(self.descargar(self.titular, documento=enlace).status_code, status.HTTP_404_NOT_FOUND)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {generar_token(self.titular, 'estudiante')}")
+        self.assertEqual(
+            self.client.get(f"{self.URL}documentos/999999/descargar/").status_code, status.HTTP_404_NOT_FOUND
+        )
+
+    def test_adjunto_antiguo_cuyo_archivo_no_esta_en_disco_da_404(self):
+        antiguo = DocumentoEvidencia.objects.create(
+            evidencia=self.documento.evidencia, archivo="evidencias/no-existe.pptx",
+            nombre_original="no-existe.pptx",
+        )
+        res = self.descargar(self.titular, documento=antiguo)
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIn("volver a cargarse", res.data["error"])

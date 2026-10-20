@@ -1,15 +1,26 @@
+import mimetypes
+
+from django.db.models import Prefetch
+from django.http import FileResponse, HttpResponse
+from django.utils.http import content_disposition_header
 from rest_framework import mixins, viewsets, status
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from gestion_administrativa.authentication import JWTAuthentication
 from gestion_administrativa.permissions import TieneRolPermitido
-from .models import Evidencia
+from .models import DocumentoEvidencia, Evidencia
 from .serializers import (
     EvidenciaCrearSerializer,
     EvidenciaSerializer,
     proyectos_del_estudiante,
     proyectos_del_tutor,
+)
+
+
+# Los listados no cargan el contenido binario de los archivos (hasta 10 MB cada uno)
+DOCUMENTOS_SIN_CONTENIDO = Prefetch(
+    "documentos", queryset=DocumentoEvidencia.objects.defer("contenido")
 )
 
 
@@ -38,7 +49,7 @@ class EvidenciaViewSet(mixins.CreateModelMixin,
     def get_queryset(self):
         qs = (Evidencia.objects
               .select_related("proyecto__iniciativa", "etapa", "usuario")
-              .prefetch_related("documentos"))
+              .prefetch_related(DOCUMENTOS_SIN_CONTENIDO))
         proyecto = self.request.query_params.get("proyecto")
         if proyecto:
             # Un id no numérico no coincide con ningún proyecto (evita un error 500)
@@ -75,9 +86,56 @@ class EvidenciaViewSet(mixins.CreateModelMixin,
         qs = (Evidencia.objects
               .filter(proyecto__in=proyectos)
               .select_related("proyecto__iniciativa", "etapa", "usuario")
-              .prefetch_related("documentos"))
+              .prefetch_related(DOCUMENTOS_SIN_CONTENIDO))
         proyecto = request.query_params.get("proyecto")
         if proyecto:
             qs = qs.filter(proyecto_id=proyecto) if proyecto.isdigit() else qs.none()
         serializer = EvidenciaSerializer(qs, many=True, context={"request": request})
         return Response(serializer.data)
+
+    @action(detail=False, methods=["get"], url_path=r"documentos/(?P<doc_id>\d+)/descargar")
+    def descargar_documento(self, request, doc_id=None):
+        """
+        Descarga un archivo adjunto a una evidencia. El contenido vive en la base de datos,
+        así que lo puede descargar cualquiera con acceso al proyecto, no solo quien lo subió:
+        - estudiante: proyectos en los que participa (titular o integrante del equipo).
+        - tutor: proyectos en los que es el tutor asignado.
+        - demás roles de lectura: cualquier proyecto.
+        """
+        documento = (DocumentoEvidencia.objects
+                     .select_related("evidencia")
+                     .filter(pk=doc_id, enlace__isnull=True)
+                     .first())
+        if not documento:
+            return Response({"error": "Archivo no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        rol = getattr(request.user, "rol_activo", None)
+        proyectos = None
+        if rol == "estudiante":
+            proyectos = proyectos_del_estudiante(request.user)
+        elif rol == "tutor":
+            proyectos = proyectos_del_tutor(request.user)
+        if proyectos is not None and not proyectos.filter(pk=documento.evidencia.proyecto_id).exists():
+            return Response(
+                {"error": "No tienes acceso a las evidencias de este proyecto."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        nombre = documento.nombre_original or f"evidencia-{documento.pk}"
+        if documento.contenido is not None:
+            tipo = (documento.tipo_contenido
+                    or mimetypes.guess_type(nombre)[0]
+                    or "application/octet-stream")
+            respuesta = HttpResponse(bytes(documento.contenido), content_type=tipo)
+            respuesta["Content-Disposition"] = content_disposition_header(as_attachment=True, filename=nombre)
+            return respuesta
+
+        # Adjuntos subidos antes de guardar el contenido en la base de datos
+        if documento.archivo and documento.archivo.storage.exists(documento.archivo.name):
+            return FileResponse(documento.archivo.open("rb"), as_attachment=True, filename=nombre)
+
+        return Response(
+            {"error": "El archivo se subió antes de guardarse en la base de datos y ya no está "
+                      "disponible en este servidor. Debe volver a cargarse."},
+            status=status.HTTP_404_NOT_FOUND,
+        )

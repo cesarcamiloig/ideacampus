@@ -16,6 +16,12 @@ export async function registerEvidencia(formData) {
   return apiClient.post("/evidencias/", formData);
 }
 
+// El contenido de los archivos vive en la base de datos y se descarga por la API con el token
+// (por eso no se usa el enlace directo del campo "archivo"). Devuelve un Blob.
+export async function descargarDocumentoEvidencia(idDocumento) {
+  return apiClient.download(`/evidencias/documentos/${idDocumento}/descargar/`);
+}
+
 // Evidencias de los proyectos en los que participa el estudiante (las suyas y las de su equipo).
 // GET /evidencias/ en cambio solo devuelve las que subió el propio estudiante.
 export async function getEvidencias() {

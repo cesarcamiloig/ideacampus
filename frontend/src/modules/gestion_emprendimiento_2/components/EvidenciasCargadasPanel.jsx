@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, ExternalLink, FileText, Link2, Loader2, RefreshCw, X } from "lucide-react";
+import { AlertCircle, Download, ExternalLink, FileText, Link2, Loader2, RefreshCw, X } from "lucide-react";
+import { descargarDocumentoEvidencia } from "../services/evidenciaService";
 
 const FILTROS = [
   { id: "todas", label: "Todas" },
@@ -29,30 +30,67 @@ function formatFecha(valor) {
   return fecha.toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+const ADJUNTO_CLASS =
+  "flex w-full items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 text-left transition-colors hover:border-red-300 hover:bg-red-50/40 disabled:cursor-wait disabled:opacity-70";
+
 function DocumentoAdjunto({ doc }) {
-  const esEnlace = Boolean(doc.enlace);
-  const href = esEnlace ? doc.enlace : doc.archivo;
-  const nombre = esEnlace ? doc.enlace : doc.nombre_original || "Archivo adjunto";
-  const Icon = esEnlace ? Link2 : FileText;
-  const detalle = esEnlace
-    ? "Enlace"
-    : [doc.extension?.toUpperCase(), formatSize(doc.tamano_bytes)].filter(Boolean).join(" · ");
+  const [descargando, setDescargando] = useState(false);
+  const [error, setError] = useState("");
+
+  if (doc.enlace) {
+    return (
+      <li>
+        <a href={doc.enlace} target="_blank" rel="noopener noreferrer" className={ADJUNTO_CLASS}>
+          <Link2 className="h-4 w-4 shrink-0 text-slate-400" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-semibold text-slate-800">{doc.enlace}</p>
+            <p className="text-[11px] text-slate-500">Enlace</p>
+          </div>
+          <ExternalLink className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+        </a>
+      </li>
+    );
+  }
+
+  const nombre = doc.nombre_original || "Archivo adjunto";
+  const detalle = [doc.extension?.toUpperCase(), formatSize(doc.tamano_bytes)].filter(Boolean).join(" · ");
+
+  // El archivo se pide a la API con el token y se guarda con su nombre original
+  async function descargar() {
+    setDescargando(true);
+    setError("");
+    try {
+      const blob = await descargarDocumentoEvidencia(doc.id);
+      const url = URL.createObjectURL(blob);
+      const enlace = document.createElement("a");
+      enlace.href = url;
+      enlace.download = nombre;
+      document.body.appendChild(enlace);
+      enlace.click();
+      enlace.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setError(err.message || "No se pudo descargar el archivo.");
+    } finally {
+      setDescargando(false);
+    }
+  }
 
   return (
-    <li>
-      <a
-        href={href || undefined}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 transition-colors hover:border-red-300 hover:bg-red-50/40"
-      >
-        <Icon className="h-4 w-4 shrink-0 text-slate-400" />
+    <li className="space-y-1">
+      <button type="button" onClick={descargar} disabled={descargando} className={ADJUNTO_CLASS}>
+        <FileText className="h-4 w-4 shrink-0 text-slate-400" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-xs font-semibold text-slate-800">{nombre}</p>
           {detalle && <p className="text-[11px] text-slate-500">{detalle}</p>}
         </div>
-        <ExternalLink className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-      </a>
+        {descargando ? (
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-red-600" />
+        ) : (
+          <Download className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+        )}
+      </button>
+      {error && <p className="text-[11px] font-medium text-red-600" role="alert">{error}</p>}
     </li>
   );
 }

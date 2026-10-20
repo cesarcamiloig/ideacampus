@@ -64,7 +64,11 @@ class DocumentoEvidencia(models.Model):
         db_column="id_evidencia",
         related_name="documentos",
     )
-    # Archivo subido (PDF, DOCX, PPTX, PNG, JPG)...
+    # Archivo subido (PDF, DOCX, PPTX, PNG, JPG): su contenido se guarda en la base de datos
+    # para que cualquiera con acceso lo descargue, sin depender del disco de quien lo subió.
+    contenido = models.BinaryField(null=True, blank=True, editable=False)
+    tipo_contenido = models.CharField(max_length=100, blank=True)
+    # Ruta en disco de los adjuntos subidos antes de guardar el contenido en la base de datos
     archivo = models.FileField(
         upload_to="evidencias/",
         db_column="url_archivo",
@@ -86,9 +90,14 @@ class DocumentoEvidencia(models.Model):
         db_table = "documento_evidencia"
         ordering = ["-fecha_carga"]
 
+    @property
+    def es_archivo(self):
+        return not self.enlace
+
     def clean(self):
         # Exactamente uno: archivo o enlace
-        if bool(self.archivo) == bool(self.enlace):
+        tiene_archivo = self.contenido is not None or bool(self.archivo)
+        if tiene_archivo == bool(self.enlace):
             raise ValidationError("Cada adjunto debe ser un archivo o un enlace, no ambos ni ninguno.")
 
     def __str__(self):

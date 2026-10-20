@@ -1,6 +1,7 @@
 from django.core.validators import FileExtensionValidator
 from django.db import transaction
 from django.db.models import Q
+from django.urls import reverse
 from rest_framework import serializers
 
 from gestion_emprendimiento_2.models import EquipoEmprendedor, Proyecto
@@ -48,6 +49,16 @@ def puede_subir_evidencia(usuario, proyecto):
 
 # ---------- Lectura ----------
 class DocumentoEvidenciaSerializer(serializers.ModelSerializer):
+    # URL de descarga por la API (requiere el token); None si el adjunto es un enlace
+    archivo = serializers.SerializerMethodField()
+
+    def get_archivo(self, obj):
+        if not obj.es_archivo:
+            return None
+        ruta = reverse("evidencia-descargar-documento", kwargs={"doc_id": obj.pk})
+        request = self.context.get("request")
+        return request.build_absolute_uri(ruta) if request else ruta
+
     class Meta:
         model = DocumentoEvidencia
         fields = ["id", "archivo", "nombre_original", "extension",
@@ -126,7 +137,8 @@ class EvidenciaCrearSerializer(serializers.ModelSerializer):
         for f in archivos:
             DocumentoEvidencia.objects.create(
                 evidencia=evidencia,
-                archivo=f,
+                contenido=f.read(),
+                tipo_contenido=getattr(f, "content_type", "") or "",
                 nombre_original=f.name,
                 extension=f.name.rsplit(".", 1)[-1].lower() if "." in f.name else None,
                 tamano_bytes=f.size,
