@@ -1,14 +1,25 @@
-import { useEffect, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, ChevronDown, Link2, Save, Upload, X } from "lucide-react";
-import { registerEvidencia } from "../services/evidenciaService";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AlertCircle, CheckCircle2, ChevronDown, FolderOpen, Link2, Save, Upload, X } from "lucide-react";
+import { useAuth } from "../../../context/AuthContext";
+import { getEvidencias, registerEvidencia } from "../services/evidenciaService";
 import { obtenerMiEquipo } from "../services/equipoService";
-import { getRubricas } from "../../gestion_evaluacion/services/rubricaService";
+import { getHitos, getRubricas } from "../../gestion_evaluacion/services/rubricaService";
+import EvidenciasCargadasPanel from "../components/EvidenciasCargadasPanel";
 
-const TIPOS = ["Documento", "Enlace", "Prototipo", "Presentación"];
+const TIPOS = [
+  { id: "documento", label: "Documento" },
+  { id: "enlace", label: "Enlace" },
+  { id: "prototipo", label: "Prototipo" },
+  { id: "presentacion", label: "Presentación" },
+];
 const EXTENSIONES = ["pdf", "docx", "pptx", "png", "jpg", "jpeg"];
 const MAX_MB = 10;
+const MAX_TITULO = 200;
 
 const ETIQUETA_POR_EXT = { pdf: "PDF", docx: "DOC", pptx: "PPT", png: "IMG", jpg: "IMG", jpeg: "IMG" };
+
+// Campos del 400 que se muestran junto a su campo; el resto va al mensaje general
+const CAMPOS_ERROR = ["proyecto", "etapa", "titulo", "descripcion", "tipo", "archivos", "enlaces"];
 
 const STEPS = [
   { number: 1, title: "Etapa y datos", subtitle: "Indica la etapa del proyecto y describe el avance." },
@@ -51,26 +62,63 @@ function esUrlValida(valor) {
   }
 }
 
+function aTexto(valor) {
+  return Array.isArray(valor) ? valor.join(" ") : String(valor);
+}
+
+// Convierte el body del 400 ({ campo: ["mensaje"] }) en { campo: "mensaje", general: "..." }
+function erroresDelServidor(data) {
+  if (!data || typeof data !== "object") return { general: "No se pudo guardar la evidencia." };
+  const resultado = {};
+  const generales = [];
+  Object.entries(data).forEach(([campo, valor]) => {
+    if (CAMPOS_ERROR.includes(campo)) resultado[campo] = aTexto(valor);
+    else generales.push(aTexto(valor));
+  });
+  if (generales.length > 0) resultado.general = generales.join(" ");
+  return resultado;
+}
+
+// Los hitos salen del endpoint de hitos; si aún no está disponible, de la rúbrica completa
+async function cargarHitos(tipoIniciativa) {
+  try {
+    const hitos = await getHitos(tipoIniciativa);
+    return Array.isArray(hitos) ? hitos : hitos?.results || [];
+  } catch (err) {
+    if (err.status !== 404) throw err;
+    const rubricas = await getRubricas();
+    const lista = Array.isArray(rubricas) ? rubricas : rubricas?.results || [];
+    return lista.find((r) => r.tipo_iniciativa === tipoIniciativa)?.subrubricas || [];
+  }
+}
+
 function Required() {
   return <span className="text-red-600">*</span>;
 }
 
 function EvidenciaForm() {
+  const { logout } = useAuth();
   const inputArchivoRef = useRef(null);
 
   // El proyecto lleva el nombre de la iniciativa aprobada del equipo, y sus etapas son
   // los hitos de la rúbrica del mismo tipo de iniciativa (configurada en Rúbricas).
-  const [proyecto, setProyecto] = useState(null);
+  const [proyecto, setProyecto] = useState(null); // { id, nombre, tipo }
   const [etapas, setEtapas] = useState([]);
   const [cargandoProyecto, setCargandoProyecto] = useState(true);
   const [cargandoEtapas, setCargandoEtapas] = useState(true);
   const [datosError, setDatosError] = useState("");
 
+  const [registradas, setRegistradas] = useState([]);
+  const [cargandoRegistradas, setCargandoRegistradas] = useState(true);
+  const [registradasError, setRegistradasError] = useState("");
+  const [panelAbierto, setPanelAbierto] = useState(false);
+  const cerrarPanel = useCallback(() => setPanelAbierto(false), []);
+
   const [etapa, setEtapa] = useState("");
   const [titulo, setTitulo] = useState("");
   const [descripcion, setDescripcion] = useState("");
-  const [tipo, setTipo] = useState("Documento");
-  const [evidencias, setEvidencias] = useState([]);
+  const [tipo, setTipo] = useState("documento");
+  const [adjuntos, setAdjuntos] = useState([]);
   const [enlace, setEnlace] = useState("");
   const [arrastrando, setArrastrando] = useState(false);
 
@@ -78,7 +126,39 @@ function EvidenciaForm() {
   const [archivoError, setArchivoError] = useState("");
   const [enlaceError, setEnlaceError] = useState("");
   const [status, setStatus] = useState("idle"); // idle | loading | success | error
-  const [serverError, setServerError] = useState("");
+
+  const soloEnlaces = tipo === "enlace";
+  const hayArchivos = adjuntos.some((ad) => ad.file);
+
+  // logout cambia en cada render del AuthProvider: se guarda en una ref para no recargar los datos
+  const logoutRef = useRef(logout);
+  logoutRef.current = logout;
+
+  // 401: token ausente o vencido → se cierra la sesión y la app vuelve al login
+  const manejarErrorSesion = useCallback((err) => {
+    if (err?.status === 401) {
+      logoutRef.current?.();
+      return true;
+    }
+    return false;
+  }, []);
+
+  const cargarRegistradas = useCallback(async () => {
+    setCargandoRegistradas(true);
+    setRegistradasError("");
+    try {
+      const lista = await getEvidencias();
+      setRegistradas(lista);
+      return lista;
+    } catch (err) {
+      if (!manejarErrorSesion(err)) {
+        setRegistradasError(err.message || "No se pudieron cargar las evidencias registradas.");
+      }
+      return [];
+    } finally {
+      setCargandoRegistradas(false);
+    }
+  }, [manejarErrorSesion]);
 
   useEffect(() => {
     let activo = true;
@@ -86,21 +166,25 @@ function EvidenciaForm() {
     async function cargarDatosProyecto() {
       setDatosError("");
       try {
-        // El nombre del proyecto se muestra apenas llega; los hitos dependen de su tipo de iniciativa
-        const dataEquipo = await obtenerMiEquipo();
+        const [dataEquipo, lista] = await Promise.all([obtenerMiEquipo(), cargarRegistradas()]);
         if (!activo) return;
-        const iniciativa = dataEquipo?.equipo?.iniciativa || null;
-        setProyecto(iniciativa);
+
+        // El nombre del proyecto se muestra apenas llega; los hitos dependen de su tipo de iniciativa
+        const equipo = dataEquipo?.equipo;
+        const iniciativa = equipo?.iniciativa || null;
+        const idProyecto =
+          iniciativa?.id_proyecto ?? equipo?.id_proyecto ?? equipo?.proyecto?.id_proyecto ?? lista[0]?.proyecto ?? null;
+        setProyecto(iniciativa ? { id: idProyecto, nombre: iniciativa.nombre, tipo: iniciativa.tipo } : null);
         setCargandoProyecto(false);
 
         if (!iniciativa?.tipo) return;
-        const rubricas = await getRubricas();
+        const hitos = await cargarHitos(iniciativa.tipo);
         if (!activo) return;
-        const lista = Array.isArray(rubricas) ? rubricas : rubricas?.results || [];
-        const rubrica = lista.find((r) => r.tipo_iniciativa === iniciativa.tipo);
-        setEtapas([...(rubrica?.subrubricas || [])].sort((a, b) => a.numero_hito - b.numero_hito));
+        setEtapas([...hitos].sort((a, b) => a.numero_hito - b.numero_hito));
       } catch (err) {
-        if (activo) setDatosError(err.message || "No se pudieron cargar los datos del proyecto.");
+        if (activo && !manejarErrorSesion(err)) {
+          setDatosError(err.message || "No se pudieron cargar los datos del proyecto.");
+        }
       } finally {
         if (activo) {
           setCargandoProyecto(false);
@@ -113,9 +197,18 @@ function EvidenciaForm() {
     return () => {
       activo = false;
     };
-  }, []);
+  }, [cargarRegistradas, manejarErrorSesion]);
+
+  function limpiarErrorCampo(campo) {
+    setErrors((prev) => (prev[campo] || prev.general ? { ...prev, [campo]: undefined, general: undefined } : prev));
+    setStatus("idle");
+  }
 
   function agregarArchivos(lista) {
+    if (soloEnlaces) {
+      setArchivoError("Con el tipo Enlace solo se aceptan enlaces.");
+      return;
+    }
     const nuevos = [];
     const problemas = [];
 
@@ -128,9 +221,8 @@ function EvidenciaForm() {
       } else {
         nuevos.push({
           id: nuevoId(),
-          tipo,
           nombre: file.name,
-          detalle: `${tipo} · ${formatSize(file.size)}`,
+          detalle: formatSize(file.size),
           etiqueta: ETIQUETA_POR_EXT[ext] || "ARCH",
           file,
           url: null,
@@ -140,9 +232,8 @@ function EvidenciaForm() {
 
     setArchivoError(problemas.join(" "));
     if (nuevos.length > 0) {
-      setEvidencias((prev) => [...prev, ...nuevos]);
-      setErrors((prev) => ({ ...prev, evidencias: undefined }));
-      setStatus("idle");
+      setAdjuntos((prev) => [...prev, ...nuevos]);
+      limpiarErrorCampo("archivos");
     }
   }
 
@@ -163,34 +254,29 @@ function EvidenciaForm() {
       setEnlaceError("Ingresa un enlace válido que empiece con http:// o https://");
       return;
     }
+    if (adjuntos.some((ad) => ad.url === valor)) {
+      setEnlaceError("Ese enlace ya está en la lista.");
+      return;
+    }
     setEnlaceError("");
-    setEvidencias((prev) => [
+    setAdjuntos((prev) => [
       ...prev,
-      {
-        id: nuevoId(),
-        tipo,
-        nombre: valor,
-        detalle: `${tipo} · enlace`,
-        etiqueta: "URL",
-        file: null,
-        url: valor,
-      },
+      { id: nuevoId(), nombre: valor, detalle: "Enlace", etiqueta: "URL", file: null, url: valor },
     ]);
-    setErrors((prev) => ({ ...prev, evidencias: undefined }));
-    setStatus("idle");
+    limpiarErrorCampo("enlaces");
     setEnlace("");
   }
 
-  function quitarEvidencia(id) {
-    setEvidencias((prev) => prev.filter((ev) => ev.id !== id));
+  function quitarAdjunto(id) {
+    setAdjuntos((prev) => prev.filter((ad) => ad.id !== id));
   }
 
   function limpiarFormulario() {
     setEtapa("");
     setTitulo("");
     setDescripcion("");
-    setTipo("Documento");
-    setEvidencias([]);
+    setTipo("documento");
+    setAdjuntos([]);
     setEnlace("");
     setErrors({});
     setArchivoError("");
@@ -200,16 +286,23 @@ function EvidenciaForm() {
   function handleCancel() {
     limpiarFormulario();
     setStatus("idle");
-    setServerError("");
   }
 
   function validar() {
     const nuevos = {};
+    if (!proyecto?.id) nuevos.proyecto = "No se encontró el proyecto de tu equipo.";
     if (!etapa) nuevos.etapa = "Selecciona la etapa del proyecto.";
     if (!titulo.trim()) nuevos.titulo = "Indica un título para la evidencia.";
-    if (evidencias.length === 0) nuevos.evidencias = "Adjunta al menos una evidencia (archivo o enlace).";
+    else if (titulo.trim().length > MAX_TITULO) nuevos.titulo = `El título admite máximo ${MAX_TITULO} caracteres.`;
+    if (adjuntos.length === 0) nuevos.general = "Adjunta al menos una evidencia (archivo o enlace).";
+    else if (soloEnlaces && hayArchivos) nuevos.archivos = "Con el tipo Enlace solo se aceptan enlaces: quita los archivos.";
     return nuevos;
   }
+
+  const puedeGuardar =
+    Boolean(proyecto?.id && etapa && titulo.trim() && tipo && adjuntos.length > 0) &&
+    !(soloEnlaces && hayArchivos) &&
+    status !== "loading";
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -218,45 +311,63 @@ function EvidenciaForm() {
     if (Object.keys(nuevos).length > 0) return;
 
     const formData = new FormData();
-    // Se envía el id del hito (SubRubrica) de la rúbrica
+    formData.append("proyecto", proyecto.id);
     formData.append("etapa", etapa);
     formData.append("titulo", titulo.trim());
     formData.append("descripcion", descripcion.trim());
-    formData.append(
-      "evidencias",
-      JSON.stringify(
-        evidencias.map((ev) => ({ tipo: ev.tipo, nombre: ev.nombre, url: ev.url }))
-      )
-    );
-    evidencias
-      .filter((ev) => ev.file)
-      .forEach((ev) => formData.append("archivos", ev.file));
+    formData.append("tipo", tipo);
+    adjuntos.forEach((ad) => {
+      if (ad.file) formData.append("archivos", ad.file);
+      else if (ad.url) formData.append("enlaces", ad.url);
+    });
 
     setStatus("loading");
-    setServerError("");
     try {
-      await registerEvidencia(formData);
+      const creada = await registerEvidencia(formData);
       limpiarFormulario();
       setStatus("success");
+      if (creada?.id) setRegistradas((prev) => [creada, ...prev.filter((ev) => ev.id !== creada.id)]);
+      else cargarRegistradas();
     } catch (err) {
+      if (manejarErrorSesion(err)) return;
       setStatus("error");
-      setServerError(err.message);
+      if (err.status === 400) setErrors(erroresDelServidor(err.data));
+      else if (err.status === 403) setErrors({ general: "No tienes permiso para registrar evidencias." });
+      else setErrors({ general: err.message || "No se pudo guardar la evidencia." });
     }
   }
 
+  const textoProyecto = cargandoProyecto ? "Cargando..." : proyecto?.nombre || "Sin proyecto asignado";
+
   return (
     <div className="w-full space-y-6">
-      <div>
-        <span className="text-[11px] font-bold uppercase tracking-wider text-red-600">
-          Evidencias de avance
-        </span>
-        <h2 className="mt-0.5 text-xl font-bold text-slate-900">
-          Registra la evidencia de tu avance
-        </h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Adjunta documentos, enlaces, prototipos y presentaciones que respalden
-          la trayectoria y madurez de tu iniciativa al finalizar una etapa.
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-red-600">
+            Evidencias de avance
+          </span>
+          <h2 className="mt-0.5 text-xl font-bold text-slate-900">
+            Registra la evidencia de tu avance
+          </h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Adjunta documentos, enlaces, prototipos y presentaciones que respalden
+            la trayectoria y madurez de tu iniciativa al finalizar una etapa.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setPanelAbierto(true)}
+          aria-haspopup="dialog"
+          className={`${OUTLINE_BUTTON_CLASS} self-start sm:self-auto`}
+        >
+          <FolderOpen className="h-4 w-4" />
+          Evidencias cargadas
+          {!cargandoRegistradas && !registradasError && (
+            <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+              {registradas.length}
+            </span>
+          )}
+        </button>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -294,10 +405,13 @@ function EvidenciaForm() {
                   <input
                     id="proyecto"
                     type="text"
-                    value={cargandoProyecto ? "Cargando..." : proyecto?.nombre || "Sin proyecto asignado"}
+                    value={textoProyecto}
+                    title={textoProyecto}
                     disabled
+                    aria-invalid={Boolean(errors.proyecto)}
                     className={READONLY_CLASS}
                   />
+                  {errors.proyecto && <p className={ERROR_CLASS} role="alert">{errors.proyecto}</p>}
                 </div>
                 <div className="space-y-1">
                   <label htmlFor="etapa" className={LABEL_CLASS}>
@@ -309,7 +423,7 @@ function EvidenciaForm() {
                       value={etapa}
                       onChange={(e) => {
                         setEtapa(e.target.value);
-                        setStatus("idle");
+                        limpiarErrorCampo("etapa");
                       }}
                       aria-invalid={Boolean(errors.etapa)}
                       disabled={cargandoEtapas || etapas.length === 0}
@@ -330,13 +444,13 @@ function EvidenciaForm() {
                     </select>
                     <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   </div>
-                  {!cargandoEtapas && !datosError && etapas.length === 0 && (
+                  {!cargandoEtapas && !datosError && proyecto && etapas.length === 0 && (
                     <p className={HINT_CLASS}>
                       La rúbrica de tu tipo de iniciativa aún no tiene hitos definidos.
                     </p>
                   )}
-                  {datosError && <p className={ERROR_CLASS} role="alert">{datosError}</p>}
                   {errors.etapa && <p className={ERROR_CLASS} role="alert">{errors.etapa}</p>}
+                  {datosError && <p className={ERROR_CLASS} role="alert">{datosError}</p>}
                 </div>
               </div>
 
@@ -349,13 +463,15 @@ function EvidenciaForm() {
                   type="text"
                   placeholder="Ej. Prototipo funcional v1"
                   value={titulo}
+                  maxLength={MAX_TITULO}
                   onChange={(e) => {
                     setTitulo(e.target.value);
-                    setStatus("idle");
+                    limpiarErrorCampo("titulo");
                   }}
                   aria-invalid={Boolean(errors.titulo)}
                   className={INPUT_CLASS}
                 />
+                <p className={`${HINT_CLASS} text-right`}>{titulo.length}/{MAX_TITULO}</p>
                 {errors.titulo && <p className={ERROR_CLASS} role="alert">{errors.titulo}</p>}
               </div>
 
@@ -368,11 +484,13 @@ function EvidenciaForm() {
                   value={descripcion}
                   onChange={(e) => {
                     setDescripcion(e.target.value);
-                    setStatus("idle");
+                    limpiarErrorCampo("descripcion");
                   }}
+                  aria-invalid={Boolean(errors.descripcion)}
                   className={`${INPUT_CLASS} resize-none`}
                 />
                 <p className={HINT_CLASS}>Opcional.</p>
+                {errors.descripcion && <p className={ERROR_CLASS} role="alert">{errors.descripcion}</p>}
               </div>
             </div>
 
@@ -384,52 +502,64 @@ function EvidenciaForm() {
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {TIPOS.map((t) => (
                   <button
-                    key={t}
+                    key={t.id}
                     type="button"
-                    aria-pressed={tipo === t}
-                    onClick={() => setTipo(t)}
-                    className={`rounded-lg border px-3 py-2.5 text-xs font-semibold transition-colors ${tipo === t
+                    aria-pressed={tipo === t.id}
+                    onClick={() => {
+                      setTipo(t.id);
+                      setArchivoError("");
+                      limpiarErrorCampo("tipo");
+                    }}
+                    className={`rounded-lg border px-3 py-2.5 text-xs font-semibold transition-colors ${tipo === t.id
                       ? "border-red-600 bg-red-50 text-red-700"
                       : "border-slate-200 bg-white text-slate-600 hover:border-red-300 hover:bg-slate-50"
                       }`}
                   >
-                    {t}
+                    {t.label}
                   </button>
                 ))}
               </div>
+              {errors.tipo && <p className={ERROR_CLASS} role="alert">{errors.tipo}</p>}
 
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setArrastrando(true);
-                }}
-                onDragLeave={() => setArrastrando(false)}
-                onDrop={handleDrop}
-                className={`rounded-xl border-2 border-dashed p-6 text-center transition-colors ${arrastrando
-                  ? "border-red-400 bg-red-50/60"
-                  : "border-slate-200 bg-[#f4f5f7]"
-                  }`}
-              >
-                <Upload className="mx-auto h-6 w-6 text-slate-400" />
-                <p className="mt-2 text-sm font-semibold text-slate-800">Arrastra tu archivo aquí</p>
-                <p className="mb-4 text-xs text-slate-500">o selecciónalo desde tu equipo</p>
-                <button
-                  type="button"
-                  onClick={() => inputArchivoRef.current?.click()}
-                  className={OUTLINE_BUTTON_CLASS}
+              {soloEnlaces ? (
+                <p className="rounded-lg border border-slate-100 bg-[#f4f5f7] p-3 text-xs text-slate-600">
+                  Con el tipo <strong className="text-slate-800">Enlace</strong> solo se aceptan enlaces; no se pueden subir archivos.
+                </p>
+              ) : (
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setArrastrando(true);
+                  }}
+                  onDragLeave={() => setArrastrando(false)}
+                  onDrop={handleDrop}
+                  className={`rounded-xl border-2 border-dashed p-6 text-center transition-colors ${arrastrando
+                    ? "border-red-400 bg-red-50/60"
+                    : "border-slate-200 bg-[#f4f5f7]"
+                    }`}
                 >
-                  Seleccionar archivo
-                </button>
-                <input
-                  ref={inputArchivoRef}
-                  type="file"
-                  multiple
-                  hidden
-                  accept={EXTENSIONES.map((x) => `.${x}`).join(",")}
-                  onChange={handleSeleccionArchivo}
-                />
-              </div>
+                  <Upload className="mx-auto h-6 w-6 text-slate-400" />
+                  <p className="mt-2 text-sm font-semibold text-slate-800">Arrastra tu archivo aquí</p>
+                  <p className="mb-4 text-xs text-slate-500">o selecciónalo desde tu equipo</p>
+                  <button
+                    type="button"
+                    onClick={() => inputArchivoRef.current?.click()}
+                    className={OUTLINE_BUTTON_CLASS}
+                  >
+                    Seleccionar archivo
+                  </button>
+                  <input
+                    ref={inputArchivoRef}
+                    type="file"
+                    multiple
+                    hidden
+                    accept={EXTENSIONES.map((x) => `.${x}`).join(",")}
+                    onChange={handleSeleccionArchivo}
+                  />
+                </div>
+              )}
               {archivoError && <p className={ERROR_CLASS} role="alert">{archivoError}</p>}
+              {errors.archivos && <p className={ERROR_CLASS} role="alert">{errors.archivos}</p>}
 
               <div className="space-y-1">
                 <div className="flex flex-col gap-3 sm:flex-row">
@@ -445,7 +575,7 @@ function EvidenciaForm() {
                         agregarEnlace();
                       }
                     }}
-                    aria-invalid={Boolean(enlaceError)}
+                    aria-invalid={Boolean(enlaceError || errors.enlaces)}
                     className={INPUT_CLASS}
                   />
                   <button type="button" onClick={agregarEnlace} className={OUTLINE_BUTTON_CLASS}>
@@ -454,33 +584,40 @@ function EvidenciaForm() {
                   </button>
                 </div>
                 {enlaceError && <p className={ERROR_CLASS} role="alert">{enlaceError}</p>}
+                {errors.enlaces && <p className={ERROR_CLASS} role="alert">{errors.enlaces}</p>}
               </div>
             </div>
 
             <div className="space-y-3">
-              <h3 className={SECTION_CLASS}>Evidencias adjuntas ({evidencias.length})</h3>
-              {evidencias.length === 0 ? (
+              <h3 className={SECTION_CLASS}>Evidencias adjuntas ({adjuntos.length})</h3>
+              {errors.general && (
+                <p className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700" role="alert">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  {errors.general}
+                </p>
+              )}
+              {adjuntos.length === 0 ? (
                 <p className="text-xs text-slate-400">Aún no has adjuntado ninguna evidencia.</p>
               ) : (
                 <ul className="space-y-2">
-                  {evidencias.map((ev) => (
+                  {adjuntos.map((ad) => (
                     <li
-                      key={ev.id}
-                      className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2.5"
+                      key={ad.id}
+                      className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 ${soloEnlaces && ad.file ? "border-red-300 bg-red-50/40" : "border-slate-200"}`}
                     >
                       <span className="min-w-[38px] rounded-md bg-red-50 px-2 py-1 text-center text-[10px] font-bold text-red-700">
-                        {ev.etiqueta}
+                        {ad.etiqueta}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-slate-800">{ev.nombre}</p>
-                        <p className="text-[11px] text-slate-500">{ev.detalle}</p>
+                        <p className="truncate text-sm font-semibold text-slate-800">{ad.nombre}</p>
+                        <p className="text-[11px] text-slate-500">{ad.detalle}</p>
                       </div>
                       <button
                         type="button"
-                        onClick={() => quitarEvidencia(ev.id)}
+                        onClick={() => quitarAdjunto(ad.id)}
                         className="rounded-md p-1 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
                         title="Quitar evidencia"
-                        aria-label={`Quitar ${ev.nombre}`}
+                        aria-label={`Quitar ${ad.nombre}`}
                       >
                         <X className="h-4 w-4" />
                       </button>
@@ -488,19 +625,12 @@ function EvidenciaForm() {
                   ))}
                 </ul>
               )}
-              {errors.evidencias && <p className={ERROR_CLASS} role="alert">{errors.evidencias}</p>}
             </div>
 
             {status === "success" && (
               <p className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                 Tu evidencia se guardó correctamente.
-              </p>
-            )}
-            {status === "error" && (
-              <p className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700" role="alert">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                {serverError}
               </p>
             )}
 
@@ -514,7 +644,7 @@ function EvidenciaForm() {
               </button>
               <button
                 type="submit"
-                disabled={status === "loading"}
+                disabled={!puedeGuardar}
                 className="inline-flex items-center gap-2 rounded-lg bg-[#c81e1e] px-4 py-2 text-xs font-semibold text-white shadow transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Save className="h-4 w-4" />
@@ -524,6 +654,15 @@ function EvidenciaForm() {
           </form>
         </section>
       </div>
+
+      <EvidenciasCargadasPanel
+        open={panelAbierto}
+        onClose={cerrarPanel}
+        evidencias={registradas}
+        cargando={cargandoRegistradas}
+        error={registradasError}
+        onReintentar={cargarRegistradas}
+      />
     </div>
   );
 }

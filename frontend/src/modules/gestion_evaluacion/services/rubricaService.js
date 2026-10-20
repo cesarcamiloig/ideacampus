@@ -24,6 +24,12 @@ export function getRubrica(id) {
     return apiClient.get(`/rubricas/${id}/`)
 }
 
+// Solo los hitos (sin criterios) de la rúbrica de un tipo de iniciativa:
+// [{ id, numero_hito, nombre, tipo_iniciativa }]
+export function getHitos(tipoIniciativa) {
+    return apiClient.get(`/rubricas/hitos/?tipo_iniciativa=${encodeURIComponent(tipoIniciativa)}`)
+}
+
 // Solo admin y direccion_del_programa. Responde con la rúbrica actualizada (los nuevos ya traen id).
 export function updateRubrica(id, rubrica) {
     return apiClient.put(`/rubricas/${id}/`, rubrica)

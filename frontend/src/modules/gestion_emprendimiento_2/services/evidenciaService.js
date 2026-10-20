@@ -1,7 +1,24 @@
 import { apiClient } from "../../../services/apiClient";
 
-// TODO: confirmar endpoint y formato del payload con el backend (GENNOVA-73/74)
-// Se envía como FormData: etapa, titulo, descripcion, evidencias (JSON) y archivos.
+// Contrato de evidencias de avance (HU-07). Solo el rol estudiante puede crear.
+// POST se envía siempre como FormData: proyecto, etapa (id del hito), titulo, descripcion,
+// tipo ("documento" | "enlace" | "prototipo" | "presentacion"), y las keys repetidas
+// "archivos" (uno por archivo) y "enlaces" (uno por URL). El usuario sale del token.
+// No se fija Content-Type: el navegador lo genera con el boundary del multipart.
+//
+// Respuesta (POST 201 y cada elemento del GET):
+// { id, proyecto, iniciativa, etapa, etapa_nombre, usuario, usuario_nombre, titulo,
+//   descripcion, tipo, creado, documentos: [{ id, archivo, nombre_original, extension,
+//   tamano_bytes, enlace, fecha_carga }] }
+// Cada documento es un archivo ("archivo") o un enlace ("enlace"), nunca ambos.
+
 export async function registerEvidencia(formData) {
   return apiClient.post("/evidencias/", formData);
+}
+
+// Evidencias de los proyectos en los que participa el estudiante (las suyas y las de su equipo).
+// GET /evidencias/ en cambio solo devuelve las que subió el propio estudiante.
+export async function getEvidencias() {
+  const data = await apiClient.get("/evidencias/mi-proyecto/");
+  return Array.isArray(data) ? data : data?.results || [];
 }
