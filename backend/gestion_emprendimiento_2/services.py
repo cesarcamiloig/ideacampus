@@ -131,7 +131,8 @@ def asignar_mentor_a_proyecto(id_proyecto: int, id_mentor: int, fecha_asignacion
                 "error": f"El mentor '{mentor.usuario.nombre}' ya se encuentra asignado activamente al proyecto '{proyecto.nombre_proyecto}'."
             })
         
-        # Reactivación de asignación previa
+        # Reactivación de un registro inactivo que quedó de cuando la desasignación era un
+        # soft delete; las desasignaciones nuevas eliminan el registro.
         relacion.activo = True
         relacion.fecha_asignacion = hoy
         relacion.save(update_fields=['activo', 'fecha_asignacion'])
@@ -150,8 +151,12 @@ def asignar_mentor_a_proyecto(id_proyecto: int, id_mentor: int, fecha_asignacion
 @transaction.atomic
 def desasignar_mentor_de_proyecto(id_proyecto: int, id_mentor: int):
     """
-    GENNOVA-80: Realiza un soft delete desasignando al mentor del proyecto (activo=False).
-    Lanza ValidationError si la asignación no existe o ya se encuentra inactiva.
+    GENNOVA-80: Quita al mentor del proyecto eliminando el registro de proyecto_mentor.
+    Lanza ValidationError si el mentor no está asignado (o solo queda un registro inactivo
+    de cuando la desasignación era un soft delete).
+
+    Retorna la instancia ya eliminada, con su id original y activo=False, para que la
+    respuesta conserve el mismo formato de antes.
     """
     relacion = ProyectoMentor.objects.select_related('proyecto', 'mentor__usuario').filter(
         proyecto_id=id_proyecto,
@@ -168,7 +173,10 @@ def desasignar_mentor_de_proyecto(id_proyecto: int, id_mentor: int):
             "error": "El mentor ya se encuentra desasignado (inactivo) de este proyecto."
         })
 
+    id_relacion = relacion.pk
+    relacion.delete()
+    # delete() deja pk en None; se restaura solo para serializar la respuesta
+    relacion.pk = id_relacion
     relacion.activo = False
-    relacion.save(update_fields=['activo'])
     return relacion
 

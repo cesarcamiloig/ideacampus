@@ -135,6 +135,7 @@ class IniciativaSerializer(serializers.ModelSerializer):
     equipo_id = serializers.SerializerMethodField()
     equipo_nombre = serializers.SerializerMethodField()
     radicado = serializers.SerializerMethodField()
+    proyecto = serializers.SerializerMethodField()
 
     class Meta:
         model = Iniciativa
@@ -158,6 +159,7 @@ class IniciativaSerializer(serializers.ModelSerializer):
             'tiene_equipo',
             'equipo_id',
             'equipo_nombre',
+            'proyecto',
             'fecha_postulacion',
             'fecha_actualizacion',
             'documentos',
@@ -182,6 +184,23 @@ class IniciativaSerializer(serializers.ModelSerializer):
 
     def get_equipo_nombre(self, obj):
         return obj.equipo.nombre_equipo if (hasattr(obj, 'equipo') and obj.equipo) else None
+
+    def get_proyecto(self, obj):
+        """
+        Resumen del proyecto de una iniciativa aprobada (None si aún no tiene), para que el
+        Banco muestre qué roles le faltan sin pedir cada proyecto por separado.
+        """
+        proyecto = getattr(obj, 'proyecto', None)
+        if proyecto is None:
+            return None
+        # asignaciones_mentor viene precargado desde la vista; se filtra en memoria
+        mentores_activos = sum(1 for a in proyecto.asignaciones_mentor.all() if a.activo)
+        return {
+            'id_proyecto': proyecto.id_proyecto,
+            'tiene_tutor': proyecto.tutor_id is not None,
+            'tiene_evaluador': proyecto.evaluador_id is not None,
+            'mentores_asignados': mentores_activos,
+        }
 
     def validate_documento_adjunto(self, value):
         if not value:

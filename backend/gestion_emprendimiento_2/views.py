@@ -1480,7 +1480,7 @@ class AsignarMentorProyectoView(APIView):
 
 class DesasignarMentorProyectoView(APIView):
     """
-    GENNOVA-80: Desasigna o desactiva (soft delete) un mentor de un proyecto.
+    GENNOVA-80: Desasigna un mentor de un proyecto eliminando su registro de proyecto_mentor.
     Permite métodos HTTP DELETE o PATCH, restringido exclusivamente al rol 'Coordinador'.
     """
     authentication_classes = [JWTAuthentication]
