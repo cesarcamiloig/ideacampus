@@ -1,10 +1,9 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, ChevronDown, Link2, Save, Upload, X } from "lucide-react";
-import { useAuth } from "../../../context/AuthContext";
 import { registerEvidencia } from "../services/evidenciaService";
+import { obtenerMiEquipo } from "../services/equipoService";
+import { getRubricas } from "../../gestion_evaluacion/services/rubricaService";
 
-// TODO: confirmar con el PO/backend la lista oficial de etapas
-const ETAPAS = ["Ideación", "Validación", "Prototipo", "Lanzamiento"];
 const TIPOS = ["Documento", "Enlace", "Prototipo", "Presentación"];
 const EXTENSIONES = ["pdf", "docx", "pptx", "png", "jpg", "jpeg"];
 const MAX_MB = 10;
@@ -12,7 +11,7 @@ const MAX_MB = 10;
 const ETIQUETA_POR_EXT = { pdf: "PDF", docx: "DOC", pptx: "PPT", png: "IMG", jpg: "IMG", jpeg: "IMG" };
 
 const STEPS = [
-  { number: 1, title: "Etapa y datos", subtitle: "Indica la etapa que finalizaste y describe el avance." },
+  { number: 1, title: "Etapa y datos", subtitle: "Indica la etapa del proyecto y describe el avance." },
   { number: 2, title: "Evidencias", subtitle: "Sube archivos o agrega enlaces según el tipo." },
   { number: 3, title: "Confirmación", subtitle: "Revisa lo adjuntado y guarda." },
 ];
@@ -57,8 +56,15 @@ function Required() {
 }
 
 function EvidenciaForm() {
-  const { usuario } = useAuth();
   const inputArchivoRef = useRef(null);
+
+  // El proyecto lleva el nombre de la iniciativa aprobada del equipo, y sus etapas son
+  // los hitos de la rúbrica del mismo tipo de iniciativa (configurada en Rúbricas).
+  const [proyecto, setProyecto] = useState(null);
+  const [etapas, setEtapas] = useState([]);
+  const [cargandoProyecto, setCargandoProyecto] = useState(true);
+  const [cargandoEtapas, setCargandoEtapas] = useState(true);
+  const [datosError, setDatosError] = useState("");
 
   const [etapa, setEtapa] = useState("");
   const [titulo, setTitulo] = useState("");
@@ -73,6 +79,41 @@ function EvidenciaForm() {
   const [enlaceError, setEnlaceError] = useState("");
   const [status, setStatus] = useState("idle"); // idle | loading | success | error
   const [serverError, setServerError] = useState("");
+
+  useEffect(() => {
+    let activo = true;
+
+    async function cargarDatosProyecto() {
+      setDatosError("");
+      try {
+        // El nombre del proyecto se muestra apenas llega; los hitos dependen de su tipo de iniciativa
+        const dataEquipo = await obtenerMiEquipo();
+        if (!activo) return;
+        const iniciativa = dataEquipo?.equipo?.iniciativa || null;
+        setProyecto(iniciativa);
+        setCargandoProyecto(false);
+
+        if (!iniciativa?.tipo) return;
+        const rubricas = await getRubricas();
+        if (!activo) return;
+        const lista = Array.isArray(rubricas) ? rubricas : rubricas?.results || [];
+        const rubrica = lista.find((r) => r.tipo_iniciativa === iniciativa.tipo);
+        setEtapas([...(rubrica?.subrubricas || [])].sort((a, b) => a.numero_hito - b.numero_hito));
+      } catch (err) {
+        if (activo) setDatosError(err.message || "No se pudieron cargar los datos del proyecto.");
+      } finally {
+        if (activo) {
+          setCargandoProyecto(false);
+          setCargandoEtapas(false);
+        }
+      }
+    }
+
+    cargarDatosProyecto();
+    return () => {
+      activo = false;
+    };
+  }, []);
 
   function agregarArchivos(lista) {
     const nuevos = [];
@@ -164,7 +205,7 @@ function EvidenciaForm() {
 
   function validar() {
     const nuevos = {};
-    if (!etapa) nuevos.etapa = "Selecciona la etapa que finalizaste.";
+    if (!etapa) nuevos.etapa = "Selecciona la etapa del proyecto.";
     if (!titulo.trim()) nuevos.titulo = "Indica un título para la evidencia.";
     if (evidencias.length === 0) nuevos.evidencias = "Adjunta al menos una evidencia (archivo o enlace).";
     return nuevos;
@@ -177,6 +218,7 @@ function EvidenciaForm() {
     if (Object.keys(nuevos).length > 0) return;
 
     const formData = new FormData();
+    // Se envía el id del hito (SubRubrica) de la rúbrica
     formData.append("etapa", etapa);
     formData.append("titulo", titulo.trim());
     formData.append("descripcion", descripcion.trim());
@@ -248,18 +290,18 @@ function EvidenciaForm() {
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-1">
-                  <label htmlFor="iniciativa" className={LABEL_CLASS}>Iniciativa</label>
+                  <label htmlFor="proyecto" className={LABEL_CLASS}>Proyecto</label>
                   <input
-                    id="iniciativa"
+                    id="proyecto"
                     type="text"
-                    value={usuario?.iniciativa_nombre || "Sin iniciativa asignada"}
+                    value={cargandoProyecto ? "Cargando..." : proyecto?.nombre || "Sin proyecto asignado"}
                     disabled
                     className={READONLY_CLASS}
                   />
                 </div>
                 <div className="space-y-1">
                   <label htmlFor="etapa" className={LABEL_CLASS}>
-                    Etapa finalizada <Required />
+                    Etapa <Required />
                   </label>
                   <div className="relative">
                     <select
@@ -270,15 +312,30 @@ function EvidenciaForm() {
                         setStatus("idle");
                       }}
                       aria-invalid={Boolean(errors.etapa)}
-                      className={`${INPUT_CLASS} appearance-none pr-9`}
+                      disabled={cargandoEtapas || etapas.length === 0}
+                      className={`${INPUT_CLASS} appearance-none pr-9 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500`}
                     >
-                      <option value="">Selecciona una etapa</option>
-                      {ETAPAS.map((et) => (
-                        <option key={et} value={et}>{et}</option>
+                      <option value="">
+                        {cargandoEtapas
+                          ? "Cargando etapas..."
+                          : etapas.length === 0
+                            ? "No hay etapas configuradas"
+                            : "Selecciona una etapa"}
+                      </option>
+                      {etapas.map((hito) => (
+                        <option key={hito.id} value={hito.id}>
+                          {`Hito ${hito.numero_hito} · ${hito.nombre}`}
+                        </option>
                       ))}
                     </select>
                     <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   </div>
+                  {!cargandoEtapas && !datosError && etapas.length === 0 && (
+                    <p className={HINT_CLASS}>
+                      La rúbrica de tu tipo de iniciativa aún no tiene hitos definidos.
+                    </p>
+                  )}
+                  {datosError && <p className={ERROR_CLASS} role="alert">{datosError}</p>}
                   {errors.etapa && <p className={ERROR_CLASS} role="alert">{errors.etapa}</p>}
                 </div>
               </div>
