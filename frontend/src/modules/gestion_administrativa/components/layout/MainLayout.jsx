@@ -203,11 +203,11 @@ export default function MainLayout({
     ]
 
     const rawRoles =
-        Array.isArray(rolesAsignados) && rolesAsignados.length > 1
+        Array.isArray(rolesAsignados) && rolesAsignados.length > 0
             ? rolesAsignados
-            : Array.from(new Set([...(Array.isArray(rolesAsignados) ? rolesAsignados : []), rolActivo || "estudiante", ...allKnownRoles]))
+            : (rolActivo ? [rolActivo] : allKnownRoles)
 
-    const assignedRoles = rawRoles
+    const assignedRoles = Array.from(new Set(rawRoles))
         .filter(Boolean)
         .map((r) => {
             const rId = typeof r === "string" ? r : (r?.nombre_rol || r?.rol || r?.id || String(r));
@@ -217,6 +217,21 @@ export default function MainLayout({
                 label,
             };
         });
+
+    // Si el rol activo deja de estar entre los roles asignados tras una edición en el panel de administrador,
+    // conmutar inmediatamente al primer rol asignado disponible
+    useEffect(() => {
+        if (assignedRoles.length > 0 && !assignedRoles.some((r) => r.id === activeRole)) {
+            const fallbackRole = assignedRoles[0].id
+            setActiveRole(fallbackRole)
+            if (switchRole) {
+                switchRole(fallbackRole)
+            }
+            if (onRoleChange) {
+                onRoleChange(fallbackRole)
+            }
+        }
+    }, [assignedRoles, activeRole, switchRole, onRoleChange])
 
     const handleRoleSwitch = (roleId) => {
         setActiveRole(roleId)
