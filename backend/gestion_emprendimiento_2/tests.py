@@ -454,7 +454,8 @@ class AsignacionEvaluadorProyectoTests(APITestCase):
         self.proyecto.evaluador = self.estudiante
         with self.assertRaises(ValidationError):
             self.proyecto.full_clean()
-        self.assertEqual(res_get.data["tutor_nombre"], "Profesor Carlos Tutor")
+        self.proyecto.evaluador = self.evaluador
+        self.proyecto.full_clean()
 
 
 class PlanTrabajoEntregablesTests(APITestCase):
