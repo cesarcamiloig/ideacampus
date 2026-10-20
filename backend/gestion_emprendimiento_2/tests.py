@@ -7,7 +7,15 @@ from gestion_administrativa.jwt_utils import generar_token
 from gestion_administrativa.models import Rol, Usuario, UsuarioRol
 from gestion_acompaniamiento.models import Tutor
 from gestion_convocatorias.models import Convocatoria, Iniciativa
-from .models import Estudiante, EquipoEmprendedor, Proyecto
+from .models import (
+    Estudiante,
+    EquipoEmprendedor,
+    Proyecto,
+    PlanTrabajo,
+    HitoPlanTrabajo,
+    ActividadPlanTrabajo,
+    EntregableActividad,
+)
 
 
 class GestionEquiposEmprendedoresTests(APITestCase):
@@ -691,7 +699,300 @@ class AsignacionTutorProyectoTests(APITestCase):
         # Consultar mediante GET
         res_get = self.client.get(url_iniciativa)
         self.assertEqual(res_get.status_code, status.HTTP_200_OK)
-=======
+        self.assertEqual(res_get.data["id_tutor"], self.tutor_activo.id_tutor)
+        self.assertEqual(res_get.data["tutor_nombre"], "Profesor Carlos Tutor")
+
+
+class PlanTrabajoEntregablesTests(APITestCase):
+    """
+    HU-20: Pruebas backend para la Gestión del Plan de Trabajo y Entregables (GENNOVA-89).
+    Valida:
+    - Definición y consulta del plan de trabajo por estudiante o equipo emprendedor.
+    - Creación y actualización de hitos clave.
+    - Definición de actividades con responsables, fechas y validación de integrantes.
+    - Control de entregables asociados a actividades y retroalimentación de tutores.
+    - Reglas de negocio (fechas válidas, permisos de acceso, avance porcentual).
+    """
+
+    def setUp(self):
+        # Roles
+        self.rol_estudiante, _ = Rol.objects.get_or_create(nombre_rol="estudiante")
+        self.rol_coordinador, _ = Rol.objects.get_or_create(nombre_rol="coordinador")
+        self.rol_tutor, _ = Rol.objects.get_or_create(nombre_rol="tutor")
+
+        # Usuarios
+        self.lider = Usuario.objects.create(
+            nombre="Ana Líder", correo="ana@ufps.edu.co", google_id="ana-1", estado="activo"
+        )
+        UsuarioRol.objects.create(usuario=self.lider, rol=self.rol_estudiante, estado="activo")
+        self.token_lider = generar_token(self.lider, "estudiante")
+        self.estudiante_lider = Estudiante.objects.create(usuario=self.lider, codigo="1151001", semestre=8)
+
+        self.miembro = Usuario.objects.create(
+            nombre="Luis Miembro", correo="luis@ufps.edu.co", google_id="luis-1", estado="activo"
+        )
+        UsuarioRol.objects.create(usuario=self.miembro, rol=self.rol_estudiante, estado="activo")
+        self.token_miembro = generar_token(self.miembro, "estudiante")
+        self.estudiante_miembro = Estudiante.objects.create(usuario=self.miembro, codigo="1151002", semestre=7)
+
+        self.ajeno = Usuario.objects.create(
+            nombre="Estudiante Ajeno", correo="ajeno@ufps.edu.co", google_id="ajeno-1", estado="activo"
+        )
+        UsuarioRol.objects.create(usuario=self.ajeno, rol=self.rol_estudiante, estado="activo")
+        self.token_ajeno = generar_token(self.ajeno, "estudiante")
+        self.estudiante_ajeno = Estudiante.objects.create(usuario=self.ajeno, codigo="1151003", semestre=6)
+
+        self.coordinador = Usuario.objects.create(
+            nombre="Coordinadora Claudia", correo="coord@ufps.edu.co", google_id="coord-1", estado="activo"
+        )
+        UsuarioRol.objects.create(usuario=self.coordinador, rol=self.rol_coordinador, estado="activo")
+        self.token_coordinador = generar_token(self.coordinador, "coordinador")
+
+        self.tutor_user = Usuario.objects.create(
+            nombre="Tutor Roberto", correo="tutor_rob@ufps.edu.co", google_id="tutor-rob-1", estado="activo"
+        )
+        UsuarioRol.objects.create(usuario=self.tutor_user, rol=self.rol_tutor, estado="activo")
+        self.token_tutor = generar_token(self.tutor_user, "tutor")
+        self.tutor = Tutor.objects.create(usuario=self.tutor_user, area_conocimiento="DevOps", estado="activo")
+
+        # Convocatoria, Iniciativa y Equipo Emprendedor
+        now = timezone.now()
+        self.conv = Convocatoria.objects.create(
+            nombre="Convocatoria 2026-I",
+            fecha_apertura=now - timedelta(days=5),
+            fecha_cierre=now + timedelta(days=20),
+            estado="abierta",
+        )
+        self.iniciativa = Iniciativa.objects.create(
+            convocatoria=self.conv,
+            usuario=self.lider,
+            nombre="Sistema Solar IoT",
+            tipo="innovacion",
+            origen_academico="asignatura",
+            estado="aprobada",
+        )
+        self.equipo = EquipoEmprendedor.objects.create(
+            estudiante_lider=self.estudiante_lider,
+            nombre_equipo="Equipo Solar Tech",
+            iniciativa=self.iniciativa,
+        )
+        self.estudiante_lider.equipo = self.equipo
+        self.estudiante_lider.save(update_fields=["equipo"])
+        self.estudiante_miembro.equipo = self.equipo
+        self.estudiante_miembro.save(update_fields=["equipo"])
+
+        self.proyecto = Proyecto.objects.get(iniciativa=self.iniciativa)
+        self.proyecto.tutor = self.tutor
+        self.proyecto.save(update_fields=["tutor"])
+
+    def test_estudiante_crea_y_consulta_plan_trabajo(self):
+        """Estudiante líder inicializa y consulta el plan de trabajo de su iniciativa."""
+        url = f"/api/iniciativas/{self.iniciativa.id_iniciativa}/plan-trabajo/"
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_lider}")
+
+        # GET: autocrea el plan inicial si no existía
+        res_get = self.client.get(url)
+        self.assertEqual(res_get.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_get.data["id_iniciativa"], self.iniciativa.id_iniciativa)
+        self.assertEqual(res_get.data["iniciativa_nombre"], "Sistema Solar IoT")
+        self.assertEqual(res_get.data["equipo_nombre"], "Equipo Solar Tech")
+        id_plan = res_get.data["id_plan_trabajo"]
+
+        # POST: actualiza metadatos del plan
+        payload = {
+            "titulo": "Plan de Ejecución Fase 1",
+            "descripcion": "Desarrollo del prototipo funcional y pruebas de campo",
+            "fecha_inicio": "2026-03-01",
+            "fecha_fin": "2026-08-30",
+            "estado": "en_progreso",
+        }
+        res_post = self.client.post(url, payload, format="json")
+        self.assertEqual(res_post.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_post.data["titulo"], "Plan de Ejecución Fase 1")
+        self.assertEqual(res_post.data["estado"], "en_progreso")
+
+        # Consulta a través del proyecto
+        url_proy = f"/api/proyectos/{self.proyecto.id_proyecto}/plan-trabajo/"
+        res_proy = self.client.get(url_proy)
+        self.assertEqual(res_proy.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_proy.data["id_plan_trabajo"], id_plan)
+
+    def test_estudiante_define_hitos_en_plan_trabajo(self):
+        """Estudiante define hitos y los marca como completados."""
+        plan = PlanTrabajo.objects.create(iniciativa=self.iniciativa, titulo="Plan Base")
+        url_hitos = f"/api/planes-trabajo/{plan.id_plan_trabajo}/hitos/"
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_lider}")
+
+        # Crear hito
+        payload_hito = {
+            "nombre": "Hito 1: Prototipo Electrónico",
+            "descripcion": "Diseño de PCB y sensores conectados",
+            "fecha_limite": "2026-04-15",
+            "orden": 1,
+        }
+        res_crear = self.client.post(url_hitos, payload_hito, format="json")
+        self.assertEqual(res_crear.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res_crear.data["nombre"], "Hito 1: Prototipo Electrónico")
+        self.assertFalse(res_crear.data["completado"])
+        id_hito = res_crear.data["id_hito"]
+
+        # Marcar hito completado
+        url_detalle_hito = f"/api/hitos/{id_hito}/"
+        res_patch = self.client.patch(url_detalle_hito, {"completado": True}, format="json")
+        self.assertEqual(res_patch.status_code, status.HTTP_200_OK)
+        self.assertTrue(res_patch.data["completado"])
+
+    def test_estudiante_define_actividad_con_responsable_y_fechas(self):
+        """Estudiante crea actividad con responsable del equipo y recibe alerta automática."""
+        plan = PlanTrabajo.objects.create(iniciativa=self.iniciativa, titulo="Plan Base")
+        hito = HitoPlanTrabajo.objects.create(plan_trabajo=plan, nombre="Hito A", orden=1)
+        url_actividades = f"/api/planes-trabajo/{plan.id_plan_trabajo}/actividades/"
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_lider}")
+        payload_actividad = {
+            "nombre": "Adquisición de Sensores y Placas",
+            "descripcion": "Cotización y compra de componentes en Cúcuta",
+            "id_hito": hito.id_hito,
+            "id_responsable": self.estudiante_miembro.id_estudiante,
+            "fecha_inicio": "2026-03-10",
+            "fecha_fin": "2026-03-25",
+            "prioridad": "alta",
+            "estado": "en_progreso",
+        }
+        res = self.client.post(url_actividades, payload_actividad, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data["responsable_nombre"], "Luis Miembro")
+        self.assertEqual(res.data["prioridad"], "alta")
+        id_actividad = res.data["id_actividad"]
+
+        # Verificar alerta automática emitida al responsable (HU-12)
+        from gestion_convocatorias.models import AlertaRol
+        alerta = AlertaRol.objects.filter(usuario=self.miembro, titulo__icontains="Nueva Actividad Asignada").first()
+        self.assertIsNotNone(alerta)
+        self.assertIn("Adquisición de Sensores", alerta.mensaje)
+
+        # Modificar estado de actividad a completada
+        url_det = f"/api/actividades/{id_actividad}/"
+        res_comp = self.client.patch(url_det, {"estado": "completada"}, format="json")
+        self.assertEqual(res_comp.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_comp.data["estado"], "completada")
+
+    def test_validacion_fechas_actividad_fecha_fin_anterior_a_inicio(self):
+        """Rechaza actividades con fecha de fin anterior a la fecha de inicio."""
+        plan = PlanTrabajo.objects.create(iniciativa=self.iniciativa, titulo="Plan Base")
+        url_actividades = f"/api/planes-trabajo/{plan.id_plan_trabajo}/actividades/"
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_lider}")
+        payload_invalido = {
+            "nombre": "Actividad con fechas inconsistentes",
+            "fecha_inicio": "2026-05-20",
+            "fecha_fin": "2026-05-10",  # Anterior a fecha_inicio
+        }
+        res = self.client.post(url_actividades, payload_invalido, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("fecha_fin", res.data)
+
+    def test_validacion_responsable_debe_pertenecer_al_equipo(self):
+        """Rechaza asignar como responsable a un estudiante que no pertenece al equipo."""
+        plan = PlanTrabajo.objects.create(iniciativa=self.iniciativa, titulo="Plan Base")
+        url_actividades = f"/api/planes-trabajo/{plan.id_plan_trabajo}/actividades/"
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_lider}")
+        payload = {
+            "nombre": "Actividad asignada a estudiante ajeno",
+            "id_responsable": self.estudiante_ajeno.id_estudiante,
+        }
+        res = self.client.post(url_actividades, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("integrante activo del equipo emprendedor", res.data["error"])
+
+    def test_estudiante_define_entregable_asociado_a_actividad(self):
+        """Estudiante crea entregable para una actividad y lo marca como entregado."""
+        plan = PlanTrabajo.objects.create(iniciativa=self.iniciativa, titulo="Plan Base")
+        actividad = ActividadPlanTrabajo.objects.create(plan_trabajo=plan, nombre="Desarrollo de Firmware")
+        url_entregables = f"/api/actividades/{actividad.id_actividad}/entregables/"
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_lider}")
+        payload_entregable = {
+            "nombre": "Repositorio y Código Fuente v1.0",
+            "descripcion": "Commit inicial con lectura de sensores",
+            "fecha_limite": "2026-04-30",
+            "tipo": "software",
+            "enlace": "https://github.com/ufps/solar-firmware",
+        }
+        res = self.client.post(url_entregables, payload_entregable, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data["nombre"], "Repositorio y Código Fuente v1.0")
+        id_entregable = res.data["id_entregable"]
+
+        # Marcar entregado
+        url_det_ent = f"/api/entregables/{id_entregable}/"
+        res_entrega = self.client.patch(url_det_ent, {"estado": "entregado"}, format="json")
+        self.assertEqual(res_entrega.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_entrega.data["estado"], "entregado")
+        self.assertIsNotNone(res_entrega.data["fecha_entrega"])
+
+    def test_tutor_o_coordinador_consulta_y_retroalimenta_entregable(self):
+        """Tutor asignado consulta el plan de trabajo y añade retroalimentación a un entregable."""
+        plan = PlanTrabajo.objects.create(iniciativa=self.iniciativa, titulo="Plan Base")
+        actividad = ActividadPlanTrabajo.objects.create(plan_trabajo=plan, nombre="Diseño de Arquitectura")
+        entregable = EntregableActividad.objects.create(
+            actividad=actividad,
+            plan_trabajo=plan,
+            nombre="Diagrama C4 y Especificación",
+            estado="entregado",
+        )
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_tutor}")
+
+        # Tutor consulta plan
+        url_plan = f"/api/iniciativas/{self.iniciativa.id_iniciativa}/plan-trabajo/"
+        res_get = self.client.get(url_plan)
+        self.assertEqual(res_get.status_code, status.HTTP_200_OK)
+
+        # Tutor retroalimenta y aprueba entregable
+        url_entregable = f"/api/entregables/{entregable.id_entregable}/"
+        res_patch = self.client.patch(
+            url_entregable,
+            {
+                "observaciones": "Excelente definición de componentes de telemetría. Aprobado para implementación.",
+                "estado": "aprobado",
+            },
+            format="json",
+        )
+        self.assertEqual(res_patch.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_patch.data["estado"], "aprobado")
+        self.assertIn("Excelente definición", res_patch.data["observaciones"])
+
+    def test_usuario_no_autorizado_es_rechazado(self):
+        """Estudiante no relacionado con la iniciativa no puede consultar ni modificar el plan."""
+        plan = PlanTrabajo.objects.create(iniciativa=self.iniciativa, titulo="Plan Privado")
+        url = f"/api/iniciativas/{self.iniciativa.id_iniciativa}/plan-trabajo/"
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_ajeno}")
+        res_get = self.client.get(url)
+        self.assertEqual(res_get.status_code, status.HTTP_403_FORBIDDEN)
+
+        res_post = self.client.post(url, {"titulo": "Plan Ilegítimo"}, format="json")
+        self.assertEqual(res_post.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_calculo_porcentaje_avance_y_metricas_en_plan(self):
+        """Verifica el cálculo de avance porcentual según actividades completadas."""
+        plan = PlanTrabajo.objects.create(iniciativa=self.iniciativa, titulo="Plan Métricas")
+        ActividadPlanTrabajo.objects.create(plan_trabajo=plan, nombre="Act 1", estado="completada")
+        ActividadPlanTrabajo.objects.create(plan_trabajo=plan, nombre="Act 2", estado="completada")
+        ActividadPlanTrabajo.objects.create(plan_trabajo=plan, nombre="Act 3", estado="en_progreso")
+        ActividadPlanTrabajo.objects.create(plan_trabajo=plan, nombre="Act 4", estado="pendiente")
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_lider}")
+        url = f"/api/iniciativas/{self.iniciativa.id_iniciativa}/plan-trabajo/"
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["total_actividades"], 4)
+        self.assertEqual(res.data["actividades_completadas"], 2)
+        self.assertEqual(res.data["porcentaje_avance"], 50.0)
+
+
 # ==============================================================================
 # GENNOVA-80: Tests de Asignación y Gestión de Mentores en Proyectos
 # ==============================================================================
@@ -919,5 +1220,4 @@ class AsignarMentorProyectoTests(APITestCase):
         }
         res = self.client.post("/api/proyectos/asignar-mentor/", payload, format="json")
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-
 

@@ -12,6 +12,15 @@ from .views import (
     DesasignarMentorProyectoView,
     TutoresDisponiblesView,
     AsignarTutorView,
+    PlanTrabajoIniciativaView,
+    PlanTrabajoProyectoView,
+    PlanTrabajoDetalleView,
+    HitoPlanTrabajoListCreateView,
+    HitoPlanTrabajoDetailView,
+    ActividadPlanTrabajoListCreateView,
+    ActividadPlanTrabajoDetailView,
+    EntregableActividadListCreateView,
+    EntregableActividadDetailView,
 )
 
 urlpatterns = [
@@ -23,16 +32,24 @@ urlpatterns = [
     path('equipos/<int:id_equipo>/miembros/<int:id_usuario>/', EquipoMiembroView.as_view(), name='equipo_eliminar_miembro'),
     path('proyectos/evaluadores/', EvaluadoresDisponiblesView.as_view(), name='evaluadores_disponibles'),
     path('proyectos/<int:id_proyecto>/evaluador/', AsignarEvaluadorView.as_view(), name='proyecto_asignar_evaluador'),
-
-    # GENNOVA-80: Gestión y asignación de mentores
+    # GENNOVA-80: Gesti?n y asignaci?n de mentores
     path('proyectos/mentores/disponibles/', MentoresDisponiblesView.as_view(), name='mentores_disponibles'),
     path('proyectos/<int:id_proyecto>/mentores-disponibles/', MentoresDisponiblesView.as_view(), name='proyecto_mentores_disponibles'),
     path('proyectos/asignar-mentor/', AsignarMentorProyectoView.as_view(), name='asignar_mentor_proyecto'),
     path('proyectos/<int:id_proyecto>/mentores/', AsignarMentorProyectoView.as_view(), name='proyecto_mentores'),
     path('proyectos/<int:id_proyecto>/mentores/<int:id_mentor>/', DesasignarMentorProyectoView.as_view(), name='proyecto_desasignar_mentor'),
     path('proyectos/desasignar-mentor/', DesasignarMentorProyectoView.as_view(), name='desasignar_mentor_directo'),
-
-    # HU-05: Asignación manual de tutores a iniciativas validadas
     path('proyectos/tutores/', TutoresDisponiblesView.as_view(), name='tutores_disponibles'),
     path('proyectos/<int:id_proyecto>/tutor/', AsignarTutorView.as_view(), name='proyecto_asignar_tutor'),
+
+    # HU-20: Plan de Trabajo y Entregables
+    path('iniciativas/<int:id_iniciativa>/plan-trabajo/', PlanTrabajoIniciativaView.as_view(), name='iniciativa_plan_trabajo'),
+    path('proyectos/<int:id_proyecto>/plan-trabajo/', PlanTrabajoProyectoView.as_view(), name='proyecto_plan_trabajo'),
+    path('planes-trabajo/<int:id_plan>/', PlanTrabajoDetalleView.as_view(), name='plan_trabajo_detalle'),
+    path('planes-trabajo/<int:id_plan>/hitos/', HitoPlanTrabajoListCreateView.as_view(), name='plan_trabajo_hitos'),
+    path('hitos/<int:id_hito>/', HitoPlanTrabajoDetailView.as_view(), name='plan_trabajo_hito_detalle'),
+    path('planes-trabajo/<int:id_plan>/actividades/', ActividadPlanTrabajoListCreateView.as_view(), name='plan_trabajo_actividades'),
+    path('actividades/<int:id_actividad>/', ActividadPlanTrabajoDetailView.as_view(), name='plan_trabajo_actividad_detalle'),
+    path('actividades/<int:id_actividad>/entregables/', EntregableActividadListCreateView.as_view(), name='actividad_entregables'),
+    path('entregables/<int:id_entregable>/', EntregableActividadDetailView.as_view(), name='entregable_detalle'),
 ]

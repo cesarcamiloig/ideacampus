@@ -95,6 +95,12 @@ Una vez que la terminal indique que los contenedores están "Running", puedes ve
   5. **Mínimo de integrantes:** Requiere al menos un integrante adicional además del estudiante líder.
   6. **Ciclo de vida y disolución:** El líder puede retirar integrantes o disolver el equipo por completo, liberando a los miembros y permitiendo volver a conformar un equipo para la iniciativa cuando lo requiera.
 
+### HU-05 · Asignación Manual de Tutores a Iniciativas Validadas
+* Asignación y desasignación manual de tutores académicos a proyectos de iniciativas validadas y aprobadas por parte de la Coordinación, Dirección del Programa y Administradores (`PATCH /api/proyectos/<id_proyecto>/tutor/` y `/api/iniciativas/<id_iniciativa>/tutor/`).
+* Listado y filtrado exclusivo de tutores académicos activos (`GET /api/proyectos/tutores/`).
+* Protección contra asignación de tutores inexistentes, inactivos o a iniciativas no validadas.
+* Disparo de alertas automáticas para el tutor académico y notificaciones institucionales al líder de la iniciativa.
+
 ### HU-06 · Gestión de Rúbricas Dinámicas y Creación Automática de Proyectos
 * Módulo de evaluación multicriterio (`gestion_evaluacion`) con soporte para rúbricas por tipo de iniciativa (`emprendimiento`, `innovacion`), estructuradas en hitos (`SubRubrica`) y criterios (`CriterioRubrica`) con validación estricta de ponderaciones al 100 %.
 * Editor visual interactivo de rúbricas en Frontend (`RubricasTab`, `HitoCard`, `DistribucionPesos`, `PesoInput`) integrado en el Panel de Administración Paramétrica y en la vista de Dirección del Programa, conectado en vivo con los endpoints `GET`/`PUT` `/api/rubricas/` y `/api/rubricas/<id>/validar/`.
@@ -112,6 +118,12 @@ Una vez que la terminal indique que los contenedores están "Running", puedes ve
 * Rediseño visual completo del perfil de acompañamiento adaptado a la arquitectura Tailwind CSS y componentes estándar del sistema.
 * Navegación embebida dentro del layout institucional (`MainLayout`) preservando la barra lateral, campana de notificaciones y selector de usuario.
 * Soporte para restablecer el perfil original guardado al cancelar y sincronización directa con el backend.
+
+### HU-20 · Gestión del Plan de Trabajo y Entregables (GENNOVA-89)
+* Estructuración del plan de trabajo por iniciativa validada y proyecto institucional (`PlanTrabajo`).
+* Desglose jerárquico en hitos temporales (`HitoPlanTrabajo`), actividades con responsables (`ActividadPlanTrabajo`) y entregables o evidencias verificables (`EntregableActividad`).
+* Reglas de negocio: validación de coherencia temporal (fecha fin >= fecha inicio), exclusividad de responsables pertenecientes al equipo emprendedor de la iniciativa y cálculo en vivo del porcentaje de avance.
+* Retroalimentación técnica, observaciones y dictamen de entregables por el tutor académico y la coordinación.
 
 ### Conmutador Dinámico de Roles y Autenticación JWT Multi-Rol
 * Selector contextual en el menú de usuario de la cabecera superior para alternar dinámicamente entre vistas y permisos asignados (`useAuth.switchRole`) sin requerir cierre de sesión.
@@ -138,7 +150,7 @@ Una vez que la terminal indique que los contenedores están "Running", puedes ve
 ```bash
 docker exec ideacampus_backend python manage.py test
 ```
-*Cubre 71 pruebas unitarias y de integración que validan permisos, reglas de negocio Estudiante-Iniciativa-Equipo, creación de proyectos, asignación de coordinadores y evaluadores, edición y validación de rúbricas (HU-06), autenticación JWT multi-rol, ciclo de vida de convocatorias, alertas automáticas y endpoints REST.*
+*Cubre 102 pruebas unitarias y de integración que validan permisos, reglas de negocio Estudiante-Iniciativa-Equipo, creación de proyectos, asignación de coordinadores, evaluadores, tutores (HU-05) y mentores (HU-10), edición y validación de rúbricas (HU-06), plan de trabajo y entregables (HU-20), autenticación JWT multi-rol, ciclo de vida de convocatorias, alertas automáticas por rol (HU-12) y endpoints REST.*
 
 ### Compilación y Verificación de Tipos del Frontend
 ```bash

@@ -8,7 +8,15 @@ from gestion_administrativa.authentication import JWTAuthentication
 from gestion_administrativa.permissions import EsEstudiante, TieneRolPermitido
 from gestion_administrativa.models import Usuario, UsuarioRol
 
-from .models import Estudiante, EquipoEmprendedor, Proyecto
+from .models import (
+    Estudiante,
+    EquipoEmprendedor,
+    Proyecto,
+    PlanTrabajo,
+    HitoPlanTrabajo,
+    ActividadPlanTrabajo,
+    EntregableActividad,
+)
 from .services import (
     evaluadores_activos,
     tutores_activos,
@@ -21,12 +29,15 @@ from .serializers import (
     CrearEquipoSerializer,
     ActualizarEquipoSerializer,
     AgregarMiembroSerializer,
+    PlanTrabajoDetalleSerializer,
+    HitoPlanTrabajoSerializer,
+    ActividadPlanTrabajoSerializer,
+    EntregableSerializer,
     MentorDisponibleSerializer,
     AsignarMentorSerializer,
     DesasignarMentorSerializer,
     ProyectoMentorDetalleSerializer,
 )
-
 
 
 class EstudiantesDisponiblesView(APIView):
@@ -762,7 +773,643 @@ class AsignarTutorView(APIView):
             status=status.HTTP_200_OK,
         )
 
-=======
+
+# =========================================================================
+# HU-20: GESTIÓN DEL PLAN DE TRABAJO, HITOS, ACTIVIDADES Y ENTREGABLES
+# =========================================================================
+
+
+def _usuario_es_gestor_institucional(usuario):
+    roles = getattr(usuario, "roles_asignados", [])
+    rol_activo = getattr(usuario, "rol_activo", "")
+    permitidos = {"admin", "coordinador", "direccion_del_programa", "direccion"}
+    return any(r in permitidos for r in roles) or (rol_activo in permitidos)
+
+
+def _puede_ver_plan_trabajo(usuario, plan_trabajo):
+    if _usuario_es_gestor_institucional(usuario):
+        return True
+
+    ini = plan_trabajo.iniciativa
+    # Autor de la iniciativa
+    if ini.usuario_id == usuario.id_usuario:
+        return True
+
+    # Miembro o líder del equipo emprendedor
+    equipo = getattr(ini, "equipo", None)
+    if equipo:
+        if equipo.estudiante_lider.usuario_id == usuario.id_usuario:
+            return True
+        if Estudiante.objects.filter(usuario=usuario, equipo=equipo).exists():
+            return True
+
+    # Tutor o evaluador asignado al proyecto
+    proyecto = getattr(ini, "proyecto", None)
+    if proyecto:
+        if proyecto.evaluador_id == usuario.id_usuario:
+            return True
+        if proyecto.tutor and proyecto.tutor.usuario_id == usuario.id_usuario:
+            return True
+        if proyecto.asignaciones_mentor.filter(mentor__usuario=usuario, activo=True).exists():
+            return True
+
+    return False
+
+
+def _puede_editar_plan_trabajo(usuario, plan_trabajo):
+    if _usuario_es_gestor_institucional(usuario):
+        return True
+
+    ini = plan_trabajo.iniciativa
+    # El líder del equipo emprendedor o el estudiante autor
+    equipo = getattr(ini, "equipo", None)
+    if equipo:
+        if equipo.estudiante_lider.usuario_id == usuario.id_usuario:
+            return True
+        if Estudiante.objects.filter(usuario=usuario, equipo=equipo).exists():
+            return True
+
+    if ini.usuario_id == usuario.id_usuario:
+        return True
+
+    return False
+
+
+class PlanTrabajoIniciativaView(APIView):
+    """
+    HU-20: Consulta y definición del Plan de Trabajo para una iniciativa.
+    Accesible para el equipo emprendedor, tutores y coordinadores.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [TieneRolPermitido]
+    roles_permitidos = (
+        "estudiante",
+        "tutor",
+        "mentor",
+        "coordinador",
+        "admin",
+        "direccion_del_programa",
+        "direccion",
+    )
+
+    def get(self, request, id_iniciativa):
+        from gestion_convocatorias.models import Iniciativa
+        iniciativa = Iniciativa.objects.select_related("convocatoria", "usuario").filter(pk=id_iniciativa).first()
+        if not iniciativa:
+            return Response({"error": "Iniciativa no encontrada."}, status=status.HTTP_404_NOT_FOUND)
+
+        plan, _ = PlanTrabajo.objects.get_or_create(
+            iniciativa=iniciativa,
+            defaults={"titulo": f"Plan de Trabajo - {iniciativa.nombre}"}
+        )
+
+        if not _puede_ver_plan_trabajo(request.user, plan):
+            return Response(
+                {"error": "No tienes permisos para visualizar el plan de trabajo de esta iniciativa."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = PlanTrabajoDetalleSerializer(plan)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request, id_iniciativa):
+        from gestion_convocatorias.models import Iniciativa
+        iniciativa = Iniciativa.objects.select_related("convocatoria", "usuario").filter(pk=id_iniciativa).first()
+        if not iniciativa:
+            return Response({"error": "Iniciativa no encontrada."}, status=status.HTTP_404_NOT_FOUND)
+
+        plan, creado = PlanTrabajo.objects.get_or_create(
+            iniciativa=iniciativa,
+            defaults={"titulo": request.data.get("titulo") or f"Plan de Trabajo - {iniciativa.nombre}"}
+        )
+
+        if not _puede_editar_plan_trabajo(request.user, plan):
+            return Response(
+                {"error": "Solo el equipo emprendedor o los gestores pueden definir el plan de trabajo."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        titulo = request.data.get("titulo")
+        descripcion = request.data.get("descripcion")
+        fecha_inicio = request.data.get("fecha_inicio")
+        fecha_fin = request.data.get("fecha_fin")
+        estado = request.data.get("estado")
+
+        if titulo:
+            plan.titulo = titulo.strip()
+        if descripcion is not None:
+            plan.descripcion = descripcion
+        if fecha_inicio:
+            plan.fecha_inicio = fecha_inicio
+        if fecha_fin:
+            plan.fecha_fin = fecha_fin
+        if estado in dict(PlanTrabajo.Estado.choices):
+            plan.estado = estado
+
+        plan.save()
+        serializer = PlanTrabajoDetalleSerializer(plan)
+        return Response(serializer.data, status=status.HTTP_201_CREATED if creado else status.HTTP_200_OK)
+
+
+class PlanTrabajoProyectoView(APIView):
+    """
+    HU-20: Consulta y acceso al Plan de Trabajo desde la perspectiva del Proyecto.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [TieneRolPermitido]
+    roles_permitidos = (
+        "estudiante",
+        "tutor",
+        "mentor",
+        "coordinador",
+        "admin",
+        "direccion_del_programa",
+        "direccion",
+    )
+
+    def get(self, request, id_proyecto):
+        proyecto = Proyecto.objects.select_related("iniciativa").filter(pk=id_proyecto).first()
+        if not proyecto:
+            return Response({"error": "Proyecto no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        plan, _ = PlanTrabajo.objects.get_or_create(
+            iniciativa=proyecto.iniciativa,
+            defaults={"titulo": f"Plan de Trabajo - {proyecto.nombre_proyecto}"}
+        )
+
+        if not _puede_ver_plan_trabajo(request.user, plan):
+            return Response(
+                {"error": "No tienes permisos para visualizar este plan de trabajo."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = PlanTrabajoDetalleSerializer(plan)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class PlanTrabajoDetalleView(APIView):
+    """
+    HU-20: Actualización parcial y consulta directa del Plan de Trabajo por ID.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [TieneRolPermitido]
+    roles_permitidos = (
+        "estudiante",
+        "tutor",
+        "mentor",
+        "coordinador",
+        "admin",
+        "direccion_del_programa",
+        "direccion",
+    )
+
+    def get(self, request, id_plan):
+        plan = PlanTrabajo.objects.filter(pk=id_plan).first()
+        if not plan:
+            return Response({"error": "Plan de trabajo no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not _puede_ver_plan_trabajo(request.user, plan):
+            return Response({"error": "No autorizado para consultar este plan."}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = PlanTrabajoDetalleSerializer(plan)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def patch(self, request, id_plan):
+        plan = PlanTrabajo.objects.filter(pk=id_plan).first()
+        if not plan:
+            return Response({"error": "Plan de trabajo no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not _puede_editar_plan_trabajo(request.user, plan):
+            return Response({"error": "No tienes permisos para modificar este plan."}, status=status.HTTP_403_FORBIDDEN)
+
+        for campo in ["titulo", "descripcion", "fecha_inicio", "fecha_fin", "estado"]:
+            if campo in request.data:
+                valor = request.data.get(campo)
+                if campo == "estado" and valor not in dict(PlanTrabajo.Estado.choices):
+                    continue
+                setattr(plan, campo, valor)
+
+        plan.save()
+        return Response(PlanTrabajoDetalleSerializer(plan).data, status=status.HTTP_200_OK)
+
+
+class HitoPlanTrabajoListCreateView(APIView):
+    """
+    HU-20: Listado y creación de hitos para un plan de trabajo.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [TieneRolPermitido]
+    roles_permitidos = (
+        "estudiante",
+        "tutor",
+        "mentor",
+        "coordinador",
+        "admin",
+        "direccion_del_programa",
+        "direccion",
+    )
+
+    def get(self, request, id_plan):
+        plan = PlanTrabajo.objects.filter(pk=id_plan).first()
+        if not plan:
+            return Response({"error": "Plan de trabajo no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not _puede_ver_plan_trabajo(request.user, plan):
+            return Response({"error": "No autorizado."}, status=status.HTTP_403_FORBIDDEN)
+
+        hitos = plan.hitos.all()
+        return Response(HitoPlanTrabajoSerializer(hitos, many=True).data, status=status.HTTP_200_OK)
+
+    def post(self, request, id_plan):
+        plan = PlanTrabajo.objects.filter(pk=id_plan).first()
+        if not plan:
+            return Response({"error": "Plan de trabajo no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not _puede_editar_plan_trabajo(request.user, plan):
+            return Response({"error": "No tienes permisos para agregar hitos a este plan."}, status=status.HTTP_403_FORBIDDEN)
+
+        nombre = request.data.get("nombre")
+        if not nombre or not nombre.strip():
+            return Response({"error": "El nombre del hito es obligatorio."}, status=status.HTTP_400_BAD_REQUEST)
+
+        orden = request.data.get("orden")
+        if not orden:
+            orden = plan.hitos.count() + 1
+
+        hito = HitoPlanTrabajo.objects.create(
+            plan_trabajo=plan,
+            nombre=nombre.strip(),
+            descripcion=request.data.get("descripcion", ""),
+            fecha_limite=request.data.get("fecha_limite") or None,
+            orden=int(orden),
+        )
+        return Response(HitoPlanTrabajoSerializer(hito).data, status=status.HTTP_201_CREATED)
+
+
+class HitoPlanTrabajoDetailView(APIView):
+    """
+    HU-20: Edición o eliminación de un hito del plan de trabajo.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [TieneRolPermitido]
+    roles_permitidos = (
+        "estudiante",
+        "tutor",
+        "coordinador",
+        "admin",
+        "direccion_del_programa",
+        "direccion",
+    )
+
+    def patch(self, request, id_hito):
+        hito = HitoPlanTrabajo.objects.select_related("plan_trabajo").filter(pk=id_hito).first()
+        if not hito:
+            return Response({"error": "Hito no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not _puede_editar_plan_trabajo(request.user, hito.plan_trabajo):
+            return Response({"error": "No tienes permisos para editar este hito."}, status=status.HTTP_403_FORBIDDEN)
+
+        if "nombre" in request.data:
+            hito.nombre = request.data["nombre"].strip()
+        if "descripcion" in request.data:
+            hito.descripcion = request.data["descripcion"]
+        if "fecha_limite" in request.data:
+            hito.fecha_limite = request.data["fecha_limite"] or None
+        if "orden" in request.data:
+            hito.orden = int(request.data["orden"])
+        if "completado" in request.data:
+            from django.utils import timezone
+            comp = bool(request.data["completado"])
+            hito.completado = comp
+            hito.fecha_completado = timezone.now() if comp else None
+
+        hito.save()
+        return Response(HitoPlanTrabajoSerializer(hito).data, status=status.HTTP_200_OK)
+
+    def delete(self, request, id_hito):
+        hito = HitoPlanTrabajo.objects.select_related("plan_trabajo").filter(pk=id_hito).first()
+        if not hito:
+            return Response({"error": "Hito no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not _puede_editar_plan_trabajo(request.user, hito.plan_trabajo):
+            return Response({"error": "No tienes permisos para eliminar este hito."}, status=status.HTTP_403_FORBIDDEN)
+
+        hito.delete()
+        return Response({"message": "Hito eliminado exitosamente."}, status=status.HTTP_200_OK)
+
+
+class ActividadPlanTrabajoListCreateView(APIView):
+    """
+    HU-20: Listado y creación de actividades del plan de trabajo con responsable y fechas.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [TieneRolPermitido]
+    roles_permitidos = (
+        "estudiante",
+        "tutor",
+        "mentor",
+        "coordinador",
+        "admin",
+        "direccion_del_programa",
+        "direccion",
+    )
+
+    def get(self, request, id_plan):
+        plan = PlanTrabajo.objects.filter(pk=id_plan).first()
+        if not plan:
+            return Response({"error": "Plan de trabajo no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not _puede_ver_plan_trabajo(request.user, plan):
+            return Response({"error": "No autorizado."}, status=status.HTTP_403_FORBIDDEN)
+
+        qs = plan.actividades.select_related("hito", "responsable__usuario").prefetch_related("entregables")
+        estado_f = request.query_params.get("estado")
+        if estado_f:
+            qs = qs.filter(estado=estado_f)
+
+        id_hito = request.query_params.get("id_hito")
+        if id_hito:
+            qs = qs.filter(hito_id=id_hito)
+
+        return Response(ActividadPlanTrabajoSerializer(qs, many=True).data, status=status.HTTP_200_OK)
+
+    def post(self, request, id_plan):
+        plan = PlanTrabajo.objects.select_related("iniciativa__equipo").filter(pk=id_plan).first()
+        if not plan:
+            return Response({"error": "Plan de trabajo no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not _puede_editar_plan_trabajo(request.user, plan):
+            return Response({"error": "No tienes permisos para agregar actividades a este plan."}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = ActividadPlanTrabajoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        nombre = serializer.validated_data["nombre"]
+        descripcion = serializer.validated_data.get("descripcion", "")
+        fecha_inicio = serializer.validated_data.get("fecha_inicio")
+        fecha_fin = serializer.validated_data.get("fecha_fin")
+        prioridad = serializer.validated_data.get("prioridad", ActividadPlanTrabajo.Prioridad.MEDIA)
+        estado = serializer.validated_data.get("estado", ActividadPlanTrabajo.Estado.PENDIENTE)
+
+        # Validar hito
+        hito_obj = None
+        id_hito = request.data.get("id_hito")
+        if id_hito:
+            hito_obj = plan.hitos.filter(pk=id_hito).first()
+            if not hito_obj:
+                return Response({"error": "El hito indicado no pertenece a este plan de trabajo."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validar responsable (debe pertenecer al equipo emprendedor de la iniciativa o ser líder)
+        responsable_obj = None
+        id_responsable = request.data.get("id_responsable")
+        if id_responsable:
+            responsable_obj = Estudiante.objects.filter(
+                Q(pk=id_responsable) | Q(usuario_id=id_responsable)
+            ).first()
+            if not responsable_obj:
+                return Response({"error": "El estudiante responsable no existe."}, status=status.HTTP_400_BAD_REQUEST)
+
+            equipo = plan.equipo
+            if equipo:
+                es_del_equipo = (
+                    responsable_obj.pk == equipo.estudiante_lider_id
+                    or responsable_obj.equipo_id == equipo.pk
+                )
+                if not es_del_equipo:
+                    return Response(
+                        {"error": "El responsable debe ser un integrante activo del equipo emprendedor."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+        actividad = ActividadPlanTrabajo.objects.create(
+            plan_trabajo=plan,
+            hito=hito_obj,
+            responsable=responsable_obj,
+            nombre=nombre,
+            descripcion=descripcion,
+            fecha_inicio=fecha_inicio,
+            fecha_fin=fecha_fin,
+            prioridad=prioridad,
+            estado=estado,
+        )
+
+        # Emisión de alerta automática al responsable (HU-12)
+        if responsable_obj and responsable_obj.usuario_id != request.user.id_usuario:
+            from gestion_convocatorias.models import AlertaRol
+            from django.utils import timezone
+            import datetime
+
+            fecha_venc = None
+            if actividad.fecha_fin:
+                fecha_venc = timezone.make_aware(
+                    datetime.datetime.combine(actividad.fecha_fin, datetime.time.min)
+                )
+            else:
+                fecha_venc = timezone.now() + timedelta(days=7)
+
+            AlertaRol.objects.create(
+                usuario=responsable_obj.usuario,
+                titulo=f"Nueva Actividad Asignada: {actividad.nombre}",
+                mensaje=(
+                    f"Se te ha asignado como responsable de la actividad '{actividad.nombre}' "
+                    f"en el plan de trabajo de '{plan.iniciativa.nombre}'."
+                ),
+                rol_destinatario="estudiante",
+                tipo="general",
+                prioridad="media",
+                fecha_vencimiento=fecha_venc,
+                modulo_destino="plan_trabajo",
+            )
+
+        return Response(ActividadPlanTrabajoSerializer(actividad).data, status=status.HTTP_201_CREATED)
+
+
+class ActividadPlanTrabajoDetailView(APIView):
+    """
+    HU-20: Edición o eliminación de una actividad específica del plan de trabajo.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [TieneRolPermitido]
+    roles_permitidos = (
+        "estudiante",
+        "tutor",
+        "coordinador",
+        "admin",
+        "direccion_del_programa",
+        "direccion",
+    )
+
+    def patch(self, request, id_actividad):
+        actividad = (
+            ActividadPlanTrabajo.objects.select_related("plan_trabajo__iniciativa__equipo", "responsable")
+            .filter(pk=id_actividad)
+            .first()
+        )
+        if not actividad:
+            return Response({"error": "Actividad no encontrada."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not _puede_editar_plan_trabajo(request.user, actividad.plan_trabajo):
+            return Response({"error": "No tienes permisos para modificar esta actividad."}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = ActividadPlanTrabajoSerializer(actividad, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+
+        if "id_responsable" in request.data:
+            id_resp = request.data.get("id_responsable")
+            if id_resp is None:
+                actividad.responsable = None
+            else:
+                resp = Estudiante.objects.filter(Q(pk=id_resp) | Q(usuario_id=id_resp)).first()
+                if not resp:
+                    return Response({"error": "Responsable no encontrado."}, status=status.HTTP_400_BAD_REQUEST)
+                equipo = actividad.plan_trabajo.equipo
+                if equipo:
+                    es_del_equipo = (resp.pk == equipo.estudiante_lider_id or resp.equipo_id == equipo.pk)
+                    if not es_del_equipo:
+                        return Response(
+                            {"error": "El responsable debe ser un integrante del equipo emprendedor."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                actividad.responsable = resp
+
+        if "id_hito" in request.data:
+            id_h = request.data.get("id_hito")
+            if id_h is None:
+                actividad.hito = None
+            else:
+                hito = actividad.plan_trabajo.hitos.filter(pk=id_h).first()
+                if not hito:
+                    return Response({"error": "El hito indicado no pertenece a este plan."}, status=status.HTTP_400_BAD_REQUEST)
+                actividad.hito = hito
+
+        serializer.save()
+        return Response(ActividadPlanTrabajoSerializer(actividad).data, status=status.HTTP_200_OK)
+
+    def delete(self, request, id_actividad):
+        actividad = ActividadPlanTrabajo.objects.select_related("plan_trabajo").filter(pk=id_actividad).first()
+        if not actividad:
+            return Response({"error": "Actividad no encontrada."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not _puede_editar_plan_trabajo(request.user, actividad.plan_trabajo):
+            return Response({"error": "No tienes permisos para eliminar esta actividad."}, status=status.HTTP_403_FORBIDDEN)
+
+        actividad.delete()
+        return Response({"message": "Actividad eliminada exitosamente."}, status=status.HTTP_200_OK)
+
+
+class EntregableActividadListCreateView(APIView):
+    """
+    HU-20: Listado y creación de entregables para una actividad.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [TieneRolPermitido]
+    roles_permitidos = (
+        "estudiante",
+        "tutor",
+        "mentor",
+        "coordinador",
+        "admin",
+        "direccion_del_programa",
+        "direccion",
+    )
+
+    def get(self, request, id_actividad):
+        actividad = ActividadPlanTrabajo.objects.select_related("plan_trabajo").filter(pk=id_actividad).first()
+        if not actividad:
+            return Response({"error": "Actividad no encontrada."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not _puede_ver_plan_trabajo(request.user, actividad.plan_trabajo):
+            return Response({"error": "No autorizado."}, status=status.HTTP_403_FORBIDDEN)
+
+        entregables = actividad.entregables.all()
+        return Response(EntregableSerializer(entregables, many=True).data, status=status.HTTP_200_OK)
+
+    def post(self, request, id_actividad):
+        actividad = ActividadPlanTrabajo.objects.select_related("plan_trabajo").filter(pk=id_actividad).first()
+        if not actividad:
+            return Response({"error": "Actividad no encontrada."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not _puede_editar_plan_trabajo(request.user, actividad.plan_trabajo):
+            return Response({"error": "No tienes permisos para agregar entregables a esta actividad."}, status=status.HTTP_403_FORBIDDEN)
+
+        nombre = request.data.get("nombre")
+        if not nombre or not nombre.strip():
+            return Response({"error": "El nombre del entregable es obligatorio."}, status=status.HTTP_400_BAD_REQUEST)
+
+        entregable = EntregableActividad.objects.create(
+            actividad=actividad,
+            plan_trabajo=actividad.plan_trabajo,
+            nombre=nombre.strip(),
+            descripcion=request.data.get("descripcion", ""),
+            fecha_limite=request.data.get("fecha_limite") or None,
+            tipo=request.data.get("tipo", "documento"),
+            enlace=request.data.get("enlace", ""),
+            estado=request.data.get("estado", EntregableActividad.Estado.PENDIENTE),
+        )
+        return Response(EntregableSerializer(entregable).data, status=status.HTTP_201_CREATED)
+
+
+class EntregableActividadDetailView(APIView):
+    """
+    HU-20: Edición, retroalimentación (observaciones de tutor) o eliminación de entregable.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [TieneRolPermitido]
+    roles_permitidos = (
+        "estudiante",
+        "tutor",
+        "mentor",
+        "coordinador",
+        "admin",
+        "direccion_del_programa",
+        "direccion",
+    )
+
+    def patch(self, request, id_entregable):
+        entregable = (
+            EntregableActividad.objects.select_related("actividad__plan_trabajo", "plan_trabajo")
+            .filter(pk=id_entregable)
+            .first()
+        )
+        if not entregable:
+            return Response({"error": "Entregable no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        plan = entregable.plan_trabajo
+        es_editor = _puede_editar_plan_trabajo(request.user, plan)
+        roles = getattr(request.user, "roles_asignados", [])
+        rol_activo = getattr(request.user, "rol_activo", "")
+        es_acompanamiento = any(r in {"tutor", "coordinador", "admin", "direccion_del_programa", "direccion"} for r in roles) or (rol_activo in {"tutor", "coordinador"})
+
+        if not es_editor and not es_acompanamiento:
+            return Response({"error": "No tienes permisos para modificar este entregable."}, status=status.HTTP_403_FORBIDDEN)
+
+        from django.utils import timezone
+        for campo in ["nombre", "descripcion", "fecha_limite", "tipo", "enlace", "observaciones"]:
+            if campo in request.data:
+                setattr(entregable, campo, request.data.get(campo))
+
+        if "estado" in request.data:
+            nuevo_est = request.data["estado"]
+            if nuevo_est in dict(EntregableActividad.Estado.choices):
+                entregable.estado = nuevo_est
+                if nuevo_est == EntregableActividad.Estado.ENTREGADO and not entregable.fecha_entrega:
+                    entregable.fecha_entrega = timezone.now()
+
+        entregable.save()
+        return Response(EntregableSerializer(entregable).data, status=status.HTTP_200_OK)
+
+    def delete(self, request, id_entregable):
+        entregable = EntregableActividad.objects.select_related("plan_trabajo").filter(pk=id_entregable).first()
+        if not entregable:
+            return Response({"error": "Entregable no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not _puede_editar_plan_trabajo(request.user, entregable.plan_trabajo):
+            return Response({"error": "No tienes permisos para eliminar este entregable."}, status=status.HTTP_403_FORBIDDEN)
+
+        entregable.delete()
+        return Response({"message": "Entregable eliminado exitosamente."}, status=status.HTTP_200_OK)
+
+
 # ==============================================================================
 # GENNOVA-80: Vistas para Asignación y Gestión de Mentores en Proyectos
 # ==============================================================================
@@ -877,5 +1524,4 @@ class DesasignarMentorProyectoView(APIView):
 
     def patch(self, request, id_proyecto=None, id_mentor=None):
         return self._procesar_desasignacion(request, id_proyecto, id_mentor)
-
 
