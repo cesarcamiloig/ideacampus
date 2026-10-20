@@ -1,17 +1,21 @@
-from rest_framework import mixins, viewsets
+from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from gestion_administrativa.permissions import TieneRolPermitido
 
 from .authentication import JWTAuthenticationRubricas
-from .models import Rubrica
+from .models import Rubrica, SubRubrica
 from .serializers import (
     CIEN,
+    HitoListaSerializer,
     RubricaEdicionSerializer,
     RubricaSerializer,
     suma_ponderaciones,
 )
+
+# Deben coincidir con los valores del campo tipo de Iniciativa
+TIPOS_INICIATIVA = ("emprendimiento", "innovacion")
 
 
 class PermisosRubricaMixin:
@@ -24,7 +28,7 @@ class PermisosRubricaMixin:
         "evaluador", "tutor", "mentor", "estudiante",
     )
     roles_escritura = ("admin", "direccion_del_programa")
-    acciones_lectura = ("list", "retrieve", "validar")
+    acciones_lectura = ("list", "retrieve", "validar", "hitos")
 
     @property
     def roles_permitidos(self):
@@ -56,6 +60,27 @@ class RubricaViewSet(PermisosRubricaMixin, mixins.UpdateModelMixin, viewsets.Rea
 
         recargada = self.get_queryset().get(pk=rubrica.pk)
         return Response(RubricaSerializer(recargada, context=self.get_serializer_context()).data)
+
+    @action(detail=False, methods=["get"], url_path="hitos")
+    def hitos(self, request):
+        """Lista liviana de hitos (sin criterios), opcionalmente filtrada por ?tipo_iniciativa=."""
+        hitos = SubRubrica.objects.select_related("rubrica").order_by(
+            "rubrica__tipo_iniciativa", "numero_hito"
+        )
+
+        tipo = request.query_params.get("tipo_iniciativa")
+        if tipo:
+            if tipo not in TIPOS_INICIATIVA:
+                return Response(
+                    {"tipo_iniciativa": (
+                        f"Tipo de iniciativa inválido: '{tipo}'. "
+                        f"Use uno de: {', '.join(TIPOS_INICIATIVA)}."
+                    )},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            hitos = hitos.filter(rubrica__tipo_iniciativa=tipo)
+
+        return Response(HitoListaSerializer(hitos, many=True).data)
 
     @action(detail=True, methods=["get"])
     def validar(self, request, pk=None):

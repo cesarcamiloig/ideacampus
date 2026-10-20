@@ -279,3 +279,67 @@ class RubricasTests(APITestCase):
         res = self.client.get(f"/api/rubricas/{vacia.id}/validar/")
         self.assertFalse(res.data["completa"])
         self.assertEqual(len(res.data["problemas"]), 3)
+
+
+class HitosListaTests(APITestCase):
+    URL = "/api/rubricas/hitos/"
+
+    def setUp(self):
+        self.tokens = {}
+        # "secretaria" es un rol sin permiso de lectura de rúbricas
+        for i, rol in enumerate(("evaluador", "secretaria")):
+            rol_obj, _ = Rol.objects.get_or_create(nombre_rol=rol, defaults={"descripcion": rol})
+            usuario = Usuario.objects.create(
+                nombre=f"Usuario {rol}", correo=f"hitos-{rol}@ufps.edu.co",
+                google_id=f"gid-hitos-{i}", estado="activo",
+            )
+            UsuarioRol.objects.create(usuario=usuario, rol=rol_obj, estado="activo")
+            self.tokens[rol] = generar_token(usuario, rol)
+
+        emprendimiento = Rubrica.objects.get(tipo_iniciativa="emprendimiento")
+        innovacion = Rubrica.objects.get(tipo_iniciativa="innovacion")
+        # Se crean desordenados para comprobar el orden de la respuesta
+        hito_e2 = SubRubrica.objects.create(
+            rubrica=emprendimiento, numero_hito=2, nombre="Validación", descripcion="d", ponderacion="60"
+        )
+        CriterioRubrica.objects.create(subrubrica=hito_e2, nombre="C", ponderacion="100")
+        SubRubrica.objects.create(rubrica=innovacion, numero_hito=1, nombre="Prototipo", ponderacion="100")
+        SubRubrica.objects.create(rubrica=emprendimiento, numero_hito=1, nombre="Ideación", ponderacion="40")
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.tokens['evaluador']}")
+
+    def test_devuelve_solo_los_campos_esperados_y_ordenados(self):
+        res = self.client.get(self.URL)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(res.data, list)  # sin paginación
+        for hito in res.data:
+            self.assertEqual(set(hito), {"id", "numero_hito", "nombre", "tipo_iniciativa"})
+        self.assertEqual(
+            [(h["tipo_iniciativa"], h["numero_hito"], h["nombre"]) for h in res.data],
+            [
+                ("emprendimiento", 1, "Ideación"),
+                ("emprendimiento", 2, "Validación"),
+                ("innovacion", 1, "Prototipo"),
+            ],
+        )
+
+    def test_filtro_por_tipo_de_iniciativa(self):
+        res = self.client.get(self.URL, {"tipo_iniciativa": "innovacion"})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual([h["nombre"] for h in res.data], ["Prototipo"])
+
+        res = self.client.get(self.URL, {"tipo_iniciativa": "emprendimiento"})
+        self.assertEqual([h["numero_hito"] for h in res.data], [1, 2])
+
+    def test_tipo_invalido_devuelve_400(self):
+        res = self.client.get(self.URL, {"tipo_iniciativa": "otro"})
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("tipo_iniciativa", res.data)
+
+    def test_sin_token_devuelve_401(self):
+        self.client.credentials()
+        self.assertEqual(self.client.get(self.URL).status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_rol_sin_permiso_de_lectura_devuelve_403(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.tokens['secretaria']}")
+        self.assertEqual(self.client.get(self.URL).status_code, status.HTTP_403_FORBIDDEN)
