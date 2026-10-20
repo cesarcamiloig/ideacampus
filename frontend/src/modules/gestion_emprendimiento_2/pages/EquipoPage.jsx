@@ -4,7 +4,7 @@ import { obtenerMiEquipo, obtenerMisIniciativasAprobadas } from "../services/equ
 import MiEquipoView from "./MiEquipoView";
 import EquipoForm from "./EquipoForm";
 
-export default function EquipoPage({ onIrAConvocatorias }) {
+export default function EquipoPage({ onIrAConvocatorias, onEstadoEquipoCambiado }) {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
   const [equipoData, setEquipoData] = useState(null);
@@ -26,6 +26,10 @@ export default function EquipoPage({ onIrAConvocatorias }) {
       }
 
       setIniciativasAprobadas(Array.isArray(dataIniciativas) ? dataIniciativas : []);
+      // Al crear, abandonar o disolver el equipo se actualiza lo que se muestra en el menú "Proyecto"
+      if (onEstadoEquipoCambiado) {
+        onEstadoEquipoCambiado();
+      }
     } catch (err) {
       console.error("Error al obtener información del equipo:", err);
       setError(err.message || "Error al verificar el estado de tu equipo.");
