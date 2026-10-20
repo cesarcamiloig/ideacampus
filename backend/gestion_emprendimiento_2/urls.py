@@ -10,6 +10,8 @@ from .views import (
     MentoresDisponiblesView,
     AsignarMentorProyectoView,
     DesasignarMentorProyectoView,
+    TutoresDisponiblesView,
+    AsignarTutorView,
 )
 
 urlpatterns = [
@@ -29,4 +31,8 @@ urlpatterns = [
     path('proyectos/<int:id_proyecto>/mentores/', AsignarMentorProyectoView.as_view(), name='proyecto_mentores'),
     path('proyectos/<int:id_proyecto>/mentores/<int:id_mentor>/', DesasignarMentorProyectoView.as_view(), name='proyecto_desasignar_mentor'),
     path('proyectos/desasignar-mentor/', DesasignarMentorProyectoView.as_view(), name='desasignar_mentor_directo'),
-]
+
+    # HU-05: Asignación manual de tutores a iniciativas validadas
+    path('proyectos/tutores/', TutoresDisponiblesView.as_view(), name='tutores_disponibles'),
+    path('proyectos/<int:id_proyecto>/tutor/', AsignarTutorView.as_view(), name='proyecto_asignar_tutor'),
+]

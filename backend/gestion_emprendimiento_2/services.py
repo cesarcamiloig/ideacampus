@@ -22,6 +22,26 @@ def evaluadores_activos():
     ).distinct().order_by('nombre')
 
 
+def tutores_activos():
+    """
+    Tutores académicos activos cuyo usuario institucional tiene el rol 'tutor' activo.
+    Asegura que los usuarios con rol 'tutor' activo cuenten con su perfil en el modelo Tutor.
+    """
+    from gestion_acompaniamiento.models import Tutor
+    usuarios_tutor = Usuario.objects.filter(
+        usuarios_con_rol_activo('tutor')
+    ).distinct()
+    for u in usuarios_tutor:
+        Tutor.objects.get_or_create(usuario=u)
+
+    return Tutor.objects.filter(
+        estado="activo",
+        usuario__estado="activo",
+        usuario__usuariorol__rol__nombre_rol="tutor",
+        usuario__usuariorol__estado="activo",
+    ).select_related("usuario").distinct().order_by("usuario__nombre")
+
+
 def crear_proyecto_desde_iniciativa(iniciativa, coordinador=None):
     """
     Crea oficialmente el Proyecto asociado a una iniciativa aprobada.
