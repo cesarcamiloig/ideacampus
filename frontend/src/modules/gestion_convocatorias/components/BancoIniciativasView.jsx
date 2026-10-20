@@ -24,6 +24,7 @@ import {
 } from "../services/postulacionService";
 import DetalleExpedienteModal from "./DetalleExpedienteModal";
 import MentoresPanel from "../../gestion_acompaniamiento/components/MentoresPanel";
+import TutorPanel from "../../gestion_acompaniamiento/components/TutorPanel";
 
 const ESTADOS_APROBADOS = ["aprobada", "aprobado", "aceptada", "aceptado"];
 
@@ -87,6 +88,16 @@ export default function BancoIniciativasView({ titulo = "Banco de Iniciativas y 
 
   // HU-10: panel de mentores del proyecto de una iniciativa aprobada
   const [iniciativaMentores, setIniciativaMentores] = useState(null);
+  // Panel del tutor académico del proyecto
+  const [iniciativaTutor, setIniciativaTutor] = useState(null);
+
+  // Actualiza el resumen de roles de una fila tras asignar o quitar desde un panel
+  const actualizarProyecto = (idIniciativa, cambios) =>
+    setIniciativas((prev) =>
+      prev.map((i) =>
+        i.id_iniciativa === idIniciativa && i.proyecto ? { ...i, proyecto: { ...i.proyecto, ...cambios } } : i
+      )
+    );
 
   // Coordinadores disponibles para asignar al proyecto al aprobar
   const [coordinadores, setCoordinadores] = useState([]);
@@ -489,14 +500,14 @@ export default function BancoIniciativasView({ titulo = "Banco de Iniciativas y 
                             )}
                           </div>
 
-                          {/* Tutor y Evaluador: mismo aspecto que "Mentores", sin funcionalidad todavía */}
+                          {/* Tutor y Evaluador (este último aún sin funcionalidad) */}
                           {esAprobada(item) && (
                             <div className="flex items-center justify-end gap-1.5">
                               <BotonRol
                                 etiqueta="Tutor"
                                 Icono={GraduationCap}
                                 falta={!item.proyecto?.tiene_tutor}
-                                proximamente
+                                onClick={() => setIniciativaTutor(item)}
                               />
                               <BotonRol
                                 etiqueta="Evaluador"
@@ -531,13 +542,18 @@ export default function BancoIniciativasView({ titulo = "Banco de Iniciativas y 
           iniciativa={iniciativaMentores}
           onClose={() => setIniciativaMentores(null)}
           onAsignadosCambiados={(cantidad) =>
-            setIniciativas((prev) =>
-              prev.map((i) =>
-                i.id_iniciativa === iniciativaMentores.id_iniciativa && i.proyecto
-                  ? { ...i, proyecto: { ...i.proyecto, mentores_asignados: cantidad } }
-                  : i
-              )
-            )
+            actualizarProyecto(iniciativaMentores.id_iniciativa, { mentores_asignados: cantidad })
+          }
+        />
+      )}
+
+      {iniciativaTutor && (
+        <TutorPanel
+          key={iniciativaTutor.id_iniciativa}
+          iniciativa={iniciativaTutor}
+          onClose={() => setIniciativaTutor(null)}
+          onTutorCambiado={(tieneTutor) =>
+            actualizarProyecto(iniciativaTutor.id_iniciativa, { tiene_tutor: tieneTutor })
           }
         />
       )}

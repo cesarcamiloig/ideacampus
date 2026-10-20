@@ -1,52 +1,9 @@
 import { apiClient } from "../../../services/apiClient";
+import { comoLista, llamar } from "./errores";
 
 // HU-10 (GENNOVA-80): asignación de mentores a proyectos.
 // Asignar y quitar solo los permite el rol coordinador (los demás reciben 403);
 // consultar los mentores disponibles también lo pueden hacer admin y Dirección.
-
-export const NIVELES_ACADEMICOS = {
-  pregrado: "Pregrado",
-  especializacion: "Especialización",
-  maestria: "Maestría",
-  doctorado: "Doctorado",
-};
-
-// El backend responde de tres formas distintas:
-// - negocio:    { error: "..." }  (a veces { error: ["..."] } cuando viene de un ValidationError)
-// - permisos:   { detail: "..." }
-// - validación: { id_mentor: ["..."] } / { id_proyecto: ["..."] }
-// Se toma el primer mensaje legible para no mostrar el genérico del apiClient.
-function primerMensaje(valor) {
-  if (!valor) return "";
-  if (typeof valor === "string") return valor;
-  if (Array.isArray(valor)) return primerMensaje(valor[0]);
-  if (typeof valor === "object") return primerMensaje(Object.values(valor)[0]);
-  return String(valor);
-}
-
-function mensajeDeError(err) {
-  const data = err?.data;
-  if (data && typeof data === "object") {
-    const mensaje = primerMensaje(data.error) || primerMensaje(data.detail) || primerMensaje(data);
-    if (mensaje) return mensaje;
-  }
-  return err?.message || "No pudimos comunicarnos con el servidor.";
-}
-
-async function llamar(peticion) {
-  try {
-    return await peticion();
-  } catch (err) {
-    const normalizado = new Error(mensajeDeError(err));
-    normalizado.status = err?.status;
-    normalizado.data = err?.data;
-    throw normalizado;
-  }
-}
-
-function comoLista(data) {
-  return Array.isArray(data) ? data : data?.results || [];
-}
 
 // Mentores activos. Con idProyecto, excluye a los que ya están asignados a ese proyecto.
 export async function getMentoresDisponibles(idProyecto) {

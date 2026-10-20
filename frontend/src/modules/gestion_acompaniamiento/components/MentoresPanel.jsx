@@ -1,167 +1,58 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import {
-  AlertCircle,
-  Check,
-  ChevronDown,
-  ExternalLink,
-  FolderClosed,
-  Loader2,
-  Lock,
-  RefreshCw,
-  ShieldOff,
-  X,
-} from "lucide-react";
-import { useAuth } from "../../../context/AuthContext";
+import { AlertCircle, FolderClosed, Loader2, Lock, RefreshCw, ShieldOff } from "lucide-react";
 import {
   BOTON_FANTASMA,
-  BOTON_ICONO,
   BOTON_PELIGRO,
   BOTON_PRIMARIO,
   BOTON_SECUNDARIO,
-  CAMPO,
-  ETIQUETA,
 } from "../../gestion_evaluacion/components/estilos";
 import {
-  NIVELES_ACADEMICOS,
   asignarMentor,
   desasignarMentor,
   getMentoresDelProyecto,
   getProyectoDeIniciativa,
 } from "../services/mentorService";
+import {
+  AvisoPanel,
+  Esqueleto,
+  EstadoCompleto,
+  FilaPersona,
+  PanelLateral,
+  SelectorPersona,
+  VistaPreviaPerfil,
+} from "./panelComun";
+import {
+  NIVELES_ACADEMICOS,
+  SALIDA_FILA_MS,
+  porNombre,
+  prefiereMenosMovimiento,
+  textoExperiencia,
+  useManejarErrorSesion,
+  usePuedeGestionar,
+} from "./panelUtilidades";
 
-// Duraciones alineadas con las clases de transición de abajo
-const SALIDA_PANEL_MS = 200;
-const SALIDA_FILA_MS = 160;
-
-const SELECTOR_FOCO =
-  'a[href], button:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-function prefiereMenosMovimiento() {
-  return typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-}
-
-function porNombre(a, b) {
-  return (a.nombre || "").localeCompare(b.nombre || "", "es");
-}
-
-function iniciales(nombre = "") {
-  return (
-    nombre
-      .split(" ")
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((p) => p[0])
-      .join("")
-      .toUpperCase() || "M"
-  );
-}
-
-// Proyecto de la iniciativa y, si existe, sus mentores asignados y disponibles
-// El listado de iniciativas ya trae id_proyecto; si no viene, se consulta por la iniciativa
+// Proyecto de la iniciativa y, si existe, sus mentores asignados y disponibles.
+// El listado de iniciativas ya trae id_proyecto; si no viene, se consulta por la iniciativa.
 async function obtenerDatosPanel(idIniciativa, idProyectoConocido) {
   const idProyecto = idProyectoConocido ?? (await getProyectoDeIniciativa(idIniciativa));
   if (!idProyecto) return { idProyecto: null, datos: null };
   return { idProyecto, datos: await getMentoresDelProyecto(idProyecto) };
 }
 
-function Esqueleto() {
-  return (
-    <div className="space-y-8" aria-busy="true">
-      <span className="sr-only">Cargando mentores…</span>
-      <div className="space-y-4">
-        <div className="h-4 w-40 animate-pulse rounded-full bg-superficie motion-reduce:animate-none" />
-        {[0, 1].map((n) => (
-          <div key={n} className="flex items-center gap-3">
-            <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-superficie motion-reduce:animate-none" />
-            <div className="flex-1 space-y-2">
-              <div className="h-3.5 w-2/3 animate-pulse rounded-full bg-superficie motion-reduce:animate-none" />
-              <div className="h-3 w-1/2 animate-pulse rounded-full bg-superficie motion-reduce:animate-none" />
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="h-11 w-full animate-pulse rounded-xl bg-superficie motion-reduce:animate-none" />
-    </div>
-  );
-}
-
-function EstadoCompleto({ icono: Icono, titulo, children, accion }) {
-  return (
-    <div className="flex flex-col items-start gap-3 py-6 animate-aparecer motion-reduce:animate-desvanecer">
-      <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-superficie text-slate-600">
-        <Icono className="h-5 w-5" aria-hidden="true" />
-      </span>
-      <div className="space-y-1">
-        <p className="text-base font-semibold text-slate-900">{titulo}</p>
-        <div className="max-w-sm text-sm leading-relaxed text-slate-600">{children}</div>
-      </div>
-      {accion}
-    </div>
-  );
-}
-
-function Dato({ etiqueta, valor }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-xs text-slate-600">{etiqueta}</dt>
-      <dd className="mt-0.5 truncate text-sm font-medium text-slate-900">{valor || "Sin dato"}</dd>
-    </div>
-  );
-}
-
-function VistaPreviaMentor({ mentor }) {
-  const experiencia =
-    mentor.anios_experiencia === null || mentor.anios_experiencia === undefined
-      ? null
-      : `${mentor.anios_experiencia} ${mentor.anios_experiencia === 1 ? "año" : "años"}`;
-
-  return (
-    <div className="space-y-3 rounded-2xl bg-superficie-alta p-4 ring-1 ring-slate-200/70 animate-aparecer motion-reduce:animate-desvanecer">
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
-        <Dato etiqueta="Nivel académico" valor={NIVELES_ACADEMICOS[mentor.nivel_academico] || mentor.nivel_academico} />
-        <Dato etiqueta="Experiencia" valor={experiencia} />
-        <Dato etiqueta="Disponibilidad" valor={mentor.disponibilidad} />
-      </dl>
-      {mentor.biografia && <p className="text-sm leading-relaxed text-slate-700">{mentor.biografia}</p>}
-      {mentor.enlace_perfil && (
-        <a
-          href={mentor.enlace_perfil}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-md text-sm font-semibold text-slate-900 underline decoration-slate-300 underline-offset-4 transition-colors hover:decoration-ufps focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ufps/15"
-        >
-          Ver perfil profesional
-          <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-          <span className="sr-only">(se abre en otra pestaña)</span>
-        </a>
-      )}
-    </div>
-  );
-}
-
 // Panel lateral para ver y gestionar los mentores del proyecto de una iniciativa aprobada.
 // Solo el coordinador asigna y quita; admin y Dirección lo ven en modo lectura.
 export default function MentoresPanel({ iniciativa, onClose, onAsignadosCambiados }) {
-  const { rolActivo, logout } = useAuth();
-  const puedeGestionar = (rolActivo || "").trim().toLowerCase() === "coordinador";
+  const puedeGestionar = usePuedeGestionar();
+  const manejarErrorSesion = useManejarErrorSesion();
   const idTitulo = useId();
-  const idSelector = useId();
 
-  const panelRef = useRef(null);
-  const botonCerrarRef = useRef(null);
   const tituloAsignadosRef = useRef(null);
   const selectorRef = useRef(null);
-  // logout cambia en cada render del AuthProvider: se guarda en una ref para no recargar los datos
-  const logoutRef = useRef(logout);
-  useEffect(() => {
-    logoutRef.current = logout;
-  }, [logout]);
 
   const nombreProyecto = iniciativa?.iniciativa?.titulo || iniciativa?.nombre || "este proyecto";
   const idIniciativa = iniciativa?.id_iniciativa;
   const idProyectoConocido = iniciativa?.proyecto?.id_proyecto ?? null;
 
-  const [visible, setVisible] = useState(false);
   const [estado, setEstado] = useState({ fase: "cargando" }); // cargando | sinProyecto | sinPermiso | error | listo
   const [idProyecto, setIdProyecto] = useState(null);
   const [asignados, setAsignados] = useState([]);
@@ -174,55 +65,7 @@ export default function MentoresPanel({ iniciativa, onClose, onAsignadosCambiado
   const [saliendoId, setSaliendoId] = useState(null);
   const [aviso, setAviso] = useState(null); // { tipo: "exito" | "error", titulo, detalle }
 
-  // ---------- apertura, cierre y foco ----------
-  useEffect(() => {
-    const anterior = document.activeElement;
-    const frame = requestAnimationFrame(() => setVisible(true));
-    botonCerrarRef.current?.focus({ preventScroll: true });
-    return () => {
-      cancelAnimationFrame(frame);
-      if (anterior && typeof anterior.focus === "function") anterior.focus({ preventScroll: true });
-    };
-  }, []);
-
-  const cerrar = useCallback(() => {
-    setVisible(false);
-    window.setTimeout(onClose, prefiereMenosMovimiento() ? 0 : SALIDA_PANEL_MS);
-  }, [onClose]);
-
-  function manejarTeclado(e) {
-    if (e.key === "Escape") {
-      e.stopPropagation();
-      if (confirmandoId !== null) setConfirmandoId(null);
-      else cerrar();
-      return;
-    }
-    if (e.key !== "Tab" || !panelRef.current) return;
-    // Mantiene el foco dentro del panel mientras está abierto
-    const enfocables = [...panelRef.current.querySelectorAll(SELECTOR_FOCO)];
-    if (enfocables.length === 0) return;
-    const primero = enfocables[0];
-    const ultimo = enfocables[enfocables.length - 1];
-    if (e.shiftKey && document.activeElement === primero) {
-      e.preventDefault();
-      ultimo.focus();
-    } else if (!e.shiftKey && document.activeElement === ultimo) {
-      e.preventDefault();
-      primero.focus();
-    }
-  }
-
   // ---------- datos ----------
-  // 401, o el 403 que hoy devuelve el backend cuando el token venció: se cierra la sesión
-  const manejarErrorSesion = useCallback((err) => {
-    const tokenVencido = err?.status === 403 && /token inv[aá]lido o expirado/i.test(err.message || "");
-    if (err?.status === 401 || tokenVencido) {
-      logoutRef.current?.();
-      return true;
-    }
-    return false;
-  }, []);
-
   const aplicarDatos = useCallback((resultado) => {
     if (!resultado.idProyecto) {
       setEstado({ fase: "sinProyecto" });
@@ -356,7 +199,7 @@ export default function MentoresPanel({ iniciativa, onClose, onAsignadosCambiado
 
   // ---------- render ----------
   function contenido() {
-    if (estado.fase === "cargando") return <Esqueleto />;
+    if (estado.fase === "cargando") return <Esqueleto texto="Cargando mentores…" />;
 
     if (estado.fase === "sinProyecto") {
       return (
@@ -394,36 +237,7 @@ export default function MentoresPanel({ iniciativa, onClose, onAsignadosCambiado
 
     return (
       <div className="space-y-8">
-        {aviso && (
-          <div
-            role={aviso.tipo === "error" ? "alert" : undefined}
-            className={`flex items-start gap-3 rounded-2xl p-3.5 text-sm animate-aparecer motion-reduce:animate-desvanecer ${
-              aviso.tipo === "error" ? "bg-ufps-suave text-ufps" : "bg-emerald-50 text-emerald-900"
-            }`}
-          >
-            {aviso.tipo === "error" ? (
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            ) : (
-              <span className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white animate-confirmar motion-reduce:animate-desvanecer">
-                <Check className="h-3 w-3" strokeWidth={3} aria-hidden="true" />
-              </span>
-            )}
-            <div className="min-w-0 flex-1 space-y-0.5">
-              <p className="font-semibold">{aviso.titulo}</p>
-              {aviso.detalle && (
-                <p className={aviso.tipo === "error" ? "text-ufps" : "text-emerald-800"}>{aviso.detalle}</p>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => setAviso(null)}
-              className="-my-3 -mr-3 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ufps/15"
-              aria-label="Cerrar aviso"
-            >
-              <X className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </div>
-        )}
+        <AvisoPanel aviso={aviso} onCerrar={() => setAviso(null)} />
 
         {/* Mentores asignados */}
         <section aria-labelledby={`${idTitulo}-asignados`} className="space-y-3">
@@ -454,45 +268,28 @@ export default function MentoresPanel({ iniciativa, onClose, onAsignadosCambiado
                       saliendoId === m.id_mentor ? "translate-x-3 opacity-0" : "animate-aparecer motion-reduce:animate-desvanecer"
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <span
-                        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-superficie text-xs font-semibold text-slate-700"
-                        aria-hidden="true"
-                      >
-                        {iniciales(m.nombre)}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-slate-900">{m.nombre}</p>
-                        <p className="truncate text-xs text-slate-600">
-                          {m.area_especializacion || "Sin área registrada"}
-                          {m.correo && (
-                            <>
-                              {" · "}
-                              <a
-                                href={`mailto:${m.correo}`}
-                                className="rounded-sm underline decoration-slate-300 underline-offset-2 hover:text-slate-900 hover:decoration-slate-500 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ufps/15"
-                              >
-                                {m.correo}
-                              </a>
-                            </>
-                          )}
-                        </p>
-                      </div>
-                      {puedeGestionar && !confirmando && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setConfirmandoId(m.id_mentor);
-                            setAviso(null);
-                          }}
-                          disabled={Boolean(ocupado) || saliendoId !== null}
-                          className={`${BOTON_PELIGRO} disabled:cursor-not-allowed disabled:text-slate-400 disabled:hover:bg-transparent disabled:active:scale-100`}
-                          aria-label={`Quitar a ${m.nombre} del proyecto`}
-                        >
-                          Quitar
-                        </button>
-                      )}
-                    </div>
+                    <FilaPersona
+                      nombre={m.nombre}
+                      area={m.area_especializacion}
+                      correo={m.correo}
+                      accion={
+                        puedeGestionar &&
+                        !confirmando && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setConfirmandoId(m.id_mentor);
+                              setAviso(null);
+                            }}
+                            disabled={Boolean(ocupado) || saliendoId !== null}
+                            className={`${BOTON_PELIGRO} disabled:cursor-not-allowed disabled:text-slate-400 disabled:hover:bg-transparent disabled:active:scale-100`}
+                            aria-label={`Quitar a ${m.nombre} del proyecto`}
+                          >
+                            Quitar
+                          </button>
+                        )
+                      }
+                    />
 
                     {confirmando && (
                       <div className="mt-3 space-y-3 rounded-2xl bg-ufps-suave p-3.5 animate-aparecer motion-reduce:animate-desvanecer">
@@ -545,37 +342,37 @@ export default function MentoresPanel({ iniciativa, onClose, onAsignadosCambiado
               </p>
             ) : (
               <>
-                <div className="space-y-1.5">
-                  <label htmlFor={idSelector} className={ETIQUETA}>
-                    Mentor
-                  </label>
-                  <div className="relative">
-                    <select
-                      ref={selectorRef}
-                      id={idSelector}
-                      value={seleccion}
-                      onChange={(e) => {
-                        setSeleccion(e.target.value);
-                        setAviso(null);
-                      }}
-                      disabled={ocupado === "asignar"}
-                      className={`${CAMPO} appearance-none pr-10 disabled:cursor-not-allowed disabled:bg-superficie disabled:text-slate-500`}
-                    >
-                      <option value="">Elige un mentor…</option>
-                      {disponibles.map((m) => (
-                        <option key={m.id_mentor} value={m.id_mentor}>
-                          {m.area_especializacion ? `${m.nombre} — ${m.area_especializacion}` : m.nombre}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown
-                      className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
-                      aria-hidden="true"
-                    />
-                  </div>
-                </div>
+                <SelectorPersona
+                  etiqueta="Mentor"
+                  valor={seleccion}
+                  onChange={(valor) => {
+                    setSeleccion(valor);
+                    setAviso(null);
+                  }}
+                  opciones={disponibles.map((m) => ({
+                    valor: m.id_mentor,
+                    texto: m.area_especializacion ? `${m.nombre} — ${m.area_especializacion}` : m.nombre,
+                  }))}
+                  placeholder="Elige un mentor…"
+                  disabled={ocupado === "asignar"}
+                  selectRef={selectorRef}
+                />
 
-                {mentorSeleccionado && <VistaPreviaMentor key={mentorSeleccionado.id_mentor} mentor={mentorSeleccionado} />}
+                {mentorSeleccionado && (
+                  <VistaPreviaPerfil
+                    key={mentorSeleccionado.id_mentor}
+                    datos={[
+                      {
+                        etiqueta: "Nivel académico",
+                        valor: NIVELES_ACADEMICOS[mentorSeleccionado.nivel_academico] || mentorSeleccionado.nivel_academico,
+                      },
+                      { etiqueta: "Experiencia", valor: textoExperiencia(mentorSeleccionado.anios_experiencia) },
+                      { etiqueta: "Disponibilidad", valor: mentorSeleccionado.disponibilidad },
+                    ]}
+                    biografia={mentorSeleccionado.biografia}
+                    enlacePerfil={mentorSeleccionado.enlace_perfil}
+                  />
+                )}
 
                 <button
                   type="button"
@@ -606,48 +403,19 @@ export default function MentoresPanel({ iniciativa, onClose, onAsignadosCambiado
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" onKeyDown={manejarTeclado}>
-      <div
-        className={`absolute inset-0 bg-slate-900/40 transition-opacity duration-200 ease-out-suave motion-reduce:duration-150 ${
-          visible ? "opacity-100" : "opacity-0"
-        }`}
-        onClick={cerrar}
-        aria-hidden="true"
-      />
-      <aside
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={idTitulo}
-        className={`relative flex h-full w-full max-w-md flex-col bg-white shadow-[-12px_0_32px_-12px_rgba(15,23,42,0.25)] transition-[transform,opacity] ease-panel motion-reduce:translate-x-0 motion-reduce:transition-opacity ${
-          visible ? "translate-x-0 opacity-100 duration-[260ms]" : "translate-x-full opacity-100 duration-200 motion-reduce:opacity-0"
-        }`}
-      >
-        <header className="flex items-start gap-3 px-5 pb-4 pt-5 sm:px-6">
-          <div className="min-w-0 flex-1">
-            <h2 id={idTitulo} className="text-lg font-semibold tracking-tight text-slate-900">
-              Mentores
-            </h2>
-            <p className="mt-0.5 truncate text-sm text-slate-600" title={nombreProyecto}>
-              {nombreProyecto}
-            </p>
-          </div>
-          <button
-            ref={botonCerrarRef}
-            type="button"
-            onClick={cerrar}
-            className={`${BOTON_ICONO} -mr-2 -mt-1`}
-            aria-label="Cerrar mentores"
-          >
-            <X className="h-5 w-5" aria-hidden="true" />
-          </button>
-        </header>
-
-        <p className="sr-only" aria-live="polite">
-          {aviso?.tipo === "exito" ? aviso.titulo : ""}
-        </p>
-        <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-8 sm:px-6">{contenido()}</div>
-      </aside>
-    </div>
+    <PanelLateral
+      titulo="Mentores"
+      subtitulo={nombreProyecto}
+      etiquetaCerrar="Cerrar mentores"
+      onClose={onClose}
+      onEscape={() => {
+        if (confirmandoId === null) return false;
+        setConfirmandoId(null);
+        return true;
+      }}
+      anuncio={aviso?.tipo === "exito" ? aviso.titulo : ""}
+    >
+      {contenido()}
+    </PanelLateral>
   );
 }
