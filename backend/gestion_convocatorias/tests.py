@@ -553,7 +553,7 @@ class GestionConvocatoriasTests(APITestCase):
         self.assertEqual(b"".join(response.streaming_content), b"%PDF-1.4 prueba")
 
     # ==========================================
-    # PRUEBAS HU-12: ALERTAS AUTOMÁTICAS POR ROL
+    # PRUEBAS HU-12: ALERTAS AUTOMÃTICAS POR ROL
     # ==========================================
 
     def test_generacion_automatica_alertas_por_vencimiento_convocatoria(self):
@@ -667,3 +667,101 @@ class GestionConvocatoriasTests(APITestCase):
         self.assertIn("alta_prioridad", res.data)
         self.assertGreaterEqual(res.data["total"], 1)
         self.assertGreaterEqual(res.data["no_leidas"], 1)
+
+    def test_catalogo_reglas_eventos_alertas(self):
+        """HU-12: Verifica el endpoint /api/alertas/reglas-eventos/ con las reglas para los 5 roles."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+        res = self.client.get("/api/alertas/reglas-eventos/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        roles_esperados = ["estudiante", "tutor", "mentor", "evaluador", "coordinador"]
+        for r in roles_esperados:
+            self.assertIn(r, res.data)
+            self.assertGreater(len(res.data[r]), 0)
+
+    def test_generacion_alertas_automaticas_para_los_cinco_roles(self):
+        """
+        HU-12: Verifica la generación automática de alertas sobre vencimientos
+        y compromisos pendientes para Estudiante, Tutor, Mentor, Evaluador y Coordinador.
+        """
+        # Crear roles y usuarios para Tutor, Mentor y Evaluador
+        rol_tutor, _ = Rol.objects.get_or_create(nombre_rol="tutor")
+        rol_mentor, _ = Rol.objects.get_or_create(nombre_rol="mentor")
+        rol_evaluador, _ = Rol.objects.get_or_create(nombre_rol="evaluador")
+
+        user_tutor = Usuario.objects.create(nombre="Tutor Juan", correo="tutorj@ufps.edu.co", google_id="t-1", estado="activo")
+        UsuarioRol.objects.create(usuario=user_tutor, rol=rol_tutor, estado="activo")
+
+        user_mentor = Usuario.objects.create(nombre="Mentor Mario", correo="mentorm@ufps.edu.co", google_id="m-1", estado="activo")
+        UsuarioRol.objects.create(usuario=user_mentor, rol=rol_mentor, estado="activo")
+
+        user_evaluador = Usuario.objects.create(nombre="Evaluadora Elena", correo="elena@ufps.edu.co", google_id="e-1", estado="activo")
+        UsuarioRol.objects.create(usuario=user_evaluador, rol=rol_evaluador, estado="activo")
+
+        # Convocatoria e iniciativas
+        conv = Convocatoria.objects.create(
+            nombre="Convocatoria Activa",
+            fecha_apertura=timezone.now() - timedelta(days=2),
+            fecha_cierre=timezone.now() + timedelta(days=15),
+            estado="abierta",
+        )
+        iniciativa = Iniciativa.objects.create(
+            convocatoria=conv,
+            usuario=self.estudiante,
+            nombre="Iniciativa Robótica",
+            tipo="innovacion",
+            origen_academico="asignatura",
+            estado="aprobada",
+        )
+
+        # Generar alertas automáticas
+        generar_alertas_automaticas_por_rol()
+
+        # 1. Alerta para Estudiante
+        alertas_est = AlertaRol.objects.filter(usuario=self.estudiante)
+        self.assertTrue(alertas_est.exists())
+        roles_dest_est = [a.rol_destinatario for a in alertas_est]
+        self.assertIn("estudiante", roles_dest_est)
+
+        # 2. Alerta para Tutor
+        alertas_tut = AlertaRol.objects.filter(usuario=user_tutor, rol_destinatario="tutor")
+        self.assertTrue(alertas_tut.exists())
+        self.assertEqual(alertas_tut.first().tipo, "compromiso_tutoria")
+
+        # 3. Alerta para Mentor
+        alertas_men = AlertaRol.objects.filter(usuario=user_mentor, rol_destinatario="mentor")
+        self.assertTrue(alertas_men.exists())
+        self.assertEqual(alertas_men.first().tipo, "compromiso_mentoria")
+
+        # 4. Alerta para Evaluador
+        alertas_eval = AlertaRol.objects.filter(usuario=user_evaluador, rol_destinatario="evaluador")
+        self.assertTrue(alertas_eval.exists())
+        self.assertEqual(alertas_eval.first().tipo, "evaluacion_pendiente")
+
+        # 5. Alerta para Coordinador
+        alertas_coord = AlertaRol.objects.filter(usuario=self.coordinador, rol_destinatario="coordinador")
+        self.assertTrue(alertas_coord.exists())
+
+    def test_alerta_estudiante_compromiso_equipo_iniciativa_aprobada(self):
+        """HU-12 + HU-04: Alerta a estudiante con iniciativa aprobada sin equipo formalizado."""
+        conv = Convocatoria.objects.create(
+            nombre="Convocatoria 2026",
+            fecha_apertura=timezone.now() - timedelta(days=1),
+            fecha_cierre=timezone.now() + timedelta(days=20),
+            estado="abierta",
+        )
+        Iniciativa.objects.create(
+            convocatoria=conv,
+            usuario=self.estudiante,
+            nombre="Iniciativa Solitaria",
+            tipo="emprendimiento",
+            origen_academico="asignatura",
+            estado="aprobada",
+        )
+        generar_alertas_automaticas_por_rol(self.estudiante)
+        alerta_equipo = AlertaRol.objects.filter(
+            usuario=self.estudiante,
+            titulo__icontains="Registro de Equipo Emprendedor"
+        ).first()
+        self.assertIsNotNone(alerta_equipo)
+        self.assertEqual(alerta_equipo.prioridad, "alta")
+        self.assertEqual(alerta_equipo.modulo_destino, "equipos")

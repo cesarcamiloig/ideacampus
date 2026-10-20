@@ -360,6 +360,15 @@ class AlertaRolViewSet(viewsets.ModelViewSet):
             'vencidas': vencidas
         }, status=status.HTTP_200_OK)
 
+    @action(detail=False, methods=['get'], url_path='reglas-eventos')
+    def reglas_eventos(self, request):
+        """
+        HU-12: Catálogo formal de eventos que generan alertas automáticas
+        por rol en el backend (Estudiante, Tutor, Mentor, Evaluador, Coordinador).
+        """
+        from .services import ESPECIFICACION_REGLAS_ALERTAS
+        return Response(ESPECIFICACION_REGLAS_ALERTAS, status=status.HTTP_200_OK)
+
 
 class IniciativaViewSet(viewsets.ModelViewSet):
     """
@@ -376,7 +385,7 @@ class IniciativaViewSet(viewsets.ModelViewSet):
     def _es_gestor(self, usuario):
         roles_usuario = getattr(usuario, 'roles_asignados', [])
         rol_activo = getattr(usuario, 'rol_activo', '')
-        roles_gestores = ['admin', 'direccion_del_programa', 'direccion']
+        roles_gestores = ['admin', 'direccion_del_programa', 'direccion', 'coordinador']
         return any(rol in roles_usuario for rol in roles_gestores) or (
             rol_activo in roles_gestores
         )
