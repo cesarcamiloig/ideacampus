@@ -9,13 +9,24 @@ from gestion_administrativa.permissions import EsEstudiante, TieneRolPermitido
 from gestion_administrativa.models import Usuario, UsuarioRol
 
 from .models import Estudiante, EquipoEmprendedor, Proyecto
-from .services import evaluadores_activos, tutores_activos
+from .services import (
+    evaluadores_activos,
+    tutores_activos,
+    obtener_mentores_disponibles,
+    asignar_mentor_a_proyecto,
+    desasignar_mentor_de_proyecto,
+)
 from .serializers import (
     EstudianteDisponibleSerializer,
     CrearEquipoSerializer,
     ActualizarEquipoSerializer,
     AgregarMiembroSerializer,
+    MentorDisponibleSerializer,
+    AsignarMentorSerializer,
+    DesasignarMentorSerializer,
+    ProyectoMentorDetalleSerializer,
 )
+
 
 
 class EstudiantesDisponiblesView(APIView):
@@ -750,4 +761,121 @@ class AsignarTutorView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+=======
+# ==============================================================================
+# GENNOVA-80: Vistas para Asignación y Gestión de Mentores en Proyectos
+# ==============================================================================
+
+class MentoresDisponiblesView(APIView):
+    """
+    GENNOVA-80: Retorna la lista de mentores disponibles consultando la entidad correspondiente.
+    Soporta filtrado opcional mediante el parámetro 'id_proyecto' (en URL o query param)
+    para excluir a los mentores que ya cuenten con asignación activa en dicho proyecto.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [TieneRolPermitido]
+    roles_permitidos = ["coordinador", "Coordinador", "admin", "direccion_del_programa", "direccion"]
+
+    def get(self, request, id_proyecto=None):
+        proyecto_id = id_proyecto or request.query_params.get("id_proyecto")
+        if proyecto_id:
+            try:
+                proyecto_id = int(proyecto_id)
+            except (ValueError, TypeError):
+                return Response(
+                    {"error": "El parámetro 'id_proyecto' debe ser un número entero válido."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        mentores = obtener_mentores_disponibles(id_proyecto=proyecto_id)
+        serializer = MentorDisponibleSerializer(mentores, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class AsignarMentorProyectoView(APIView):
+    """
+    GENNOVA-80: Asigna un mentor a un proyecto invocando la capa de servicios.
+    Restringido exclusivamente al rol 'Coordinador' mediante TieneRolPermitido.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [TieneRolPermitido]
+    roles_permitidos = ["coordinador", "Coordinador"]
+
+    def post(self, request, id_proyecto=None):
+        data = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+        if id_proyecto is not None:
+            data["id_proyecto"] = id_proyecto
+
+        serializer = AsignarMentorSerializer(data=data)
+        serializer.is_valid(raise_exception=True)
+
+        id_proy = serializer.validated_data["id_proyecto"]
+        id_ment = serializer.validated_data["id_mentor"]
+
+        asignacion, fue_creado = asignar_mentor_a_proyecto(
+            id_proyecto=id_proy,
+            id_mentor=id_ment
+        )
+
+        return Response(
+            {
+                "message": (
+                    "Mentor asignado exitosamente al proyecto."
+                    if fue_creado
+                    else "Asignación de mentor reactivada exitosamente."
+                ),
+                "asignacion": ProyectoMentorDetalleSerializer(asignacion).data,
+            },
+            status=status.HTTP_201_CREATED if fue_creado else status.HTTP_200_OK
+        )
+
+
+class DesasignarMentorProyectoView(APIView):
+    """
+    GENNOVA-80: Desasigna o desactiva (soft delete) un mentor de un proyecto.
+    Permite métodos HTTP DELETE o PATCH, restringido exclusivamente al rol 'Coordinador'.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [TieneRolPermitido]
+    roles_permitidos = ["coordinador", "Coordinador"]
+
+    def _procesar_desasignacion(self, request, id_proyecto=None, id_mentor=None):
+        target_proyecto = id_proyecto or request.data.get("id_proyecto")
+        target_mentor = id_mentor or request.data.get("id_mentor")
+
+        if not target_proyecto or not target_mentor:
+            return Response(
+                {"error": "Debe especificar 'id_proyecto' e 'id_mentor' para desasignar al mentor."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            target_proyecto = int(target_proyecto)
+            target_mentor = int(target_mentor)
+        except (ValueError, TypeError):
+            return Response(
+                {"error": "'id_proyecto' e 'id_mentor' deben ser números enteros válidos."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        asignacion = desasignar_mentor_de_proyecto(
+            id_proyecto=target_proyecto,
+            id_mentor=target_mentor
+        )
+
+        return Response(
+            {
+                "message": "Mentor desasignado exitosamente del proyecto.",
+                "asignacion": ProyectoMentorDetalleSerializer(asignacion).data,
+            },
+            status=status.HTTP_200_OK
+        )
+
+    def delete(self, request, id_proyecto=None, id_mentor=None):
+        return self._procesar_desasignacion(request, id_proyecto, id_mentor)
+
+    def patch(self, request, id_proyecto=None, id_mentor=None):
+        return self._procesar_desasignacion(request, id_proyecto, id_mentor)
+
 

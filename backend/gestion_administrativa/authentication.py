@@ -43,7 +43,20 @@ class JWTAuthentication(BaseAuthentication):
             if rol_token not in roles_bd:
                 raise AuthenticationFailed("El rol del token no está asignado o activo")
 
-        roles_vigentes = list(dict.fromkeys(roles_bd + ([r for r in roles_token if r == "estudiante" or r in roles_bd])))
+        tiene_estudiante_inactivo = UsuarioRol.objects.filter(
+            usuario=usuario, rol__nombre_rol="estudiante", estado="inactivo"
+        ).exists()
+
+        roles_vigentes = list(
+            dict.fromkeys(
+                roles_bd
+                + [
+                    r
+                    for r in roles_token
+                    if (r == "estudiante" and not tiene_estudiante_inactivo) or r in roles_bd
+                ]
+            )
+        )
         if not roles_vigentes:
             raise AuthenticationFailed("El usuario no posee roles activos asignados")
 

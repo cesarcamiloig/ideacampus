@@ -360,6 +360,15 @@ class AlertaRolViewSet(viewsets.ModelViewSet):
             'vencidas': vencidas
         }, status=status.HTTP_200_OK)
 
+    @action(detail=False, methods=['get'], url_path='reglas-eventos')
+    def reglas_eventos(self, request):
+        """
+        HU-12: Catálogo formal de eventos que generan alertas automáticas
+        por rol en el backend (Estudiante, Tutor, Mentor, Evaluador, Coordinador).
+        """
+        from .services import ESPECIFICACION_REGLAS_ALERTAS
+        return Response(ESPECIFICACION_REGLAS_ALERTAS, status=status.HTTP_200_OK)
+
 
 class IniciativaViewSet(viewsets.ModelViewSet):
     """
