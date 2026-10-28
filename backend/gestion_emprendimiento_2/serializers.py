@@ -339,3 +339,23 @@ class ProyectoMentorDetalleSerializer(serializers.ModelSerializer):
             'fecha_asignacion',
             'activo',
         ]
+
+
+# ==============================================================================
+# GENNOVA-77 / GENNOVA-78: Serializador para Línea de Tiempo Evolutiva (HU-08)
+# ==============================================================================
+
+class EtapaLineaTiempoSerializer(serializers.Serializer):
+    """
+    GENNOVA-77 / GENNOVA-78: Serializador de lectura para formatear las etapas
+    o hitos evolutivos de la línea de tiempo de un proyecto/iniciativa.
+    Garantiza los campos requeridos por negocio: fecha, estado, responsable y observaciones.
+    """
+    id_etapa = serializers.IntegerField(required=False, allow_null=True)
+    nombre = serializers.CharField(max_length=250, required=False, allow_blank=True)
+    fecha = serializers.DateTimeField(allow_null=True, required=False)
+    estado = serializers.CharField(max_length=50)
+    responsable = serializers.CharField(max_length=200, allow_null=True, allow_blank=True)
+    observaciones = serializers.CharField(allow_null=True, allow_blank=True)
+    tipo_evento = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    orden = serializers.IntegerField(required=False, allow_null=True)

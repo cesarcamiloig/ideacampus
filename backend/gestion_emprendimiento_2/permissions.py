@@ -27,3 +27,21 @@ class SoloCoordinadorParaMutaciones(TieneRolPermitido):
             return True
 
         return super().has_permission(request, view)
+
+
+class EsTutorCoordinadorODireccion(TieneRolPermitido):
+    """
+    GENNOVA-77 / HU-08: Permiso estricto que restringe el acceso a la Línea de Tiempo Evolutiva
+    exclusivamente a los roles 'Tutor', 'Coordinador' y 'Direccion'.
+    Soporta variantes de casing y nombres usados en el sistema ('tutor', 'Tutor', 'coordinador',
+    'Coordinador', 'direccion', 'Direccion', 'direccion_del_programa').
+    """
+    roles_permitidos = (
+        "tutor",
+        "Tutor",
+        "coordinador",
+        "Coordinador",
+        "direccion",
+        "Direccion",
+        "direccion_del_programa",
+    )
