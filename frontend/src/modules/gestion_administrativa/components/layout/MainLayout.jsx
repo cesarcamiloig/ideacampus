@@ -151,6 +151,7 @@ export default function MainLayout({
         ],
         tutor: [
             { id: "tutorias", label: "Mis Iniciativas Asignadas", icon: BookOpen },
+            { id: "avance", label: "Avance de Proyectos", icon: ClipboardCheck },
             { id: "acompanamiento", label: "Registro de Tutorías", icon: Users },
             { id: "perfil", label: "Mi Perfil Académico", icon: Award },
             { id: "alertas", label: "Centro de Alertas", icon: Bell },
@@ -179,6 +180,7 @@ export default function MainLayout({
                 children: [
                     { id: "equipo", label: "Equipo Emprendedor", icon: Users },
                     { id: "evidencias", label: "Evidencias de Avance", icon: FileUp },
+                    { id: "avance", label: "Avance por Etapas", icon: ClipboardCheck },
                 ],
             },
             { id: "postulaciones", label: "Convocatorias Abiertas", icon: FileText },

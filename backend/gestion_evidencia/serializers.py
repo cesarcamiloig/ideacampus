@@ -6,7 +6,7 @@ from rest_framework import serializers
 
 from gestion_emprendimiento_2.models import EquipoEmprendedor, Proyecto
 from gestion_evaluacion.models import SubRubrica
-from .models import Evidencia, DocumentoEvidencia, validar_tamano_archivo
+from .models import Evidencia, DocumentoEvidencia, RegistroAvance, RetroalimentacionAvance, validar_tamano_archivo
 
 EXTENSIONES = ["pdf", "docx", "pptx", "png", "jpg", "jpeg"]
 
@@ -45,6 +45,17 @@ def puede_subir_evidencia(usuario, proyecto):
     except EquipoEmprendedor.DoesNotExist:
         return False
     return equipo.miembros.filter(usuario=usuario).exists()
+
+
+def puede_registrar_avance(usuario, proyecto):
+    """
+    Puede registrar el avance de un proyecto, según el rol activo:
+    - tutor: el tutor asignado al proyecto.
+    - estudiante: quien puede subir evidencias al proyecto.
+    """
+    if getattr(usuario, "rol_activo", None) == "tutor":
+        return proyectos_del_tutor(usuario).filter(pk=proyecto.pk).exists()
+    return puede_subir_evidencia(usuario, proyecto)
 
 
 # ---------- Lectura ----------
@@ -146,3 +157,117 @@ class EvidenciaCrearSerializer(serializers.ModelSerializer):
         for url in enlaces:
             DocumentoEvidencia.objects.create(evidencia=evidencia, enlace=url)
         return evidencia
+
+
+# ===========================================================================
+# HU-19 — Registro y validación de avance
+# ===========================================================================
+
+class RetroalimentacionAvanceSerializer(serializers.ModelSerializer):
+    tutor_nombre = serializers.CharField(source="tutor.usuario.nombre", read_only=True)
+
+    class Meta:
+        model = RetroalimentacionAvance
+        fields = ["id", "registro_avance", "tutor", "tutor_nombre",
+                  "comentario", "aprobado", "fecha"]
+        read_only_fields = ["id", "registro_avance", "tutor", "tutor_nombre", "fecha"]
+
+
+class RegistroAvanceSerializer(serializers.ModelSerializer):
+    """Serializer de lectura: incluye datos enriquecidos y retroalimentaciones."""
+    proyecto_nombre = serializers.CharField(source="proyecto.iniciativa.nombre", read_only=True)
+    etapa_nombre = serializers.CharField(source="etapa.nombre", read_only=True)
+    registrado_por_nombre = serializers.CharField(source="registrado_por.nombre", read_only=True)
+    estado_avance_display = serializers.CharField(
+        source="get_estado_avance_display", read_only=True
+    )
+    estado_validacion = serializers.CharField(read_only=True)
+    evidencias = EvidenciaSerializer(many=True, read_only=True)
+    retroalimentaciones = RetroalimentacionAvanceSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = RegistroAvance
+        fields = [
+            "id", "proyecto", "proyecto_nombre",
+            "etapa", "etapa_nombre",
+            "registrado_por", "registrado_por_nombre",
+            "estado_avance", "estado_avance_display",
+            "estado_validacion",
+            "porcentaje_avance",
+            "descripcion_avance",
+            "dificultades",
+            "riesgos",
+            "recomendaciones",
+            "evidencias",
+            "fecha_registro",
+            "fecha_actualizacion",
+            "retroalimentaciones",
+        ]
+        read_only_fields = fields
+
+
+class RegistroAvanceCrearSerializer(serializers.ModelSerializer):
+    """Serializer de escritura para que el estudiante o el tutor cree un registro de avance."""
+    proyecto = serializers.PrimaryKeyRelatedField(
+        queryset=Proyecto.objects.select_related("iniciativa")
+    )
+    etapa = serializers.PrimaryKeyRelatedField(
+        queryset=SubRubrica.objects.select_related("rubrica")
+    )
+    evidencias = serializers.PrimaryKeyRelatedField(
+        queryset=Evidencia.objects.all(), many=True, allow_empty=False
+    )
+
+    class Meta:
+        model = RegistroAvance
+        fields = [
+            "proyecto", "etapa", "evidencias",
+            "estado_avance", "porcentaje_avance",
+            "descripcion_avance",
+            "dificultades", "riesgos", "recomendaciones",
+        ]
+
+    def validate(self, attrs):
+        usuario = self.context["request"].user
+        proyecto = attrs["proyecto"]
+        etapa = attrs["etapa"]
+
+        if not puede_registrar_avance(usuario, proyecto):
+            raise serializers.ValidationError(
+                {"proyecto": (
+                    "Solo puede registrar avance el titular de la iniciativa aprobada, "
+                    "un integrante del equipo o el tutor asignado a este proyecto."
+                )}
+            )
+
+        # La etapa debe pertenecer a la rúbrica del tipo de este proyecto
+        if etapa.rubrica.tipo_iniciativa != proyecto.iniciativa.tipo:
+            raise serializers.ValidationError(
+                {"etapa": "La etapa no pertenece a la rúbrica de este tipo de proyecto."}
+            )
+
+        # El avance se respalda con evidencia ya publicada en este proyecto y esta etapa
+        if any(ev.proyecto_id != proyecto.pk or ev.etapa_id != etapa.pk for ev in attrs["evidencias"]):
+            raise serializers.ValidationError(
+                {"evidencias": "Las evidencias deben estar publicadas en este proyecto y en esta etapa."}
+            )
+
+        return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        evidencias = validated_data.pop("evidencias")
+        registro = RegistroAvance.objects.create(
+            registrado_por=self.context["request"].user,
+            **validated_data,
+        )
+        registro.evidencias.set(evidencias)
+        return registro
+
+
+class RetroalimentacionCrearSerializer(serializers.ModelSerializer):
+    """Serializer para que el tutor deje retroalimentación sobre un registro de avance."""
+
+    class Meta:
+        model = RetroalimentacionAvance
+        fields = ["comentario", "aprobado"]
