@@ -158,10 +158,19 @@ WSGI_APPLICATION = 'core.wsgi.application'
 import sys
 
 DATABASE_URL = os.getenv('DATABASE_URL', '').strip()
+db_host = os.getenv('DB_HOST', '').strip()
+db_ssl = os.getenv('DB_SSL', '').lower() in ('true', '1', 'yes')
+
+db_options = {}
+if db_ssl or 'tidbcloud.com' in db_host or 'tidbcloud.com' in DATABASE_URL:
+    db_options['ssl_mode'] = 'REQUIRED'
+
 if DATABASE_URL and dj_database_url:
     DATABASES = {
         'default': dj_database_url.config(default=DATABASE_URL)
     }
+    if db_options:
+        DATABASES['default'].setdefault('OPTIONS', {}).update(db_options)
 else:
     DATABASES = {
         'default': {
@@ -169,12 +178,11 @@ else:
             'NAME': os.getenv('DB_NAME'),
             'USER': os.getenv('DB_USER'),
             'PASSWORD': os.getenv('DB_PASSWORD'),
-            'HOST': os.getenv('DB_HOST'),
-            'PORT': os.getenv('DB_PORT'),
+            'HOST': db_host,
+            'PORT': os.getenv('DB_PORT', '3306'),
+            'OPTIONS': db_options,
         }
     }
-
-db_host = os.getenv('DB_HOST', '')
 if 'test' in sys.argv or (any(cmd in sys.argv for cmd in ['makemigrations', 'check']) and (not db_host or 'ingresa_aqui' in db_host)):
     DATABASES['default'] = {
         'ENGINE': 'django.db.backends.sqlite3',
