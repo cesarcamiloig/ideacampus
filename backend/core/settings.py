@@ -171,7 +171,11 @@ try:
     # 2. CREATE TABLE IF NOT EXISTS para resiliencia ante migraciones interrumpidas
     DatabaseSchemaEditor.sql_create_table = "CREATE TABLE IF NOT EXISTS %(table)s (%(definition)s)"
 
-    # 3. En TiDB, agregar columna con restriccion UNIQUE en ALTER TABLE falla con error 8200.
+    # 3. En TiDB (< 8.0.13), las columnas BLOB, TEXT y JSON no soportan expresiones DEFAULT ('{}').
+    # Omitir DEFAULT inline en tipos limitados y aplicar el valor por defecto mediante UPDATE.
+    DatabaseSchemaEditor.skip_default = DatabaseSchemaEditor._is_limited_data_type
+
+    # 4. En TiDB, agregar columna con restriccion UNIQUE en ALTER TABLE falla con error 8200.
     # Desacoplar UNIQUE para que Django cree la columna primero y el UNIQUE KEY despues.
     _orig_add_field = DatabaseSchemaEditor.add_field
 
@@ -191,7 +195,7 @@ try:
 
     DatabaseSchemaEditor.add_field = _tidb_add_field
 
-    # 4. Idempotencia DDL ante reintentos de migraciones en MySQL / TiDB (DDL no transaccional)
+    # 5. Idempotencia DDL ante reintentos de migraciones y conversiones restringidas en TiDB
     _orig_execute = DatabaseSchemaEditor.execute
 
     def _tidb_execute(self, sql, params=()):
@@ -203,10 +207,17 @@ try:
             # 1061: Duplicate key name
             # 1068: Multiple primary key defined
             # 1826: Duplicate foreign key constraint name
+            # 8200: Unsupported modify column (ej. longtext -> json en TiDB)
             args = getattr(e, 'args', None)
             code = args[0] if (args and len(args) > 0 and isinstance(args[0], int)) else None
             msg = str(e).lower()
-            if code in (1050, 1060, 1061, 1068, 1826) or 'already exists' in msg or 'duplicate column' in msg or 'duplicate key' in msg:
+            if (
+                code in (1050, 1060, 1061, 1068, 1826)
+                or (code == 8200 and 'unsupported modify column' in msg)
+                or 'already exists' in msg
+                or 'duplicate column' in msg
+                or 'duplicate key' in msg
+            ):
                 return None
             raise
 
@@ -283,7 +294,11 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+os.makedirs(STATIC_ROOT, exist_ok=True)
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Silenciar advertencia W036 de django-allauth en motores MySQL/TiDB (restricciones unicas condicionales)
+SILENCED_SYSTEM_CHECKS = ['models.W036']
 
 SITE_ID = 1
 
