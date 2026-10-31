@@ -163,9 +163,28 @@ try:
     from django.db.backends.mysql.schema import DatabaseSchemaEditor
 
     DatabaseFeatures.minimum_database_version = (8, 0, 11)
-    # En TiDB, agregar columna y FK en la misma sentencia falla con error 1072.
+
+    # 1. En TiDB, agregar columna y FK en la misma sentencia falla con error 1072.
     # Desactivar inline FK hace que Django agregue primero la columna y luego la FK en pasos separados.
     DatabaseSchemaEditor.sql_create_column_inline_fk = None
+
+    # 2. En TiDB, agregar columna con restriccion UNIQUE en ALTER TABLE falla con error 8200.
+    # Desacoplar UNIQUE para que Django cree la columna primero y el UNIQUE KEY despues.
+    _orig_add_field = DatabaseSchemaEditor.add_field
+
+    def _tidb_add_field(self, model, field):
+        orig_unique = getattr(field, 'unique', False)
+        if orig_unique:
+            field.unique = False
+            try:
+                _orig_add_field(self, model, field)
+            finally:
+                field.unique = orig_unique
+            self.deferred_sql.append(self._create_unique_sql(model, [field]))
+        else:
+            _orig_add_field(self, model, field)
+
+    DatabaseSchemaEditor.add_field = _tidb_add_field
 except Exception:
     pass
 
