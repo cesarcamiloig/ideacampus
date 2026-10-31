@@ -296,6 +296,7 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 os.makedirs(STATIC_ROOT, exist_ok=True)
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+WHITENOISE_USE_FINDERS = True
 
 # Silenciar advertencia W036 de django-allauth en motores MySQL/TiDB (restricciones unicas condicionales)
 SILENCED_SYSTEM_CHECKS = ['models.W036']
