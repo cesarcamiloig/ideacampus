@@ -160,7 +160,12 @@ import sys
 # Compatibilidad con TiDB Cloud Serverless (MySQL 8.0.11+)
 try:
     from django.db.backends.mysql.features import DatabaseFeatures
+    from django.db.backends.mysql.schema import DatabaseSchemaEditor
+
     DatabaseFeatures.minimum_database_version = (8, 0, 11)
+    # En TiDB, agregar columna y FK en la misma sentencia falla con error 1072.
+    # Desactivar inline FK hace que Django agregue primero la columna y luego la FK en pasos separados.
+    DatabaseSchemaEditor.sql_create_column_inline_fk = None
 except Exception:
     pass
 
