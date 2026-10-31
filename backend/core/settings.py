@@ -157,6 +157,13 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 import sys
 
+# Compatibilidad con TiDB Cloud Serverless (MySQL 8.0.11+)
+try:
+    from django.db.backends.mysql.features import DatabaseFeatures
+    DatabaseFeatures.minimum_database_version = (8, 0, 11)
+except Exception:
+    pass
+
 DATABASE_URL = os.getenv('DATABASE_URL', '').strip()
 db_host = os.getenv('DB_HOST', '').strip()
 db_ssl = os.getenv('DB_SSL', '').lower() in ('true', '1', 'yes')
