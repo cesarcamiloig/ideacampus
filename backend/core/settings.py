@@ -168,7 +168,10 @@ try:
     # Desactivar inline FK hace que Django agregue primero la columna y luego la FK en pasos separados.
     DatabaseSchemaEditor.sql_create_column_inline_fk = None
 
-    # 2. En TiDB, agregar columna con restriccion UNIQUE en ALTER TABLE falla con error 8200.
+    # 2. CREATE TABLE IF NOT EXISTS para resiliencia ante migraciones interrumpidas
+    DatabaseSchemaEditor.sql_create_table = "CREATE TABLE IF NOT EXISTS %(table)s (%(definition)s)"
+
+    # 3. En TiDB, agregar columna con restriccion UNIQUE en ALTER TABLE falla con error 8200.
     # Desacoplar UNIQUE para que Django cree la columna primero y el UNIQUE KEY despues.
     _orig_add_field = DatabaseSchemaEditor.add_field
 
@@ -180,11 +183,34 @@ try:
                 _orig_add_field(self, model, field)
             finally:
                 field.unique = orig_unique
-            self.deferred_sql.append(self._create_unique_sql(model, [field]))
+            stmt = self._create_unique_sql(model, [field])
+            if stmt:
+                self.deferred_sql.append(stmt)
         else:
             _orig_add_field(self, model, field)
 
     DatabaseSchemaEditor.add_field = _tidb_add_field
+
+    # 4. Idempotencia DDL ante reintentos de migraciones en MySQL / TiDB (DDL no transaccional)
+    _orig_execute = DatabaseSchemaEditor.execute
+
+    def _tidb_execute(self, sql, params=()):
+        try:
+            return _orig_execute(self, sql, params)
+        except Exception as e:
+            # 1050: Table already exists
+            # 1060: Duplicate column name
+            # 1061: Duplicate key name
+            # 1068: Multiple primary key defined
+            # 1826: Duplicate foreign key constraint name
+            args = getattr(e, 'args', None)
+            code = args[0] if (args and len(args) > 0 and isinstance(args[0], int)) else None
+            msg = str(e).lower()
+            if code in (1050, 1060, 1061, 1068, 1826) or 'already exists' in msg or 'duplicate column' in msg or 'duplicate key' in msg:
+                return None
+            raise
+
+    DatabaseSchemaEditor.execute = _tidb_execute
 except Exception:
     pass
 
