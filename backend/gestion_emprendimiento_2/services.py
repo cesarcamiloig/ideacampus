@@ -1,11 +1,52 @@
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from gestion_administrativa.models import Usuario
 from gestion_acompaniamiento.models import Mentor
 
-from .models import Proyecto, ProyectoMentor, usuarios_con_rol_activo
+from .models import EquipoEmprendedor, Proyecto, ProyectoMentor, usuarios_con_rol_activo
+
+ESTADOS_APROBADOS = ("aprobada", "aceptada")
+
+
+def proyectos_del_estudiante(usuario):
+    """
+    Proyectos en los que participa el estudiante: es titular de su iniciativa
+    aprobada o está incluido en su equipo.
+    """
+    return Proyecto.objects.filter(
+        Q(iniciativa__usuario=usuario, iniciativa__estado__in=ESTADOS_APROBADOS)
+        | Q(iniciativa__equipo__miembros__usuario=usuario)
+    ).distinct()
+
+
+def proyectos_del_tutor(usuario):
+    """Proyectos en los que el usuario es el tutor asignado (los retroalimenta)."""
+    return Proyecto.objects.filter(tutor__usuario=usuario)
+
+
+def equipo_del_proyecto(proyecto):
+    try:
+        return proyecto.iniciativa.equipo
+    except EquipoEmprendedor.DoesNotExist:
+        return None
+
+
+def es_lider_del_proyecto(usuario, proyecto):
+    """El líder del equipo emprendedor del proyecto."""
+    equipo = equipo_del_proyecto(proyecto)
+    return bool(equipo) and equipo.estudiante_lider.usuario_id == usuario.pk
+
+
+def es_integrante_del_equipo(usuario, proyecto):
+    """El usuario pertenece al equipo del proyecto (el líder también cuenta)."""
+    equipo = equipo_del_proyecto(proyecto)
+    if not equipo:
+        return False
+    return (equipo.estudiante_lider.usuario_id == usuario.pk
+            or equipo.miembros.filter(usuario=usuario).exists())
 
 
 def coordinadores_activos():

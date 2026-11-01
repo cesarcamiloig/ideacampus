@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 from gestion_administrativa.models import Usuario
 
@@ -157,28 +158,32 @@ class ProyectoMentor(models.Model):
 
 class PlanTrabajo(models.Model):
     """
-    HU-20: Plan de Trabajo asociado a una iniciativa / proyecto emprendedor.
-    Permite organizar y hacer seguimiento a la ejecución técnica mediante
-    hitos, actividades y entregables.
+    HU-20: Plan de trabajo de un proyecto para uno de los hitos de su rúbrica.
+    Un proyecto tiene un plan por hito, y cada plan agrupa sus actividades.
     """
 
     class Estado(models.TextChoices):
-        BORRADOR = "borrador", "Borrador"
-        EN_PROGRESO = "en_progreso", "En Progreso"
+        PENDIENTE = "pendiente", "Pendiente"
+        EN_CURSO = "en_curso", "En curso"
         FINALIZADO = "finalizado", "Finalizado"
-        AJUSTADO = "ajustado", "Ajustado"
 
     id_plan_trabajo = models.AutoField(primary_key=True)
-    iniciativa = models.OneToOneField(
-        "gestion_convocatorias.Iniciativa",
+    proyecto = models.ForeignKey(
+        Proyecto,
         on_delete=models.CASCADE,
-        db_column="id_iniciativa",
-        related_name="plan_trabajo",
+        db_column="id_proyecto",
+        related_name="planes_trabajo",
+    )
+    hito = models.ForeignKey(
+        "gestion_evaluacion.SubRubrica",
+        on_delete=models.PROTECT,
+        db_column="id_hito",
+        related_name="planes_trabajo",
     )
     titulo = models.CharField(max_length=200, default="Plan de Trabajo")
     descripcion = models.TextField(blank=True, null=True)
     estado = models.CharField(
-        max_length=30, choices=Estado.choices, default=Estado.EN_PROGRESO
+        max_length=30, choices=Estado.choices, default=Estado.PENDIENTE
     )
     fecha_inicio = models.DateField(null=True, blank=True)
     fecha_fin = models.DateField(null=True, blank=True)
@@ -187,150 +192,78 @@ class PlanTrabajo(models.Model):
 
     class Meta:
         db_table = "plan_trabajo"
-        ordering = ["-fecha_creacion"]
+        ordering = ["hito__numero_hito"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["proyecto", "hito"], name="uq_plan_trabajo_proyecto_hito"
+            )
+        ]
+
+    def clean(self):
+        if self.fecha_inicio and self.fecha_fin and self.fecha_fin < self.fecha_inicio:
+            raise ValidationError(
+                {"fecha_fin": "No puede ser anterior a la fecha de inicio."}
+            )
+        if self.hito_id and self.proyecto_id:
+            if self.hito.rubrica.tipo_iniciativa != self.proyecto.iniciativa.tipo:
+                raise ValidationError(
+                    {"hito": "El hito no pertenece a la rúbrica de este tipo de proyecto."}
+                )
 
     def __str__(self):
-        return f"Plan de Trabajo #{self.pk} - Iniciativa #{self.iniciativa_id}"
-
-    @property
-    def proyecto(self):
-        return getattr(self.iniciativa, "proyecto", None)
-
-    @property
-    def equipo(self):
-        return getattr(self.iniciativa, "equipo", None)
+        return f"{self.titulo} - Proyecto #{self.proyecto_id} / Hito #{self.hito_id}"
 
 
-class HitoPlanTrabajo(models.Model):
+class Actividad(models.Model):
     """
-    HU-20: Hito clave o etapa estructurada dentro del plan de trabajo.
+    HU-20: Actividad de un plan de trabajo con un responsable del equipo.
+    Se completa cuando el responsable sube su evidencia.
     """
-
-    id_hito = models.AutoField(primary_key=True)
-    plan_trabajo = models.ForeignKey(
-        PlanTrabajo,
-        on_delete=models.CASCADE,
-        db_column="id_plan_trabajo",
-        related_name="hitos",
-    )
-    nombre = models.CharField(max_length=150)
-    descripcion = models.TextField(blank=True, null=True)
-    fecha_limite = models.DateField(null=True, blank=True)
-    orden = models.PositiveSmallIntegerField(default=1)
-    completado = models.BooleanField(default=False)
-    fecha_completado = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        db_table = "hito_plan_trabajo"
-        ordering = ["orden", "fecha_limite"]
-
-    def __str__(self):
-        return f"Hito {self.orden}: {self.nombre}"
-
-
-class ActividadPlanTrabajo(models.Model):
-    """
-    HU-20: Actividad específica del plan de trabajo con responsable asignado,
-    fechas límite y prioridad de ejecución.
-    """
-
-    class Prioridad(models.TextChoices):
-        ALTA = "alta", "Alta"
-        MEDIA = "media", "Media"
-        BAJA = "baja", "Baja"
 
     class Estado(models.TextChoices):
         PENDIENTE = "pendiente", "Pendiente"
-        EN_PROGRESO = "en_progreso", "En Progreso"
         COMPLETADA = "completada", "Completada"
-        CANCELADA = "cancelada", "Cancelada"
 
-    id_actividad = models.AutoField(primary_key=True)
     plan_trabajo = models.ForeignKey(
         PlanTrabajo,
         on_delete=models.CASCADE,
+        related_name="actividades",
         db_column="id_plan_trabajo",
-        related_name="actividades",
-    )
-    hito = models.ForeignKey(
-        HitoPlanTrabajo,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        db_column="id_hito",
-        related_name="actividades",
     )
     responsable = models.ForeignKey(
-        Estudiante,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        db_column="id_responsable",
+        Usuario,
+        on_delete=models.PROTECT,
         related_name="actividades_asignadas",
+        db_column="id_responsable",
+    )
+    creado_por = models.ForeignKey(
+        Usuario,
+        on_delete=models.PROTECT,
+        related_name="actividades_creadas",
+        db_column="id_creado_por",
     )
     nombre = models.CharField(max_length=200)
-    descripcion = models.TextField(blank=True, null=True)
+    descripcion = models.TextField(blank=True)
+    entregable = models.CharField(max_length=300, blank=True)
     fecha_inicio = models.DateField(null=True, blank=True)
-    fecha_fin = models.DateField(null=True, blank=True)
-    prioridad = models.CharField(
-        max_length=20, choices=Prioridad.choices, default=Prioridad.MEDIA
-    )
+    fecha_fin = models.DateField()
     estado = models.CharField(
-        max_length=30, choices=Estado.choices, default=Estado.PENDIENTE
+        max_length=20,
+        choices=Estado.choices,
+        default=Estado.PENDIENTE,
     )
-    fecha_creacion = models.DateTimeField(auto_now_add=True)
-    fecha_actualizacion = models.DateTimeField(auto_now=True)
+    fecha_completada = models.DateField(null=True, blank=True)
+    creado = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = "actividad_plan_trabajo"
-        ordering = ["fecha_inicio", "fecha_fin", "-prioridad"]
+        db_table = "actividad"
+        ordering = ["fecha_fin"]
+
+    def clean(self):
+        if self.fecha_inicio and self.fecha_fin and self.fecha_fin < self.fecha_inicio:
+            raise ValidationError(
+                {"fecha_fin": "No puede ser anterior a la fecha de inicio."}
+            )
 
     def __str__(self):
-        return f"Actividad #{self.pk}: {self.nombre} ({self.estado})"
-
-
-class EntregableActividad(models.Model):
-    """
-    HU-20: Entregable o evidencia verificable asociada a una actividad del plan de trabajo.
-    """
-
-    class Estado(models.TextChoices):
-        PENDIENTE = "pendiente", "Pendiente"
-        ENTREGADO = "entregado", "Entregado"
-        APROBADO = "aprobado", "Aprobado"
-        OBSERVADO = "observado", "Observado"
-
-    id_entregable = models.AutoField(primary_key=True)
-    actividad = models.ForeignKey(
-        ActividadPlanTrabajo,
-        on_delete=models.CASCADE,
-        db_column="id_actividad",
-        related_name="entregables",
-    )
-    plan_trabajo = models.ForeignKey(
-        PlanTrabajo,
-        on_delete=models.CASCADE,
-        db_column="id_plan_trabajo",
-        related_name="entregables",
-    )
-    nombre = models.CharField(max_length=200)
-    descripcion = models.TextField(blank=True, null=True)
-    fecha_limite = models.DateField(null=True, blank=True)
-    tipo = models.CharField(max_length=50, default="documento")
-    archivo = models.FileField(
-        upload_to="entregables/", null=True, blank=True, db_column="url_archivo"
-    )
-    enlace = models.URLField(max_length=500, blank=True, null=True)
-    estado = models.CharField(
-        max_length=30, choices=Estado.choices, default=Estado.PENDIENTE
-    )
-    observaciones = models.TextField(blank=True, null=True)
-    fecha_entrega = models.DateTimeField(null=True, blank=True)
-    fecha_creacion = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = "entregable_actividad"
-        ordering = ["fecha_limite", "-fecha_creacion"]
-
-    def __str__(self):
-        return f"Entregable: {self.nombre} - Actividad #{self.actividad_id}"
+        return f"{self.nombre} - Plan #{self.plan_trabajo_id}"

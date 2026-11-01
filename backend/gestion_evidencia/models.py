@@ -29,6 +29,14 @@ class Evidencia(models.Model):
         related_name="evidencias",
         db_column="id_usuario",
     )
+    actividad = models.ForeignKey(
+        "gestion_emprendimiento_2.Actividad",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="evidencias",
+        db_column="id_actividad",
+    )
     etapa = models.ForeignKey(
         "gestion_evaluacion.SubRubrica",  # el hito = la etapa finalizada
         on_delete=models.PROTECT,

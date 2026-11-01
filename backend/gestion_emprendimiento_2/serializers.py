@@ -1,7 +1,10 @@
 from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
 from gestion_administrativa.models import Usuario
 from gestion_acompaniamiento.models import Mentor
-from .models import Proyecto, ProyectoMentor
+from gestion_evaluacion.models import SubRubrica
+from .models import Actividad, PlanTrabajo, Proyecto, ProyectoMentor
+from .services import es_integrante_del_equipo, es_lider_del_proyecto
 
 
 class EstudianteDisponibleSerializer(serializers.ModelSerializer):
@@ -74,179 +77,114 @@ class EquipoDetalleSerializer(serializers.Serializer):
     miembros = MiembroEquipoSerializer(many=True)
 
 
-class EntregableSerializer(serializers.ModelSerializer):
-    """
-    HU-20: Serializador para entregables y evidencias asociadas a actividades.
-    """
-    id_actividad = serializers.IntegerField(source="actividad_id", read_only=True)
-    id_plan_trabajo = serializers.IntegerField(source="plan_trabajo_id", read_only=True)
-    actividad_nombre = serializers.CharField(source="actividad.nombre", read_only=True)
+# ==============================================================================
+# HU-20: Planes de trabajo (uno por hito) y sus actividades
+# ==============================================================================
 
-    class Meta:
-        from .models import EntregableActividad
-        model = EntregableActividad
-        fields = [
-            "id_entregable",
-            "id_actividad",
-            "actividad_nombre",
-            "id_plan_trabajo",
-            "nombre",
-            "descripcion",
-            "fecha_limite",
-            "tipo",
-            "archivo",
-            "enlace",
-            "estado",
-            "observaciones",
-            "fecha_entrega",
-            "fecha_creacion",
-        ]
-        read_only_fields = ["id_entregable", "fecha_creacion"]
+def validar_fechas(attrs, instancia):
+    fecha_inicio = attrs.get("fecha_inicio", getattr(instancia, "fecha_inicio", None))
+    fecha_fin = attrs.get("fecha_fin", getattr(instancia, "fecha_fin", None))
+    if fecha_inicio and fecha_fin and fecha_fin < fecha_inicio:
+        raise serializers.ValidationError(
+            {"fecha_fin": "No puede ser anterior a la fecha de inicio."})
 
 
-class ActividadPlanTrabajoSerializer(serializers.ModelSerializer):
-    """
-    HU-20: Serializador de actividades del plan de trabajo con responsable y entregables.
-    """
-    id_plan_trabajo = serializers.IntegerField(source="plan_trabajo_id", read_only=True)
-    id_hito = serializers.IntegerField(source="hito_id", required=False, allow_null=True)
+def validar_lider(usuario, proyecto):
+    if not es_lider_del_proyecto(usuario, proyecto):
+        raise PermissionDenied("Solo el líder del equipo puede gestionar el plan de trabajo del proyecto.")
+
+
+class PlanTrabajoSerializer(serializers.ModelSerializer):
+    proyecto = serializers.PrimaryKeyRelatedField(
+        queryset=Proyecto.objects.select_related("iniciativa"))
+    hito = serializers.PrimaryKeyRelatedField(
+        queryset=SubRubrica.objects.select_related("rubrica"),
+        error_messages={"does_not_exist": "El hito {pk_value} no existe."})
+    proyecto_nombre = serializers.CharField(source="proyecto.nombre_proyecto", read_only=True)
     hito_nombre = serializers.CharField(source="hito.nombre", read_only=True)
-    id_responsable = serializers.IntegerField(source="responsable_id", required=False, allow_null=True)
-    responsable_nombre = serializers.CharField(source="responsable.usuario.nombre", read_only=True)
-    responsable_correo = serializers.CharField(source="responsable.usuario.correo", read_only=True)
-    entregables = EntregableSerializer(many=True, read_only=True)
+    numero_hito = serializers.IntegerField(source="hito.numero_hito", read_only=True)
+    total_actividades = serializers.SerializerMethodField()
+    actividades_completadas = serializers.SerializerMethodField()
 
     class Meta:
-        from .models import ActividadPlanTrabajo
-        model = ActividadPlanTrabajo
-        fields = [
-            "id_actividad",
-            "id_plan_trabajo",
-            "id_hito",
-            "hito_nombre",
-            "id_responsable",
-            "responsable_nombre",
-            "responsable_correo",
-            "nombre",
-            "descripcion",
-            "fecha_inicio",
-            "fecha_fin",
-            "prioridad",
-            "estado",
-            "entregables",
-            "fecha_creacion",
-            "fecha_actualizacion",
-        ]
-        read_only_fields = ["id_actividad", "fecha_creacion", "fecha_actualizacion"]
+        model = PlanTrabajo
+        fields = ["id_plan_trabajo", "proyecto", "proyecto_nombre", "hito", "hito_nombre",
+                  "numero_hito", "titulo", "descripcion", "estado", "fecha_inicio", "fecha_fin",
+                  "total_actividades", "actividades_completadas",
+                  "fecha_creacion", "fecha_actualizacion"]
+        read_only_fields = ["fecha_creacion", "fecha_actualizacion"]
+        # La unicidad proyecto + hito se valida abajo con un mensaje propio
+        validators = []
+
+    def get_total_actividades(self, obj):
+        return obj.actividades.count()
+
+    def get_actividades_completadas(self, obj):
+        return obj.actividades.filter(estado=Actividad.Estado.COMPLETADA).count()
 
     def validate(self, attrs):
-        inicio = attrs.get("fecha_inicio")
-        fin = attrs.get("fecha_fin")
-        if inicio and fin and fin < inicio:
+        instancia = self.instance
+        if instancia:
+            for campo in ("proyecto", "hito"):
+                if campo in attrs and getattr(attrs[campo], "pk") != getattr(instancia, f"{campo}_id"):
+                    raise serializers.ValidationError(
+                        {campo: f"No se puede cambiar el {campo} de un plan de trabajo."})
+        proyecto = attrs.get("proyecto", getattr(instancia, "proyecto", None))
+        hito = attrs.get("hito", getattr(instancia, "hito", None))
+
+        validar_lider(self.context["request"].user, proyecto)
+
+        if hito.rubrica.tipo_iniciativa != proyecto.iniciativa.tipo:
             raise serializers.ValidationError(
-                {"fecha_fin": "La fecha de finalización no puede ser anterior a la fecha de inicio."}
-            )
+                {"hito": "El hito no pertenece a la rúbrica de este tipo de proyecto."})
+        if not instancia and PlanTrabajo.objects.filter(proyecto=proyecto, hito=hito).exists():
+            raise serializers.ValidationError(
+                {"hito": "El proyecto ya tiene un plan de trabajo para este hito."})
+
+        validar_fechas(attrs, instancia)
         return attrs
 
 
-class HitoPlanTrabajoSerializer(serializers.ModelSerializer):
-    """
-    HU-20: Serializador de hitos o fases del plan de trabajo.
-    """
-    id_plan_trabajo = serializers.IntegerField(source="plan_trabajo_id", read_only=True)
-    total_actividades = serializers.SerializerMethodField()
-    actividades_completadas = serializers.SerializerMethodField()
+class ActividadSerializer(serializers.ModelSerializer):
+    plan_trabajo = serializers.PrimaryKeyRelatedField(
+        queryset=PlanTrabajo.objects.select_related("proyecto__iniciativa", "hito"),
+        error_messages={"does_not_exist": "El plan de trabajo {pk_value} no existe."})
+    responsable = serializers.PrimaryKeyRelatedField(queryset=Usuario.objects.all())
+    proyecto = serializers.IntegerField(source="plan_trabajo.proyecto_id", read_only=True)
+    hito = serializers.IntegerField(source="plan_trabajo.hito_id", read_only=True)
+    hito_nombre = serializers.CharField(source="plan_trabajo.hito.nombre", read_only=True)
+    responsable_nombre = serializers.CharField(source="responsable.nombre", read_only=True)
+    creado_por_nombre = serializers.CharField(source="creado_por.nombre", read_only=True)
 
     class Meta:
-        from .models import HitoPlanTrabajo
-        model = HitoPlanTrabajo
-        fields = [
-            "id_hito",
-            "id_plan_trabajo",
-            "nombre",
-            "descripcion",
-            "fecha_limite",
-            "orden",
-            "completado",
-            "fecha_completado",
-            "total_actividades",
-            "actividades_completadas",
-        ]
-        read_only_fields = ["id_hito"]
+        model = Actividad
+        fields = ["id", "plan_trabajo", "proyecto", "hito", "hito_nombre",
+                  "responsable", "responsable_nombre", "creado_por", "creado_por_nombre",
+                  "nombre", "descripcion", "entregable", "fecha_inicio", "fecha_fin",
+                  "estado", "fecha_completada", "creado"]
+        # El estado arranca en "pendiente" y solo cambia al subir la evidencia
+        read_only_fields = ["creado_por", "estado", "fecha_completada", "creado"]
 
-    def get_total_actividades(self, obj):
-        return obj.actividades.count()
+    def validate(self, attrs):
+        instancia = self.instance
+        plan = attrs.get("plan_trabajo", getattr(instancia, "plan_trabajo", None))
+        if instancia and plan.pk != instancia.plan_trabajo_id:
+            raise serializers.ValidationError(
+                {"plan_trabajo": "No se puede cambiar el plan de trabajo de una actividad."})
+        proyecto = plan.proyecto
 
-    def get_actividades_completadas(self, obj):
-        return obj.actividades.filter(estado="completada").count()
+        validar_lider(self.context["request"].user, proyecto)
 
+        responsable = attrs.get("responsable", getattr(instancia, "responsable", None))
+        if not es_integrante_del_equipo(responsable, proyecto):
+            raise serializers.ValidationError(
+                {"responsable": "El responsable debe ser integrante del equipo del proyecto."})
 
-class PlanTrabajoDetalleSerializer(serializers.ModelSerializer):
-    """
-    HU-20: Serializador detallado del Plan de Trabajo completo para seguimiento y gestión.
-    """
-    id_iniciativa = serializers.IntegerField(source="iniciativa_id", read_only=True)
-    iniciativa_nombre = serializers.CharField(source="iniciativa.nombre", read_only=True)
-    id_proyecto = serializers.SerializerMethodField()
-    id_equipo = serializers.SerializerMethodField()
-    equipo_nombre = serializers.SerializerMethodField()
-    hitos = HitoPlanTrabajoSerializer(many=True, read_only=True)
-    actividades = ActividadPlanTrabajoSerializer(many=True, read_only=True)
-    entregables = EntregableSerializer(many=True, read_only=True)
-    total_actividades = serializers.SerializerMethodField()
-    actividades_completadas = serializers.SerializerMethodField()
-    porcentaje_avance = serializers.SerializerMethodField()
+        validar_fechas(attrs, instancia)
+        return attrs
 
-    class Meta:
-        from .models import PlanTrabajo
-        model = PlanTrabajo
-        fields = [
-            "id_plan_trabajo",
-            "id_iniciativa",
-            "iniciativa_nombre",
-            "id_proyecto",
-            "id_equipo",
-            "equipo_nombre",
-            "titulo",
-            "descripcion",
-            "estado",
-            "fecha_inicio",
-            "fecha_fin",
-            "total_actividades",
-            "actividades_completadas",
-            "porcentaje_avance",
-            "hitos",
-            "actividades",
-            "entregables",
-            "fecha_creacion",
-            "fecha_actualizacion",
-        ]
-        read_only_fields = ["id_plan_trabajo", "fecha_creacion", "fecha_actualizacion"]
-
-    def get_id_proyecto(self, obj):
-        p = obj.proyecto
-        return p.id_proyecto if p else None
-
-    def get_id_equipo(self, obj):
-        e = obj.equipo
-        return e.id_equipo if e else None
-
-    def get_equipo_nombre(self, obj):
-        e = obj.equipo
-        return e.nombre_equipo if e else None
-
-    def get_total_actividades(self, obj):
-        return obj.actividades.count()
-
-    def get_actividades_completadas(self, obj):
-        return obj.actividades.filter(estado="completada").count()
-
-    def get_porcentaje_avance(self, obj):
-        total = obj.actividades.count()
-        if total == 0:
-            return 0.0
-        completadas = obj.actividades.filter(estado="completada").count()
-        return round((completadas / total) * 100.0, 1)
+    def create(self, validated_data):
+        return Actividad.objects.create(creado_por=self.context["request"].user, **validated_data)
 
 
 # ==============================================================================

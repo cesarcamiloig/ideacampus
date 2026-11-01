@@ -9,13 +9,16 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from gestion_administrativa.authentication import JWTAuthentication
 from gestion_administrativa.permissions import TieneRolPermitido
-from gestion_emprendimiento_2.models import EquipoEmprendedor
 from .models import DocumentoEvidencia, Evidencia
 from .serializers import (
     EvidenciaCrearSerializer,
+    EvidenciaEditarSerializer,
     EvidenciaSerializer,
+    borrar_documentos,
     proyectos_del_estudiante,
     proyectos_del_tutor,
+    puede_gestionar_evidencia,
+    reabrir_actividad_sin_evidencias,
 )
 
 
@@ -24,14 +27,52 @@ DOCUMENTOS_SIN_CONTENIDO = Prefetch(
     "documentos", queryset=DocumentoEvidencia.objects.defer("contenido")
 )
 
+ROLES_LECTURA = ("estudiante", "admin", "direccion_del_programa",
+                 "coordinador", "tutor", "mentor", "evaluador")
+ACCIONES_ESCRITURA = ("create", "update", "partial_update", "destroy")
 
-def es_lider_del_proyecto(usuario, proyecto):
-    """Solo el líder del equipo emprendedor del proyecto puede eliminar sus evidencias."""
-    try:
-        equipo = proyecto.iniciativa.equipo
-    except EquipoEmprendedor.DoesNotExist:
-        return False
-    return equipo.estudiante_lider.usuario_id == usuario.pk
+
+class ActividadViewSet(viewsets.ModelViewSet):
+    """
+    Actividades del proyecto. Solo el líder del equipo las crea, edita o elimina;
+    el estado pasa a "completada" cuando el responsable sube su evidencia.
+    Filtros: ?proyecto=ID, ?hito=ID, ?estado=pendiente|completada
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [TieneRolPermitido]
+    serializer_class = ActividadSerializer
+
+    @property
+    def roles_permitidos(self):
+        return ("estudiante",) if self.action in ACCIONES_ESCRITURA else ROLES_LECTURA
+
+    def get_queryset(self):
+        qs = Actividad.objects.select_related(
+            "proyecto__iniciativa", "hito__rubrica", "responsable", "creado_por")
+        for parametro in ("proyecto", "hito"):
+            valor = self.request.query_params.get(parametro)
+            if valor:
+                qs = qs.filter(**{f"{parametro}_id": valor}) if valor.isdigit() else qs.none()
+        estado = self.request.query_params.get("estado")
+        if estado:
+            qs = qs.filter(estado=estado)
+
+        rol = getattr(self.request.user, "rol_activo", None)
+        if rol == "estudiante":
+            qs = qs.filter(proyecto__in=proyectos_del_estudiante(self.request.user))
+        elif rol == "tutor":
+            qs = qs.filter(proyecto__in=proyectos_del_tutor(self.request.user))
+        return qs
+
+    def destroy(self, request, *args, **kwargs):
+        actividad = self.get_object()
+        if not es_lider_del_proyecto(request.user, actividad.proyecto):
+            return Response(
+                {"error": "Solo el líder del equipo puede gestionar las actividades del proyecto."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        actividad.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class EvidenciaViewSet(mixins.CreateModelMixin,
@@ -43,14 +84,13 @@ class EvidenciaViewSet(mixins.CreateModelMixin,
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     roles_crear = ("estudiante",)
-    roles_lectura = ("estudiante", "admin", "direccion_del_programa",
-                     "coordinador", "tutor", "mentor", "evaluador")
+    roles_lectura = ROLES_LECTURA
     # Ver las evidencias de "mi proyecto": el estudiante que participa y el tutor que lo retroalimenta
     roles_mi_proyecto = ("estudiante", "tutor")
 
     @property
     def roles_permitidos(self):
-        if self.action in ("create", "destroy"):
+        if self.action in ACCIONES_ESCRITURA:
             return self.roles_crear
         if self.action == "mi_proyecto":
             return self.roles_mi_proyecto
@@ -58,7 +98,7 @@ class EvidenciaViewSet(mixins.CreateModelMixin,
 
     def get_queryset(self):
         qs = (Evidencia.objects
-              .select_related("proyecto__iniciativa", "etapa", "usuario")
+              .select_related("proyecto__iniciativa", "etapa", "usuario", "actividad")
               .prefetch_related(DOCUMENTOS_SIN_CONTENIDO))
         proyecto = self.request.query_params.get("proyecto")
         if proyecto:
@@ -70,7 +110,11 @@ class EvidenciaViewSet(mixins.CreateModelMixin,
         return qs
 
     def get_serializer_class(self):
-        return EvidenciaCrearSerializer if self.action == "create" else EvidenciaSerializer
+        if self.action == "create":
+            return EvidenciaCrearSerializer
+        if self.action in ("update", "partial_update"):
+            return EvidenciaEditarSerializer
+        return EvidenciaSerializer
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -79,26 +123,49 @@ class EvidenciaViewSet(mixins.CreateModelMixin,
         salida = EvidenciaSerializer(evidencia, context={"request": request})
         return Response(salida.data, status=status.HTTP_201_CREATED)
 
-    def destroy(self, request, *args, **kwargs):
+    def _evidencia_gestionable(self, request, pk):
         """
-        Elimina una evidencia con todos sus adjuntos. Solo puede hacerlo el líder del equipo
-        del proyecto, sea quien sea el integrante que la subió.
+        Devuelve (evidencia, None) si el usuario puede editarla o eliminarla:
+        el líder del equipo con todas las del proyecto y los integrantes solo con las propias.
+        Si no, (None, respuesta de error).
         """
         evidencia = (Evidencia.objects
-                     .select_related("proyecto__iniciativa__equipo__estudiante_lider")
-                     .filter(pk=kwargs.get("pk"))
+                     .select_related("proyecto__iniciativa__equipo__estudiante_lider", "actividad")
+                     .filter(pk=pk)
                      .first())
         if not evidencia:
-            return Response({"error": "Evidencia no encontrada."}, status=status.HTTP_404_NOT_FOUND)
-        if not es_lider_del_proyecto(request.user, evidencia.proyecto):
-            return Response(
-                {"error": "Solo el líder del equipo puede eliminar las evidencias del proyecto."},
+            return None, Response({"error": "Evidencia no encontrada."}, status=status.HTTP_404_NOT_FOUND)
+        if not puede_gestionar_evidencia(request.user, evidencia):
+            return None, Response(
+                {"error": "Solo el líder del equipo o quien subió la evidencia puede modificarla o eliminarla."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        # Los adjuntos antiguos guardados en disco también se borran del almacenamiento
-        for documento in evidencia.documentos.exclude(archivo="").exclude(archivo__isnull=True):
-            documento.archivo.delete(save=False)
+        return evidencia, None
+
+    def update(self, request, *args, **kwargs):
+        evidencia, error = self._evidencia_gestionable(request, kwargs.get("pk"))
+        if error:
+            return error
+        serializer = self.get_serializer(
+            evidencia, data=request.data, partial=kwargs.pop("partial", False))
+        serializer.is_valid(raise_exception=True)
+        evidencia = serializer.save()
+        salida = EvidenciaSerializer(evidencia, context={"request": request})
+        return Response(salida.data)
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs["partial"] = True
+        return self.update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        """Elimina una evidencia con todos sus adjuntos."""
+        evidencia, error = self._evidencia_gestionable(request, kwargs.get("pk"))
+        if error:
+            return error
+        actividad = evidencia.actividad
+        borrar_documentos(evidencia)
         evidencia.delete()
+        reabrir_actividad_sin_evidencias(actividad)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=["get"], url_path="mi-proyecto")
@@ -117,7 +184,7 @@ class EvidenciaViewSet(mixins.CreateModelMixin,
 
         qs = (Evidencia.objects
               .filter(proyecto__in=proyectos)
-              .select_related("proyecto__iniciativa", "etapa", "usuario")
+              .select_related("proyecto__iniciativa", "etapa", "usuario", "actividad")
               .prefetch_related(DOCUMENTOS_SIN_CONTENIDO))
         proyecto = request.query_params.get("proyecto")
         if proyecto:

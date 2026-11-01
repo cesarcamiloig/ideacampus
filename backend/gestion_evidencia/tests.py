@@ -11,7 +11,7 @@ from rest_framework.test import APITestCase
 from gestion_administrativa.jwt_utils import generar_token
 from gestion_administrativa.models import Rol, Usuario, UsuarioRol
 from gestion_convocatorias.models import Convocatoria, Iniciativa
-from gestion_emprendimiento_2.models import EquipoEmprendedor, Estudiante
+from gestion_emprendimiento_2.models import Actividad, EquipoEmprendedor, Estudiante, PlanTrabajo
 from gestion_evaluacion.models import Rubrica, SubRubrica
 
 from .models import DocumentoEvidencia, Evidencia
@@ -237,11 +237,32 @@ class DescargaDocumentoEvidenciaTests(EvidenciaBaseTests):
         self.assertIn("volver a cargarse", res.data["error"])
 
 
-class EliminarEvidenciaTests(EvidenciaBaseTests):
-    """Solo el líder del equipo del proyecto elimina evidencias (en los datos base, el integrante es el líder)."""
+class EquipoConMiembroMixin:
+    """Agrega al equipo un miembro que no es el líder (en los datos base, el integrante es el líder)."""
+
+    def agregar_miembro(self):
+        rol_estudiante = Rol.objects.get(nombre_rol="estudiante")
+        self.miembro = Usuario.objects.create(
+            nombre="Miembro", correo="miembro@ufps.edu.co", google_id="gid-ev-miembro")
+        UsuarioRol.objects.create(usuario=self.miembro, rol=rol_estudiante)
+        Estudiante.objects.create(usuario=self.miembro, equipo=self.iniciativa.equipo)
+
+    def crear_otro_equipo(self):
+        """El estudiante ajeno pasa a ser líder de un equipo en el otro proyecto."""
+        lider = Estudiante.objects.create(usuario=self.ajeno)
+        equipo = EquipoEmprendedor.objects.create(
+            nombre_equipo="Otro equipo", estudiante_lider=lider, iniciativa=self.iniciativa_sin_equipo)
+        lider.equipo = equipo
+        lider.save(update_fields=["equipo"])
+        return self.iniciativa_sin_equipo.proyecto
+
+
+class EliminarEvidenciaTests(EquipoConMiembroMixin, EvidenciaBaseTests):
+    """El líder elimina todas las evidencias del proyecto; los demás, solo las que subieron."""
 
     def setUp(self):
         super().setUp()
+        self.agregar_miembro()
         # La sube el titular, que no es el líder del equipo
         res = self.subir(self.titular, self.iniciativa)
         self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
@@ -257,9 +278,12 @@ class EliminarEvidenciaTests(EvidenciaBaseTests):
         self.assertFalse(Evidencia.objects.filter(pk=self.evidencia_id).exists())
         self.assertFalse(DocumentoEvidencia.objects.filter(evidencia_id=self.evidencia_id).exists())
 
-    def test_quien_no_es_lider_recibe_403_aunque_la_haya_subido(self):
-        res = self.eliminar(self.titular)
-        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+    def test_quien_la_subio_puede_eliminarla_aunque_no_sea_lider(self):
+        self.assertEqual(self.eliminar(self.titular).status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Evidencia.objects.filter(pk=self.evidencia_id).exists())
+
+    def test_miembro_no_elimina_la_evidencia_de_otro(self):
+        self.assertEqual(self.eliminar(self.miembro).status_code, status.HTTP_403_FORBIDDEN)
         self.assertTrue(Evidencia.objects.filter(pk=self.evidencia_id).exists())
 
     def test_estudiante_ajeno_y_otros_roles_no_eliminan(self):
@@ -267,9 +291,178 @@ class EliminarEvidenciaTests(EvidenciaBaseTests):
         self.assertEqual(self.eliminar(self.tutor, rol="tutor").status_code, status.HTTP_403_FORBIDDEN)
         self.assertTrue(Evidencia.objects.filter(pk=self.evidencia_id).exists())
 
-    def test_proyecto_sin_equipo_no_tiene_lider_que_elimine(self):
-        res = self.subir(self.titular, self.iniciativa_sin_equipo)
-        self.assertEqual(self.eliminar(self.titular, evidencia_id=res.data["id"]).status_code, status.HTTP_403_FORBIDDEN)
-
     def test_evidencia_inexistente_da_404(self):
         self.assertEqual(self.eliminar(self.integrante, evidencia_id=999999).status_code, status.HTTP_404_NOT_FOUND)
+
+
+class EditarEvidenciaTests(EquipoConMiembroMixin, EvidenciaBaseTests):
+    def setUp(self):
+        super().setUp()
+        self.agregar_miembro()
+        res = self.subir(self.miembro, self.iniciativa)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
+        self.evidencia_id = res.data["id"]
+
+    def editar(self, usuario, datos, rol="estudiante"):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {generar_token(usuario, rol)}")
+        return self.client.patch(f"{self.URL}{self.evidencia_id}/", datos, format="multipart")
+
+    def test_quien_la_subio_la_edita(self):
+        res = self.editar(self.miembro, {"titulo": "Nuevo título"})
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.assertEqual(res.data["titulo"], "Nuevo título")
+        self.assertEqual(len(res.data["documentos"]), 1)
+
+    def test_lider_edita_la_de_otro_y_reemplaza_los_adjuntos(self):
+        res = self.editar(self.integrante, {"enlaces": ["https://example.com/demo"]})
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.assertEqual([d["enlace"] for d in res.data["documentos"]], ["https://example.com/demo"])
+
+    def test_otro_integrante_no_edita_la_de_otro(self):
+        self.assertEqual(self.editar(self.titular, {"titulo": "X"}).status_code, status.HTTP_403_FORBIDDEN)
+
+
+class PlanTrabajoTests(EquipoConMiembroMixin, EvidenciaBaseTests):
+    """Un plan de trabajo por hito del proyecto; solo el líder lo gestiona."""
+    URL_PLANES = "/api/plan-trabajo/"
+
+    def setUp(self):
+        super().setUp()
+        self.agregar_miembro()
+        self.proyecto = self.iniciativa.proyecto
+
+    def crear_plan(self, usuario, **cambios):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {generar_token(usuario, 'estudiante')}")
+        datos = {"proyecto": self.proyecto.pk, "hito": self.hito.pk, "titulo": "Plan hito 1", **cambios}
+        return self.client.post(self.URL_PLANES, datos, format="json")
+
+    def test_lider_crea_el_plan_pendiente(self):
+        res = self.crear_plan(self.integrante)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
+        self.assertEqual(res.data["estado"], "pendiente")
+        self.assertEqual(res.data["total_actividades"], 0)
+
+    def test_quien_no_es_lider_no_crea_planes(self):
+        self.assertEqual(self.crear_plan(self.miembro).status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_lider_de_otro_equipo_no_crea_planes_en_un_proyecto_ajeno(self):
+        proyecto_propio = self.crear_otro_equipo()
+        # En el proyecto de otro equipo: 403 y no se crea nada
+        self.assertEqual(self.crear_plan(self.ajeno).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(PlanTrabajo.objects.filter(proyecto=self.proyecto).exists())
+        # En su propio proyecto sí puede
+        res = self.crear_plan(self.ajeno, proyecto=proyecto_propio.pk)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
+
+    def test_lider_de_otro_equipo_no_edita_ni_elimina_planes_ajenos(self):
+        plan_id = self.crear_plan(self.integrante).data["id_plan_trabajo"]
+        self.crear_otro_equipo()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {generar_token(self.ajeno, 'estudiante')}")
+        # Ni siquiera lo ve: no es de sus proyectos
+        self.assertEqual(self.client.patch(f"{self.URL_PLANES}{plan_id}/", {"estado": "finalizado"},
+                                           format="json").status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(self.client.delete(f"{self.URL_PLANES}{plan_id}/").status_code,
+                         status.HTTP_404_NOT_FOUND)
+        self.assertEqual(PlanTrabajo.objects.get(pk=plan_id).estado, "pendiente")
+
+    def test_un_solo_plan_por_hito_del_proyecto(self):
+        self.assertEqual(self.crear_plan(self.integrante).status_code, status.HTTP_201_CREATED)
+        res = self.crear_plan(self.integrante)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("hito", res.data)
+
+    def test_otro_hito_del_proyecto_tiene_su_propio_plan(self):
+        hito_2 = SubRubrica.objects.create(
+            rubrica=self.hito.rubrica, numero_hito=2, nombre="Hito 2", ponderacion="0")
+        self.assertEqual(self.crear_plan(self.integrante).status_code, status.HTTP_201_CREATED)
+        self.assertEqual(self.crear_plan(self.integrante, hito=hito_2.pk).status_code, status.HTTP_201_CREATED)
+        self.assertEqual(PlanTrabajo.objects.filter(proyecto=self.proyecto).count(), 2)
+
+    def test_hito_inexistente_o_de_otra_rubrica_da_400(self):
+        self.assertIn("hito", self.crear_plan(self.integrante, hito=999999).data)
+        rubrica_otra, _ = Rubrica.objects.get_or_create(
+            tipo_iniciativa="innovacion", defaults={"nombre": "Innovación"})
+        hito_otro = SubRubrica.objects.create(
+            rubrica=rubrica_otra, numero_hito=1, nombre="Hito innovación", ponderacion="100")
+        res = self.crear_plan(self.integrante, hito=hito_otro.pk)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("hito", res.data)
+
+
+class ActividadTests(EquipoConMiembroMixin, EvidenciaBaseTests):
+    """Solo el líder crea actividades en un plan; la evidencia del responsable la completa."""
+    URL_ACTIVIDADES = "/api/actividad/"
+
+    def setUp(self):
+        super().setUp()
+        self.agregar_miembro()
+        self.proyecto = self.iniciativa.proyecto
+        self.plan = PlanTrabajo.objects.create(proyecto=self.proyecto, hito=self.hito)
+
+    def crear_actividad(self, usuario, **cambios):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {generar_token(usuario, 'estudiante')}")
+        datos = {"plan_trabajo": self.plan.pk, "responsable": self.miembro.pk,
+                 "nombre": "Prototipo", "fecha_fin": "2026-12-01", **cambios}
+        return self.client.post(self.URL_ACTIVIDADES, datos, format="json")
+
+    def subir_de_actividad(self, usuario, actividad_id):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {generar_token(usuario, 'estudiante')}")
+        archivo = SimpleUploadedFile("avance.pdf", b"%PDF-1.4 avance", content_type="application/pdf")
+        return self.client.post(self.URL, {
+            "proyecto": self.proyecto.pk, "actividad": actividad_id, "titulo": "Avance",
+            "tipo": "documento", "archivos": [archivo],
+        }, format="multipart")
+
+    def test_lider_crea_la_actividad_pendiente(self):
+        res = self.crear_actividad(self.integrante)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
+        self.assertEqual(res.data["estado"], "pendiente")
+        self.assertEqual(res.data["creado_por"], self.integrante.pk)
+        self.assertEqual((res.data["proyecto"], res.data["hito"]), (self.proyecto.pk, self.hito.pk))
+
+    def test_el_estado_no_se_puede_enviar(self):
+        res = self.crear_actividad(self.integrante, estado="completada")
+        self.assertEqual(res.data["estado"], "pendiente")
+
+    def test_quien_no_es_lider_no_crea_actividades(self):
+        self.assertEqual(self.crear_actividad(self.miembro).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.crear_actividad(self.titular).status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_lider_de_otro_equipo_no_crea_actividades_en_un_plan_ajeno(self):
+        self.crear_otro_equipo()
+        # Manda su propio usuario como responsable y el plan de otro proyecto
+        res = self.crear_actividad(self.ajeno, responsable=self.ajeno.pk)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(Actividad.objects.exists())
+
+    def test_responsable_fuera_del_equipo_da_400(self):
+        res = self.crear_actividad(self.integrante, responsable=self.ajeno.pk)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("responsable", res.data)
+
+    def test_plan_de_trabajo_inexistente_da_400(self):
+        res = self.crear_actividad(self.integrante, plan_trabajo=999999)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("plan_trabajo", res.data)
+
+    def test_evidencia_del_responsable_completa_la_actividad(self):
+        actividad_id = self.crear_actividad(self.integrante).data["id"]
+        res = self.subir_de_actividad(self.miembro, actividad_id)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
+        self.assertEqual(res.data["etapa"], self.hito.pk)
+        actividad = Actividad.objects.get(pk=actividad_id)
+        self.assertEqual(actividad.estado, "completada")
+        self.assertIsNotNone(actividad.fecha_completada)
+
+        # Si se elimina su única evidencia, vuelve a quedar pendiente
+        self.client.delete(f"{self.URL}{res.data['id']}/")
+        actividad.refresh_from_db()
+        self.assertEqual(actividad.estado, "pendiente")
+        self.assertIsNone(actividad.fecha_completada)
+
+    def test_solo_el_responsable_sube_la_evidencia_de_la_actividad(self):
+        actividad_id = self.crear_actividad(self.integrante).data["id"]
+        res = self.subir_de_actividad(self.integrante, actividad_id)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("actividad", res.data)
+        self.assertEqual(Actividad.objects.get(pk=actividad_id).estado, "pendiente")
