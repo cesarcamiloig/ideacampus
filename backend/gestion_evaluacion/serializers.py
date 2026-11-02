@@ -1,10 +1,16 @@
 from decimal import Decimal
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import F, ProtectedError, Sum
 from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
 
-from .models import CriterioRubrica, Rubrica, SubRubrica
+from gestion_emprendimiento_2.models import Proyecto
+from gestion_evidencia.models import Evidencia
+
+from .asignaciones import es_evaluador_asignado
+from .calculos import nota_hito, redondear
+from .models import CriterioRubrica, Evaluacion, NotaCriterio, Rubrica, SubRubrica
 
 CERO = Decimal("0")
 CIEN = Decimal("100")
@@ -262,3 +268,174 @@ class RubricaEdicionSerializer(serializers.ModelSerializer):
             self._sincronizar_criterios(hito, criterios)
 
         return instance
+
+
+# ---------------------------------------------------------------
+# Serializers de evaluación
+# ---------------------------------------------------------------
+def describir_criterio(criterio):
+    return f"{criterio.pk}: {criterio.nombre}"
+
+
+class NotaCriterioEntradaSerializer(serializers.Serializer):
+    criterio = serializers.PrimaryKeyRelatedField(queryset=CriterioRubrica.objects.all())
+    nota = serializers.DecimalField(max_digits=5, decimal_places=2)
+    comentario = serializers.CharField(default="", allow_blank=True)
+
+
+class EvaluacionEntradaSerializer(serializers.Serializer):
+    """Crea (POST) o reemplaza (PUT) una evaluación. El evaluador siempre es request.user."""
+    proyecto = serializers.PrimaryKeyRelatedField(
+        queryset=Proyecto.objects.select_related("iniciativa")
+    )
+    subrubrica = serializers.PrimaryKeyRelatedField(
+        queryset=SubRubrica.objects.select_related("rubrica")
+    )
+    comentario = serializers.CharField(default="", allow_blank=True)
+    notas = NotaCriterioEntradaSerializer(many=True, allow_empty=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # En el PUT no hace falta enviarlos: no se pueden cambiar
+        if self.instance is not None:
+            self.fields["proyecto"].required = False
+            self.fields["subrubrica"].required = False
+
+    def validate(self, attrs):
+        usuario = self.context["request"].user
+        if self.instance is not None:
+            for campo in ("proyecto", "subrubrica"):
+                if campo in attrs and attrs[campo].pk != getattr(self.instance, f"{campo}_id"):
+                    raise serializers.ValidationError(
+                        {campo: "No se puede cambiar en una evaluación existente."}
+                    )
+            proyecto = self.instance.proyecto
+            subrubrica = self.instance.subrubrica
+        else:
+            proyecto = attrs["proyecto"]
+            subrubrica = attrs["subrubrica"]
+
+        # clean() del modelo no corre en DRF
+        if subrubrica.rubrica.tipo_iniciativa != proyecto.iniciativa.tipo:
+            raise serializers.ValidationError(
+                {"subrubrica": "El hito no pertenece a la rúbrica del tipo de este proyecto."}
+            )
+
+        if not es_evaluador_asignado(usuario, proyecto):
+            raise PermissionDenied("No estás asignado como evaluador de este proyecto.")
+
+        if not Evidencia.objects.filter(proyecto=proyecto, etapa=subrubrica).exists():
+            raise serializers.ValidationError(
+                {"subrubrica": "El hito no tiene evidencias registradas; no se puede evaluar todavía."}
+            )
+
+        if self.instance is None:
+            existente = Evaluacion.objects.filter(
+                proyecto=proyecto, subrubrica=subrubrica, evaluador=usuario
+            ).first()
+            if existente:
+                raise serializers.ValidationError(
+                    {"evaluacion": (
+                        f"Ya evaluaste este hito (evaluación {existente.pk}). "
+                        "Usa PUT para modificarla."
+                    )}
+                )
+
+        self._validar_notas(subrubrica, attrs["notas"])
+        return attrs
+
+    @staticmethod
+    def _validar_notas(subrubrica, notas):
+        esperados = {c.pk: c for c in subrubrica.criterios.all()}
+        # Una rúbrica incompleta (p. ej. editada desde el admin) daría una nota final errónea
+        suma = sum((c.ponderacion for c in esperados.values()), CERO)
+        if suma != CIEN:
+            raise serializers.ValidationError(
+                {"subrubrica": f"Los criterios del hito suman {suma} %, deben sumar 100 %."}
+            )
+
+        enviados = [n["criterio"] for n in notas]
+        ids_enviados = [c.pk for c in enviados]
+        faltantes = [c for pk, c in esperados.items() if pk not in ids_enviados]
+        invalidos = {c.pk: c for c in enviados if c.pk not in esperados}
+        repetidos = {c.pk: c for c in enviados if ids_enviados.count(c.pk) > 1}
+        if faltantes or invalidos or repetidos:
+            detalle = {
+                "faltantes": [describir_criterio(c) for c in faltantes],
+                "invalidos": [describir_criterio(c) for c in invalidos.values()],
+                "repetidos": [describir_criterio(c) for c in repetidos.values()],
+            }
+            raise serializers.ValidationError(
+                {"notas": {clave: valor for clave, valor in detalle.items() if valor}}
+            )
+
+        errores = []
+        for item in notas:
+            criterio, nota = item["criterio"], item["nota"]
+            if criterio.escala_min >= criterio.escala_max:
+                errores.append(f"{criterio.nombre}: la escala del criterio está mal configurada.")
+            elif not criterio.escala_min <= nota <= criterio.escala_max:
+                errores.append(
+                    f"{criterio.nombre}: la nota {nota} está fuera de la escala "
+                    f"{criterio.escala_min} a {criterio.escala_max}."
+                )
+        if errores:
+            raise serializers.ValidationError({"notas": errores})
+
+    @staticmethod
+    def _guardar_notas(evaluacion, notas):
+        NotaCriterio.objects.bulk_create([
+            NotaCriterio(
+                evaluacion=evaluacion, criterio=n["criterio"],
+                nota=n["nota"], comentario=n["comentario"],
+            )
+            for n in notas
+        ])
+        evaluacion.nota_final = redondear(nota_hito(evaluacion)["nota_en_5"])
+
+    def create(self, validated_data):
+        notas = validated_data.pop("notas")
+        try:
+            with transaction.atomic():
+                evaluacion = Evaluacion.objects.create(
+                    evaluador=self.context["request"].user, **validated_data
+                )
+                self._guardar_notas(evaluacion, notas)
+                evaluacion.save(update_fields=["nota_final"])
+        except IntegrityError:
+            # Dos POST simultáneos pasan la validación; la restricción única frena al segundo
+            raise serializers.ValidationError(
+                {"evaluacion": "Ya evaluaste este hito. Usa PUT para modificar la evaluación."}
+            )
+        return evaluacion
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        instance.comentario = validated_data["comentario"]
+        instance.notas.all().delete()
+        self._guardar_notas(instance, validated_data["notas"])
+        instance.save(update_fields=["comentario", "nota_final"])
+        return instance
+
+
+class NotaCriterioSerializer(serializers.ModelSerializer):
+    criterio_nombre = serializers.CharField(source="criterio.nombre", read_only=True)
+
+    class Meta:
+        model = NotaCriterio
+        fields = ["criterio", "criterio_nombre", "nota", "comentario"]
+        read_only_fields = fields
+
+
+class EvaluacionSerializer(serializers.ModelSerializer):
+    subrubrica_nombre = serializers.CharField(source="subrubrica.nombre", read_only=True)
+    evaluador_nombre = serializers.CharField(source="evaluador.nombre", read_only=True)
+    notas = NotaCriterioSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Evaluacion
+        fields = [
+            "id", "proyecto", "subrubrica", "subrubrica_nombre", "evaluador",
+            "evaluador_nombre", "nota_final", "comentario", "creado", "notas",
+        ]
+        read_only_fields = fields
