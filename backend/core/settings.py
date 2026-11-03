@@ -1,6 +1,19 @@
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
+
+try:
+    import pymysql
+    pymysql.install_as_MySQLdb()
+except ImportError:
+    pass
+
+try:
+    import MySQLdb  # noqa: F401
+    has_mysql = True
+except Exception:
+    has_mysql = False
 
 try:
     import dj_database_url
@@ -54,9 +67,6 @@ INSTALLED_APPS = [
     'dj_rest_auth.registration',
     'corsheaders',
 ]
-
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
 
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
@@ -155,14 +165,12 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-import sys
-
 DATABASE_URL = os.getenv('DATABASE_URL', '').strip()
 if DATABASE_URL and dj_database_url:
     DATABASES = {
         'default': dj_database_url.config(default=DATABASE_URL)
     }
-else:
+elif has_mysql:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
@@ -171,6 +179,16 @@ else:
             'PASSWORD': os.getenv('DB_PASSWORD'),
             'HOST': os.getenv('DB_HOST'),
             'PORT': os.getenv('DB_PORT'),
+            'OPTIONS': {
+                'ssl_mode': os.getenv('DB_SSL_MODE', 'REQUIRED'),
+            },
+        }
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
 
@@ -219,6 +237,14 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
 
 SITE_ID = 1
 
@@ -236,7 +262,13 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-""" urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('api/', include('gestion_administrativa.urls')),
-] """
+# ==========================================
+# Parche para TiDB Serverless: Desactivar validación de versión MySQL
+# ==========================================
+try:
+    from django.db.backends.mysql.base import DatabaseWrapper
+
+    # Sobrescribir el método de validación para evitar el bloqueo por versión 8.0.11
+    DatabaseWrapper.check_database_version_supported = lambda self: None
+except Exception:
+    pass
