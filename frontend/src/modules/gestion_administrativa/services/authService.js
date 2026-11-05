@@ -1,5 +1,19 @@
 import { apiClient } from "../../../services/apiClient";
 
+// El panel de bienvenida solo se muestra en la primera pantalla tras iniciar sesión
+const CLAVE_BIENVENIDA = "gennova:bienvenida-pendiente";
+
+/** Devuelve true una sola vez por inicio de sesión y borra la marca. */
+export function consumirBienvenidaPendiente() {
+  try {
+    const pendiente = localStorage.getItem(CLAVE_BIENVENIDA) === "1";
+    localStorage.removeItem(CLAVE_BIENVENIDA);
+    return pendiente;
+  } catch {
+    return false;
+  }
+}
+
 function isTokenValid(token) {
   if (!token || typeof token !== "string") return false;
   const parts = token.split(".");
@@ -28,6 +42,11 @@ export async function authenticateWithGoogle(idToken, rol) {
 
   localStorage.setItem("token", data.token);
   localStorage.setItem("usuario", JSON.stringify(data.usuario));
+  try {
+    localStorage.setItem(CLAVE_BIENVENIDA, "1");
+  } catch {
+    // Sin almacenamiento disponible simplemente no se muestra la bienvenida
+  }
 
   return data;
 }
@@ -62,4 +81,5 @@ export function getUsuario() {
 export function logout() {
   localStorage.removeItem("token");
   localStorage.removeItem("usuario");
+  localStorage.removeItem(CLAVE_BIENVENIDA);
 }

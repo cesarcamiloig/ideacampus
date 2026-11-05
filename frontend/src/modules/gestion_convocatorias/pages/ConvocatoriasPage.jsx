@@ -440,51 +440,6 @@ export default function ConvocatoriasPage({ onNavigate }) {
           </div>
         </div>
 
-        {/* 2. TARJETAS DE MÉTRICAS RÁPIDAS */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-              Total Registradas
-            </span>
-            <span className="text-2xl font-bold text-slate-900 mt-1 block">
-              {countsByStatus.todas}
-            </span>
-            <span className="text-[10px] text-slate-400 block mt-0.5">En el sistema</span>
-          </div>
-
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4 shadow-sm">
-            <span className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider block">
-              Abiertas Ahora
-            </span>
-            <span className="text-2xl font-bold text-emerald-800 mt-1 block">
-              {countsByStatus.abierta}
-            </span>
-            <span className="text-[10px] text-emerald-600 block mt-0.5">Postulaciones activas</span>
-          </div>
-
-          <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4 shadow-sm">
-            <span className="text-[11px] font-semibold text-blue-700 uppercase tracking-wider block">
-              Programadas
-            </span>
-            <span className="text-2xl font-bold text-blue-800 mt-1 block">
-              {countsByStatus.publicada}
-            </span>
-            <span className="text-[10px] text-blue-600 block mt-0.5">Apertura próxima</span>
-          </div>
-
-          <div className="rounded-2xl border border-amber-100 bg-amber-50/40 p-4 shadow-sm">
-            <span className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider block">
-              {isGestor ? "En Borrador" : "Cerradas"}
-            </span>
-            <span className="text-2xl font-bold text-amber-800 mt-1 block">
-              {isGestor ? countsByStatus.borrador : countsByStatus.cerrada}
-            </span>
-            <span className="text-[10px] text-amber-600 block mt-0.5">
-              {isGestor ? "Pendientes de publicar" : "Histórico de convocatorias"}
-            </span>
-          </div>
-        </div>
-
         {/* 3. BARRA DE CONTROL, PESTAÑAS Y BÚSQUEDA */}
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-4">
           {/* Pestañas tipo carpeta por estado */}

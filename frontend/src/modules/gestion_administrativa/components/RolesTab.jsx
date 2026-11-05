@@ -8,16 +8,6 @@ import {
     toggleUsuarioActive,
 } from "../services/parametroService"
 
-const ROLE_COLORS = {
-    admin: "bg-red-50 text-red-700 border-red-200",
-    coordinador: "bg-purple-50 text-purple-700 border-purple-200",
-    tutor: "bg-blue-50 text-blue-700 border-blue-200",
-    mentor: "bg-amber-50 text-amber-700 border-amber-200",
-    evaluador: "bg-teal-50 text-teal-700 border-teal-200",
-    estudiante: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    direccion_del_programa: "bg-slate-100 text-slate-700 border-slate-300",
-    direccion: "bg-slate-100 text-slate-700 border-slate-300",
-}
 
 export default function RolesTab() {
     const { usuario, updateCurrentUserRoles, refreshSession, updateUsuario } = useAuth()
@@ -287,11 +277,11 @@ export default function RolesTab() {
                                                 ) : (
                                                     user.roles.map((rId) => {
                                                         const rData = rolesCatalog.find((r) => r.id === rId)
-                                                        const badgeColor = ROLE_COLORS[rId] || "bg-slate-100 text-slate-700 border-slate-200"
+                                                        // Estilo neutro y uniforme para todos los roles
                                                         return (
                                                             <span
                                                                 key={rId}
-                                                                className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-semibold ${badgeColor}`}
+                                                                className="inline-flex items-center rounded-md border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-700"
                                                             >
                                                                 {rData ? rData.name : rId}
                                                             </span>

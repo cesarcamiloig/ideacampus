@@ -72,7 +72,8 @@ function BotonRol({ etiqueta, Icono, falta, onClick, proximamente = false }) {
 }
 
 // titulo: el coordinador ve esta vista como "Proyectos"
-export default function BancoIniciativasView({ titulo = "Banco de Iniciativas y Emprendimientos" }) {
+// encabezado: false oculta el bloque de título y deja Actualizar junto al filtro de estados
+export default function BancoIniciativasView({ titulo = "Banco de Iniciativas y Emprendimientos", encabezado = true }) {
   const { rolActivo } = useAuth();
   const esCoordinador = (rolActivo || "").trim().toLowerCase() === "coordinador";
   const [iniciativas, setIniciativas] = useState([]);
@@ -193,14 +194,6 @@ export default function BancoIniciativasView({ titulo = "Banco de Iniciativas y 
     return coincideTexto && coincideEstado;
   });
 
-  const conteoPendientes = iniciativas.filter((i) =>
-    ["pendiente", "en_espera", "radicada"].includes((i.estado || "").toLowerCase())
-  ).length;
-
-  const conteoAprobadas = iniciativas.filter((i) =>
-    ["aprobada", "aprobado", "aceptada", "aceptado"].includes((i.estado || "").toLowerCase())
-  ).length;
-
   const getBadgeEstado = (estado) => {
     const e = (estado || "").toLowerCase();
     if (["aprobada", "aprobado", "aceptada", "aceptado"].includes(e)) {
@@ -231,70 +224,43 @@ export default function BancoIniciativasView({ titulo = "Banco de Iniciativas y 
     };
   };
 
+  const botonActualizar = (
+    <button
+      type="button"
+      onClick={cargarIniciativas}
+      disabled={cargando}
+      className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors shadow-sm self-start sm:self-center"
+    >
+      <RefreshCw className={`h-3.5 w-3.5 ${cargando ? "animate-spin text-red-600" : ""}`} />
+      <span>Actualizar</span>
+    </button>
+  );
+
   return (
     <div className="w-full space-y-6">
-      {/* HEADER INSTITUCIONAL */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex items-center gap-3.5">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600 border border-red-100">
-            <Lightbulb className="h-6 w-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-red-600">
-                Coordinación de Emprendimiento
-              </span>
+      {/* HEADER INSTITUCIONAL (sin él, Actualizar pasa a la barra de filtros) */}
+      {encabezado && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-3.5">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600 border border-red-100">
+              <Lightbulb className="h-6 w-6" />
             </div>
-            <h2 className="text-xl font-bold text-slate-900">{titulo}</h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Revisión, validación de origen académico y habilitación para conformación de equipos emprendedores.
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-red-600">
+                  Coordinación de Emprendimiento
+                </span>
+              </div>
+              <h2 className="text-xl font-bold text-slate-900">{titulo}</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Revisión, validación de origen académico y habilitación para conformación de equipos emprendedores.
+              </p>
+            </div>
           </div>
-        </div>
 
-        <button
-          type="button"
-          onClick={cargarIniciativas}
-          disabled={cargando}
-          className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors shadow-sm self-start sm:self-center"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${cargando ? "animate-spin text-red-600" : ""}`} />
-          <span>Actualizar</span>
-        </button>
-      </div>
-
-      {/* MÉTRICAS RÁPIDAS */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <span className="text-[11px] font-bold uppercase text-slate-500">
-            Total Registradas
-          </span>
-          <div className="mt-1 text-2xl font-bold text-slate-900">{iniciativas.length}</div>
-          <span className="text-[11px] text-slate-400 mt-0.5 block">
-            Iniciativas recibidas en convocatorias
-          </span>
+          {botonActualizar}
         </div>
-
-        <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 shadow-sm">
-          <span className="text-[11px] font-bold uppercase text-blue-700">
-            Pendientes de Evaluación
-          </span>
-          <div className="mt-1 text-2xl font-bold text-blue-900">{conteoPendientes}</div>
-          <span className="text-[11px] text-blue-600 mt-0.5 block">
-            Requieren revisión documental
-          </span>
-        </div>
-
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm">
-          <span className="text-[11px] font-bold uppercase text-emerald-700">
-            Aprobadas
-          </span>
-          <div className="mt-1 text-2xl font-bold text-emerald-900">{conteoAprobadas}</div>
-          <span className="text-[11px] text-emerald-600 mt-0.5 block">
-            Pueden registrar su equipo emprendedor
-          </span>
-        </div>
-      </div>
+      )}
 
       {/* MENSAJES DE ESTADO */}
       {mensajeExito && (
@@ -354,6 +320,7 @@ export default function BancoIniciativasView({ titulo = "Banco de Iniciativas y 
             <option value="aprobada">Aprobadas</option>
             <option value="rechazada">Rechazadas</option>
           </select>
+          {!encabezado && botonActualizar}
         </div>
       </div>
 
