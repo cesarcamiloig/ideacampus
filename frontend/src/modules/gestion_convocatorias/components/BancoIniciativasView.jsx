@@ -15,6 +15,7 @@ import {
   Users,
   GraduationCap,
   ClipboardCheck,
+  History,
 } from "lucide-react";
 import { useAuth } from "../../../context/AuthContext";
 import {
@@ -25,6 +26,10 @@ import {
 import DetalleExpedienteModal from "./DetalleExpedienteModal";
 import MentoresPanel from "../../gestion_acompaniamiento/components/MentoresPanel";
 import TutorPanel from "../../gestion_acompaniamiento/components/TutorPanel";
+import LineaTiempoPanel from "../../gestion_emprendimiento_2/components/LineaTiempoPanel";
+
+// Roles que pueden consultar la línea de tiempo evolutiva (el backend responde 403 a los demás)
+const ROLES_LINEA_TIEMPO = ["coordinador", "direccion_del_programa", "direccion"];
 
 const ESTADOS_APROBADOS = ["aprobada", "aprobado", "aceptada", "aceptado"];
 
@@ -74,7 +79,9 @@ function BotonRol({ etiqueta, Icono, falta, onClick, proximamente = false }) {
 // titulo: el coordinador ve esta vista como "Proyectos"
 export default function BancoIniciativasView({ titulo = "Banco de Iniciativas y Emprendimientos" }) {
   const { rolActivo } = useAuth();
-  const esCoordinador = (rolActivo || "").trim().toLowerCase() === "coordinador";
+  const rolNormalizado = (rolActivo || "").trim().toLowerCase();
+  const esCoordinador = rolNormalizado === "coordinador";
+  const veLineaTiempo = ROLES_LINEA_TIEMPO.includes(rolNormalizado);
   const [iniciativas, setIniciativas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
@@ -90,6 +97,8 @@ export default function BancoIniciativasView({ titulo = "Banco de Iniciativas y 
   const [iniciativaMentores, setIniciativaMentores] = useState(null);
   // Panel del tutor académico del proyecto
   const [iniciativaTutor, setIniciativaTutor] = useState(null);
+  // HU-08: línea de tiempo evolutiva de la iniciativa
+  const [iniciativaLineaTiempo, setIniciativaLineaTiempo] = useState(null);
 
   // Actualiza el resumen de roles de una fila tras asignar o quitar desde un panel
   const actualizarProyecto = (idIniciativa, cambios) =>
@@ -459,6 +468,19 @@ export default function BancoIniciativasView({ titulo = "Banco de Iniciativas y 
                               <span>Expediente</span>
                             </button>
 
+                            {veLineaTiempo && (
+                              <button
+                                type="button"
+                                onClick={() => setIniciativaLineaTiempo(item)}
+                                aria-haspopup="dialog"
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
+                                title="Ver la evolución cronológica de la iniciativa"
+                              >
+                                <History className="h-3.5 w-3.5 text-slate-500" />
+                                <span>Línea de tiempo</span>
+                              </button>
+                            )}
+
                             {/* Botón de Aprobación */}
                             {!esAprobada(item) && (
                               <button
@@ -555,6 +577,15 @@ export default function BancoIniciativasView({ titulo = "Banco de Iniciativas y 
           onTutorCambiado={(tieneTutor) =>
             actualizarProyecto(iniciativaTutor.id_iniciativa, { tiene_tutor: tieneTutor })
           }
+        />
+      )}
+
+      {iniciativaLineaTiempo && (
+        <LineaTiempoPanel
+          key={iniciativaLineaTiempo.id_iniciativa}
+          idIniciativa={iniciativaLineaTiempo.id_iniciativa}
+          nombre={iniciativaLineaTiempo.iniciativa?.titulo || iniciativaLineaTiempo.nombre}
+          onClose={() => setIniciativaLineaTiempo(null)}
         />
       )}
 
