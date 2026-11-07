@@ -765,3 +765,189 @@ class GestionConvocatoriasTests(APITestCase):
         self.assertIsNotNone(alerta_equipo)
         self.assertEqual(alerta_equipo.prioridad, "alta")
         self.assertEqual(alerta_equipo.modulo_destino, "equipos")
+
+
+
+class HU17AsignarEvaluadorTests(APITestCase):
+    """
+    Pruebas unitarias e integrales para HU-17: Asignación de Evaluadores a Iniciativas.
+    """
+    def setUp(self):
+        # 1. Configurar Roles
+        self.rol_coordinador, _ = Rol.objects.get_or_create(nombre_rol="coordinador", defaults={"descripcion": "Coordinador"})
+        self.rol_evaluador, _ = Rol.objects.get_or_create(nombre_rol="evaluador", defaults={"descripcion": "Evaluador"})
+        self.rol_estudiante, _ = Rol.objects.get_or_create(nombre_rol="estudiante", defaults={"descripcion": "Estudiante"})
+
+        # 2. Configurar Usuarios
+        self.coordinador = Usuario.objects.create(
+            nombre="Coordinador Principal",
+            correo="coordinador.hu17@ufps.edu.co",
+            google_id="coord-hu17",
+            estado="activo",
+        )
+        UsuarioRol.objects.create(usuario=self.coordinador, rol=self.rol_coordinador, estado="activo")
+        self.token_coordinador = generar_token(self.coordinador, "coordinador")
+
+        self.evaluador = Usuario.objects.create(
+            nombre="Profesor Evaluador",
+            correo="evaluador.hu17@ufps.edu.co",
+            google_id="eval-hu17",
+            estado="activo",
+        )
+        UsuarioRol.objects.create(usuario=self.evaluador, rol=self.rol_evaluador, estado="activo")
+        self.token_evaluador = generar_token(self.evaluador, "evaluador")
+
+        self.estudiante = Usuario.objects.create(
+            nombre="Estudiante Postulante",
+            correo="estudiante.hu17@ufps.edu.co",
+            google_id="est-hu17",
+            estado="activo",
+        )
+        UsuarioRol.objects.create(usuario=self.estudiante, rol=self.rol_estudiante, estado="activo")
+        self.token_estudiante = generar_token(self.estudiante, "estudiante")
+
+        # 3. Convocatoria e Iniciativa
+        ahora = timezone.now()
+        self.convocatoria = Convocatoria.objects.create(
+            nombre="Convocatoria Innovación HU-17",
+            fecha_apertura=ahora - timedelta(days=5),
+            fecha_cierre=ahora + timedelta(days=20),
+            estado="abierta",
+        )
+        self.iniciativa = Iniciativa.objects.create(
+            convocatoria=self.convocatoria,
+            usuario=self.estudiante,
+            nombre="Iniciativa GreenTech HU-17",
+            descripcion="Plataforma de reciclaje tecnológico",
+            tipo="innovacion",
+            origen_academico="integrador",
+            estado="pendiente",
+        )
+
+    def test_coordinador_puede_asignar_evaluador_exitosamente(self):
+        """Coordinador asigna un evaluador habilitado y transiciona de 'pendiente' a 'en_revision'."""
+        url = f"/api/iniciativas/{self.iniciativa.id_iniciativa}/asignar-evaluador/"
+        data = {"id_evaluador": self.evaluador.id_usuario}
+
+        res = self.client.patch(
+            url,
+            data,
+            HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}",
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["estado_actual"], "en_revision")
+        self.assertEqual(res.data["evaluador"]["id_usuario"], self.evaluador.id_usuario)
+        self.assertEqual(res.data["coordinador_asignador"]["id_usuario"], self.coordinador.id_usuario)
+
+        # Verificar persistencia en base de datos
+        self.iniciativa.refresh_from_db()
+        self.assertEqual(self.iniciativa.estado, "en_revision")
+        self.assertEqual(self.iniciativa.evaluador_id, self.evaluador.id_usuario)
+        self.assertEqual(self.iniciativa.coordinador_asignador_id, self.coordinador.id_usuario)
+        self.assertIsNotNone(self.iniciativa.fecha_asignacion_evaluador)
+
+        # Verificar generación de notificaciones y alertas
+        notif_eval = NotificacionConvocatoria.objects.filter(usuario=self.evaluador).first()
+        self.assertIsNotNone(notif_eval)
+        self.assertIn("Asignada", notif_eval.titulo)
+
+        alerta_eval = AlertaRol.objects.filter(usuario=self.evaluador, rol_destinatario="evaluador").first()
+        self.assertIsNotNone(alerta_eval)
+        self.assertEqual(alerta_eval.tipo, "evaluacion_pendiente")
+
+    def test_estudiante_no_puede_asignar_evaluador_403_forbidden(self):
+        """Un estudiante que intenta asignar un evaluador debe recibir 403 Forbidden."""
+        url = f"/api/iniciativas/{self.iniciativa.id_iniciativa}/asignar-evaluador/"
+        data = {"id_evaluador": self.evaluador.id_usuario}
+
+        res = self.client.patch(
+            url,
+            data,
+            HTTP_AUTHORIZATION=f"Bearer {self.token_estudiante}",
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.iniciativa.refresh_from_db()
+        self.assertIsNone(self.iniciativa.evaluador)
+
+    def test_iniciativa_no_existente_retorna_404(self):
+        """Intentar asignar evaluador a una iniciativa inexistente retorna 404 Not Found."""
+        url = "/api/iniciativas/99999/asignar-evaluador/"
+        data = {"id_evaluador": self.evaluador.id_usuario}
+
+        res = self.client.patch(
+            url,
+            data,
+            HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}",
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_evaluador_no_existente_retorna_404(self):
+        """Intentar asignar un usuario evaluador inexistente retorna 404 Not Found."""
+        url = f"/api/iniciativas/{self.iniciativa.id_iniciativa}/asignar-evaluador/"
+        data = {"id_evaluador": 99999}
+
+        res = self.client.patch(
+            url,
+            data,
+            HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}",
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_usuario_sin_rol_evaluador_retorna_400(self):
+        """Intentar asignar un usuario que no tiene rol evaluador activo retorna 400 Bad Request."""
+        url = f"/api/iniciativas/{self.iniciativa.id_iniciativa}/asignar-evaluador/"
+        # El estudiante no tiene rol activo de evaluador
+        data = {"id_evaluador": self.estudiante.id_usuario}
+
+        res = self.client.patch(
+            url,
+            data,
+            HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}",
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("no es un evaluador habilitado", res.data["error"])
+
+    def test_coordinador_puede_desasignar_evaluador(self):
+        """Enviar id_evaluador=None desasigna al evaluador y revierte el estado a 'pendiente'."""
+        # 1. Asignar primero
+        self.iniciativa.evaluador = self.evaluador
+        self.iniciativa.coordinador_asignador = self.coordinador
+        self.iniciativa.estado = "en_revision"
+        self.iniciativa.save()
+
+        # 2. Desasignar enviando null
+        url = f"/api/iniciativas/{self.iniciativa.id_iniciativa}/asignar-evaluador/"
+        res = self.client.patch(
+            url,
+            {"id_evaluador": None},
+            HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}",
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIsNone(res.data["evaluador"])
+        self.iniciativa.refresh_from_db()
+        self.assertIsNone(self.iniciativa.evaluador)
+        self.assertEqual(self.iniciativa.estado, "pendiente")
+
+    def test_listar_evaluadores_disponibles(self):
+        """El coordinador puede consultar los evaluadores activos habilitados."""
+        url = "/api/iniciativas/evaluadores-disponibles/"
+        res = self.client.get(
+            url,
+            HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        eval_ids = [e["id_usuario"] for e in res.data]
+        self.assertIn(self.evaluador.id_usuario, eval_ids)

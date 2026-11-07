@@ -1,5 +1,6 @@
 import os
 from rest_framework import serializers
+from gestion_administrativa.models import Usuario
 from .models import Convocatoria, NotificacionConvocatoria, Iniciativa, DocumentoPostulacion, AlertaRol
 
 
@@ -124,6 +125,25 @@ class DocumentoPostulacionSerializer(serializers.ModelSerializer):
         fields = ['id_documento', 'nombre_original', 'extension', 'tamano_bytes', 'url_archivo', 'fecha_carga']
 
 
+class EvaluadorDisponibleSerializer(serializers.ModelSerializer):
+    """Serializer para listar evaluadores activos habilitados (HU-17)."""
+    class Meta:
+        model = Usuario
+        fields = ['id_usuario', 'nombre', 'correo']
+
+
+class AsignarEvaluadorIniciativaSerializer(serializers.Serializer):
+    """
+    Serializer de entrada para asignar (o desasignar enviando null)
+    el evaluador de una iniciativa (HU-17).
+    """
+    id_evaluador = serializers.IntegerField(
+        required=True,
+        allow_null=True,
+        help_text="ID del usuario con rol evaluador habilitado (o null para desasignar)."
+    )
+
+
 class IniciativaSerializer(serializers.ModelSerializer):
     documentos = DocumentoPostulacionSerializer(many=True, read_only=True)
     documento_adjunto = serializers.FileField(write_only=True, required=False, allow_null=True)
@@ -131,6 +151,14 @@ class IniciativaSerializer(serializers.ModelSerializer):
     usuario_correo = serializers.CharField(source='usuario.correo', read_only=True)
     convocatoria_nombre = serializers.CharField(source='convocatoria.nombre', read_only=True)
     convocatoria_categoria = serializers.CharField(source='convocatoria.categoria', read_only=True)
+    
+    # HU-17: Metadatos de Evaluador y Coordinador asignador
+    id_evaluador = serializers.IntegerField(source='evaluador_id', read_only=True)
+    evaluador_nombre = serializers.CharField(source='evaluador.nombre', read_only=True, default=None)
+    evaluador_correo = serializers.CharField(source='evaluador.correo', read_only=True, default=None)
+    id_coordinador_asignador = serializers.IntegerField(source='coordinador_asignador_id', read_only=True)
+    coordinador_asignador_nombre = serializers.CharField(source='coordinador_asignador.nombre', read_only=True, default=None)
+    
     tiene_equipo = serializers.SerializerMethodField()
     equipo_id = serializers.SerializerMethodField()
     equipo_nombre = serializers.SerializerMethodField()
@@ -156,6 +184,12 @@ class IniciativaSerializer(serializers.ModelSerializer):
             'etapa_actual',
             'estado',
             'radicado',
+            'id_evaluador',
+            'evaluador_nombre',
+            'evaluador_correo',
+            'id_coordinador_asignador',
+            'coordinador_asignador_nombre',
+            'fecha_asignacion_evaluador',
             'tiene_equipo',
             'equipo_id',
             'equipo_nombre',
@@ -170,6 +204,7 @@ class IniciativaSerializer(serializers.ModelSerializer):
             'usuario',
             'fecha_postulacion',
             'fecha_actualizacion',
+            'fecha_asignacion_evaluador',
         ]
 
     def get_radicado(self, obj):

@@ -21,6 +21,8 @@ from .serializers import (
     IniciativaSerializer,
     NotificacionConvocatoriaSerializer,
     AlertaRolSerializer,
+    AsignarEvaluadorIniciativaSerializer,
+    EvaluadorDisponibleSerializer,
 )
 from .services import (
     actualizar_estados_convocatorias,
@@ -393,7 +395,7 @@ class IniciativaViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         usuario = self.request.user
         # 'proyecto' y sus mentores se precargan para el resumen del serializer (sin N+1)
-        relaciones = ('convocatoria', 'usuario', 'proyecto')
+        relaciones = ('convocatoria', 'usuario', 'proyecto', 'evaluador', 'coordinador_asignador')
         precargas = ('documentos', 'proyecto__asignaciones_mentor')
         if self._es_gestor(usuario):
             return Iniciativa.objects.all().select_related(*relaciones).prefetch_related(*precargas).order_by('-fecha_postulacion')
@@ -622,3 +624,208 @@ class IniciativaViewSet(viewsets.ModelViewSet):
         from gestion_emprendimiento_2.views import AsignarTutorView
         view = AsignarTutorView()
         return view.patch(request, proyecto.id_proyecto)
+
+    def _es_coordinador(self, usuario):
+        roles_usuario = getattr(usuario, 'roles_activos', None) or getattr(usuario, 'roles_asignados', [])
+        rol_activo = getattr(usuario, 'rol_activo', '')
+        if 'coordinador' in roles_usuario or rol_activo == 'coordinador':
+            return True
+        from gestion_administrativa.models import UsuarioRol
+        return UsuarioRol.objects.filter(
+            usuario=usuario,
+            rol__nombre_rol='coordinador',
+            estado='activo'
+        ).exists()
+
+    @action(detail=False, methods=['get'], url_path='evaluadores-disponibles')
+    def evaluadores_disponibles(self, request):
+        """
+        HU-17: Lista de evaluadores activos habilitados para asignar a iniciativas.
+        """
+        if not self._es_coordinador(request.user) and not self._es_gestor(request.user):
+            return Response(
+                {"error": "Acceso denegado. Solo los usuarios con rol 'Coordinador' pueden consultar los evaluadores."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        from gestion_emprendimiento_2.services import evaluadores_activos
+        evaluadores = evaluadores_activos()
+        serializer = EvaluadorDisponibleSerializer(evaluadores, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get', 'patch'], url_path='evaluador')
+    def evaluador(self, request, pk=None):
+        """
+        HU-17: Consulta (GET) o asigna (PATCH) el evaluador de una iniciativa.
+        - Restricción de acceso estricta: Solo el rol 'Coordinador'.
+        - Validación de existencia y de rol habilitado del evaluador.
+        - Transición automática de 'pendiente' a 'en_revision'.
+        """
+        if not self._es_coordinador(request.user):
+            return Response(
+                {"error": "Acceso denegado. Solo los usuarios con rol 'Coordinador' pueden asignar evaluadores a iniciativas."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        iniciativa = self.get_object()
+
+        if request.method == 'GET':
+            evaluador_obj = iniciativa.evaluador
+            coordinador_obj = iniciativa.coordinador_asignador
+            return Response({
+                "id_iniciativa": iniciativa.id_iniciativa,
+                "nombre_iniciativa": iniciativa.nombre,
+                "estado": iniciativa.estado,
+                "id_evaluador": evaluador_obj.id_usuario if evaluador_obj else None,
+                "evaluador_nombre": evaluador_obj.nombre if evaluador_obj else None,
+                "evaluador_correo": evaluador_obj.correo if evaluador_obj else None,
+                "id_coordinador_asignador": coordinador_obj.id_usuario if coordinador_obj else None,
+                "coordinador_asignador_nombre": coordinador_obj.nombre if coordinador_obj else None,
+                "fecha_asignacion_evaluador": iniciativa.fecha_asignacion_evaluador.isoformat() if iniciativa.fecha_asignacion_evaluador else None,
+            }, status=status.HTTP_200_OK)
+
+        return self._procesar_asignacion_evaluador(request, iniciativa)
+
+    @action(detail=True, methods=['patch'], url_path='asignar-evaluador')
+    def asignar_evaluador(self, request, pk=None):
+        """
+        HU-17: Endpoint específico PATCH para asignación de evaluador a iniciativa.
+        """
+        if not self._es_coordinador(request.user):
+            return Response(
+                {"error": "Acceso denegado. Solo los usuarios con rol 'Coordinador' pueden asignar evaluadores a iniciativas."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        iniciativa = self.get_object()
+        return self._procesar_asignacion_evaluador(request, iniciativa)
+
+    def _procesar_asignacion_evaluador(self, request, iniciativa):
+        from gestion_administrativa.models import Usuario, UsuarioRol
+
+        serializer = AsignarEvaluadorIniciativaSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        id_evaluador = serializer.validated_data.get('id_evaluador')
+
+        # Caso de desasignación (id_evaluador = null)
+        if id_evaluador is None:
+            iniciativa.evaluador = None
+            iniciativa.coordinador_asignador = None
+            iniciativa.fecha_asignacion_evaluador = None
+            if iniciativa.estado == 'en_revision':
+                iniciativa.estado = 'pendiente'
+            iniciativa.save(update_fields=[
+                'evaluador',
+                'coordinador_asignador',
+                'fecha_asignacion_evaluador',
+                'estado',
+                'fecha_actualizacion'
+            ])
+            return Response({
+                "mensaje": "Evaluador desasignado exitosamente de la iniciativa.",
+                "id_iniciativa": iniciativa.id_iniciativa,
+                "estado": iniciativa.estado,
+                "evaluador": None,
+            }, status=status.HTTP_200_OK)
+
+        # 1. Validación de existencia del evaluador (404 si no existe)
+        try:
+            evaluador_target = Usuario.objects.get(pk=id_evaluador)
+        except Usuario.DoesNotExist:
+            return Response(
+                {"error": f"No se encontró un evaluador con el ID {id_evaluador}."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # 2. Validación de estado y rol habilitado (400 si no es válido)
+        es_evaluador_habilitado = (
+            evaluador_target.estado == 'activo' and
+            UsuarioRol.objects.filter(
+                usuario=evaluador_target,
+                rol__nombre_rol='evaluador',
+                estado='activo'
+            ).exists()
+        )
+        if not es_evaluador_habilitado:
+            return Response(
+                {"error": "El usuario seleccionado no es un evaluador habilitado o se encuentra inactivo."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 3. Validación de conflicto de interés
+        if iniciativa.usuario_id == evaluador_target.id_usuario:
+            return Response(
+                {"error": "Conflicto de interés: El evaluador no puede ser el mismo estudiante que postuló la iniciativa."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 4. Transición de estado: de 'pendiente' a 'en_revision'
+        estado_anterior = iniciativa.estado
+        if iniciativa.estado == 'pendiente':
+            iniciativa.estado = 'en_revision'
+
+        iniciativa.evaluador = evaluador_target
+        iniciativa.coordinador_asignador = request.user
+        iniciativa.fecha_asignacion_evaluador = timezone.now()
+
+        with transaction.atomic():
+            iniciativa.save(update_fields=[
+                'evaluador',
+                'coordinador_asignador',
+                'fecha_asignacion_evaluador',
+                'estado',
+                'fecha_actualizacion'
+            ])
+
+            # Disparar notificaciones y alertas automáticas
+            radicado_str = f"UFPS-POST-{iniciativa.fecha_postulacion.year}-{iniciativa.id_iniciativa:04d}" if iniciativa.fecha_postulacion else f"#{iniciativa.id_iniciativa}"
+            NotificacionConvocatoria.objects.create(
+                convocatoria=iniciativa.convocatoria,
+                usuario=evaluador_target,
+                titulo="Nueva Iniciativa Asignada para Calificación",
+                mensaje=(
+                    f"El Coordinador {request.user.nombre} te ha asignado la iniciativa "
+                    f"'{iniciativa.nombre}' ({radicado_str}) para su respectiva calificación técnica."
+                ),
+                tipo="actualizacion"
+            )
+
+            AlertaRol.objects.create(
+                usuario=evaluador_target,
+                convocatoria=iniciativa.convocatoria,
+                titulo="Evaluación de Iniciativa Pendiente",
+                mensaje=f"Tienes pendiente calificar la iniciativa '{iniciativa.nombre}' asignada por la Coordinación.",
+                rol_destinatario="evaluador",
+                tipo="evaluacion_pendiente",
+                prioridad="alta",
+                fecha_vencimiento=iniciativa.convocatoria.fecha_cierre if iniciativa.convocatoria else None,
+                modulo_destino="gestion_evaluacion"
+            )
+
+            NotificacionConvocatoria.objects.create(
+                convocatoria=iniciativa.convocatoria,
+                usuario=iniciativa.usuario,
+                titulo="Iniciativa en Proceso de Evaluación",
+                mensaje=(
+                    f"Tu iniciativa '{iniciativa.nombre}' ha iniciado la etapa de revisión con un evaluador asignado."
+                ),
+                tipo="actualizacion"
+            )
+
+        return Response({
+            "mensaje": "Evaluador asignado exitosamente a la iniciativa.",
+            "id_iniciativa": iniciativa.id_iniciativa,
+            "nombre_iniciativa": iniciativa.nombre,
+            "estado_anterior": estado_anterior,
+            "estado_actual": iniciativa.estado,
+            "evaluador": {
+                "id_usuario": evaluador_target.id_usuario,
+                "nombre": evaluador_target.nombre,
+                "correo": evaluador_target.correo,
+            },
+            "coordinador_asignador": {
+                "id_usuario": request.user.id_usuario,
+                "nombre": request.user.nombre,
+                "correo": request.user.correo,
+            },
+            "fecha_asignacion": iniciativa.fecha_asignacion_evaluador.isoformat(),
+        }, status=status.HTTP_200_OK)
+
