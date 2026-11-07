@@ -32,48 +32,6 @@ ROLES_LECTURA = ("estudiante", "admin", "direccion_del_programa",
 ACCIONES_ESCRITURA = ("create", "update", "partial_update", "destroy")
 
 
-class ActividadViewSet(viewsets.ModelViewSet):
-    """
-    Actividades del proyecto. Solo el líder del equipo las crea, edita o elimina;
-    el estado pasa a "completada" cuando el responsable sube su evidencia.
-    Filtros: ?proyecto=ID, ?hito=ID, ?estado=pendiente|completada
-    """
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [TieneRolPermitido]
-    serializer_class = ActividadSerializer
-
-    @property
-    def roles_permitidos(self):
-        return ("estudiante",) if self.action in ACCIONES_ESCRITURA else ROLES_LECTURA
-
-    def get_queryset(self):
-        qs = Actividad.objects.select_related(
-            "proyecto__iniciativa", "hito__rubrica", "responsable", "creado_por")
-        for parametro in ("proyecto", "hito"):
-            valor = self.request.query_params.get(parametro)
-            if valor:
-                qs = qs.filter(**{f"{parametro}_id": valor}) if valor.isdigit() else qs.none()
-        estado = self.request.query_params.get("estado")
-        if estado:
-            qs = qs.filter(estado=estado)
-
-        rol = getattr(self.request.user, "rol_activo", None)
-        if rol == "estudiante":
-            qs = qs.filter(proyecto__in=proyectos_del_estudiante(self.request.user))
-        elif rol == "tutor":
-            qs = qs.filter(proyecto__in=proyectos_del_tutor(self.request.user))
-        return qs
-
-    def destroy(self, request, *args, **kwargs):
-        actividad = self.get_object()
-        if not es_lider_del_proyecto(request.user, actividad.proyecto):
-            return Response(
-                {"error": "Solo el líder del equipo puede gestionar las actividades del proyecto."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        actividad.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
 
 class EvidenciaViewSet(mixins.CreateModelMixin,
                        mixins.ListModelMixin,

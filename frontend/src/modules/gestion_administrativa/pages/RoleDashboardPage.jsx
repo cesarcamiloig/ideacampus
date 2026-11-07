@@ -18,6 +18,7 @@ import TutorProfileForm from "../../gestion_acompaniamiento/pages/TutorProfileFo
 import EstudianteIniciativasPage from "../../gestion_convocatorias/pages/EstudianteIniciativasPage";
 import EquipoPage from "../../gestion_emprendimiento_2/pages/EquipoPage";
 import EvidenciaForm from "../../gestion_emprendimiento_2/pages/EvidenciaForm";
+import PlanTrabajoPage from "../../gestion_emprendimiento_2/pages/PlanTrabajoPage";
 import BancoIniciativasView from "../../gestion_convocatorias/components/BancoIniciativasView";
 import AlertasPage from "../../gestion_convocatorias/pages/AlertasPage";
 import RubricasTab from "../../gestion_evaluacion/components/RubricasTab";
@@ -55,6 +56,13 @@ const ROLE_CONFIG = {
         details:
           "Trazabilidad longitudinal del origen académico (asignaturas, semilleros, proyectos de grado), integrantes y estado de la solución.",
         actionLabel: "Ver mis radicados",
+      },
+      "plan-trabajo": {
+        title: "Plan de Trabajo",
+        desc: "Define por hito las actividades, responsables, fechas y entregables de tu proyecto.",
+        details:
+          "Organización y seguimiento de la ejecución del proyecto por parte del equipo emprendedor.",
+        actionLabel: "Ver plan de trabajo",
       },
       evidencias: {
         title: "Evidencias de Avance",
@@ -318,7 +326,7 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
 
   // Acceso al apartado "Proyecto" del estudiante:
   // - Equipo Emprendedor: si ya pertenece a un equipo o tiene una iniciativa aprobada con la cual crearlo.
-  // - Evidencias de Avance: solo si pertenece a un equipo.
+  // - Plan de Trabajo y Evidencias de Avance: solo si pertenece a un equipo.
   const esEstudiante = normalizedRole === "estudiante";
   const [accesoProyecto, setAccesoProyecto] = useState({ cargando: esEstudiante, tieneEquipo: false, tieneAprobada: false });
 
@@ -346,7 +354,7 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
 
   const modulosOcultos = [];
   if (esEstudiante) {
-    if (!accesoProyecto.tieneEquipo) modulosOcultos.push("evidencias");
+    if (!accesoProyecto.tieneEquipo) modulosOcultos.push("plan-trabajo", "evidencias");
     if (!accesoProyecto.tieneEquipo && !accesoProyecto.tieneAprobada) modulosOcultos.push("equipo");
   }
   const moduloBloqueado = modulosOcultos.includes(activeModule);
@@ -459,12 +467,14 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
               <RubricasTab key="rubricas" />
             </section>
           ) : normalizedRole === "estudiante" ? (
-            moduloBloqueado || (accesoProyecto.cargando && (activeModule === "equipo" || activeModule === "evidencias")) ? (
+            moduloBloqueado || (accesoProyecto.cargando && ["equipo", "plan-trabajo", "evidencias"].includes(activeModule)) ? (
               <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white p-16 shadow-sm">
                 <Loader2 className="h-8 w-8 animate-spin text-red-600" />
               </div>
             ) : activeModule === "equipo" ? (
               <EquipoPage key="equipo" onEstadoEquipoCambiado={cargarAccesoProyecto} />
+            ) : activeModule === "plan-trabajo" ? (
+              <PlanTrabajoPage key="plan-trabajo" />
             ) : activeModule === "evidencias" ? (
               <EvidenciaForm key="evidencias" />
             ) : (

@@ -3,7 +3,8 @@ import { AlertCircle, CheckCircle2, ChevronDown, FolderOpen, Link2, Save, Upload
 import { useAuth } from "../../../context/AuthContext";
 import { getEvidencias, registerEvidencia } from "../services/evidenciaService";
 import { obtenerMiEquipo } from "../services/equipoService";
-import { getHitos, getRubricas } from "../../gestion_evaluacion/services/rubricaService";
+import { getActividades } from "../services/planTrabajoService";
+import { getHitosDeTipo } from "../../gestion_evaluacion/services/rubricaService";
 import EvidenciasCargadasPanel from "../components/EvidenciasCargadasPanel";
 
 const TIPOS = [
@@ -19,7 +20,7 @@ const MAX_TITULO = 200;
 const ETIQUETA_POR_EXT = { pdf: "PDF", docx: "DOC", pptx: "PPT", png: "IMG", jpg: "IMG", jpeg: "IMG" };
 
 // Campos del 400 que se muestran junto a su campo; el resto va al mensaje general
-const CAMPOS_ERROR = ["proyecto", "etapa", "titulo", "descripcion", "tipo", "archivos", "enlaces"];
+const CAMPOS_ERROR = ["proyecto", "etapa", "actividad", "titulo", "descripcion", "tipo", "archivos", "enlaces"];
 
 const STEPS = [
   { number: 1, title: "Etapa y datos", subtitle: "Indica la etapa del proyecto y describe el avance." },
@@ -79,25 +80,13 @@ function erroresDelServidor(data) {
   return resultado;
 }
 
-// Los hitos salen del endpoint de hitos; si aún no está disponible, de la rúbrica completa
-async function cargarHitos(tipoIniciativa) {
-  try {
-    const hitos = await getHitos(tipoIniciativa);
-    return Array.isArray(hitos) ? hitos : hitos?.results || [];
-  } catch (err) {
-    if (err.status !== 404) throw err;
-    const rubricas = await getRubricas();
-    const lista = Array.isArray(rubricas) ? rubricas : rubricas?.results || [];
-    return lista.find((r) => r.tipo_iniciativa === tipoIniciativa)?.subrubricas || [];
-  }
-}
-
 function Required() {
   return <span className="text-red-600">*</span>;
 }
 
 function EvidenciaForm() {
-  const { logout } = useAuth();
+  const { usuario, logout } = useAuth();
+  const idUsuario = usuario?.id_usuario;
   const inputArchivoRef = useRef(null);
 
   // El proyecto lleva el nombre de la iniciativa aprobada del equipo, y sus etapas son
@@ -116,6 +105,10 @@ function EvidenciaForm() {
   const cerrarPanel = useCallback(() => setPanelAbierto(false), []);
 
   const [etapa, setEtapa] = useState("");
+  // Actividades pendientes del plan de trabajo (HU-20) asignadas al estudiante: al subir
+  // la evidencia de una, el backend la marca como completada
+  const [misActividades, setMisActividades] = useState([]);
+  const [actividad, setActividad] = useState("");
   const [titulo, setTitulo] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [tipo, setTipo] = useState("documento");
@@ -180,9 +173,14 @@ function EvidenciaForm() {
         setCargandoProyecto(false);
 
         if (!iniciativa?.tipo) return;
-        const hitos = await cargarHitos(iniciativa.tipo);
+        const [hitos, pendientes] = await Promise.all([
+          getHitosDeTipo(iniciativa.tipo),
+          // Sin plan de trabajo la evidencia se registra igual: un fallo aquí no bloquea el formulario
+          idProyecto ? getActividades({ proyecto: idProyecto, estado: "pendiente" }).catch(() => []) : [],
+        ]);
         if (!activo) return;
         setEtapas([...hitos].sort((a, b) => a.numero_hito - b.numero_hito));
+        setMisActividades(pendientes.filter((a) => a.responsable === idUsuario));
       } catch (err) {
         if (activo && !manejarErrorSesion(err)) {
           setDatosError(err.message || "No se pudieron cargar los datos del proyecto.");
@@ -199,7 +197,7 @@ function EvidenciaForm() {
     return () => {
       activo = false;
     };
-  }, [cargarRegistradas, manejarErrorSesion]);
+  }, [cargarRegistradas, manejarErrorSesion, idUsuario]);
 
   function limpiarErrorCampo(campo) {
     setErrors((prev) => (prev[campo] || prev.general ? { ...prev, [campo]: undefined, general: undefined } : prev));
@@ -275,6 +273,7 @@ function EvidenciaForm() {
 
   function limpiarFormulario() {
     setEtapa("");
+    setActividad("");
     setTitulo("");
     setDescripcion("");
     setTipo("documento");
@@ -315,6 +314,7 @@ function EvidenciaForm() {
     const formData = new FormData();
     formData.append("proyecto", proyecto.id);
     formData.append("etapa", etapa);
+    if (actividad) formData.append("actividad", actividad);
     formData.append("titulo", titulo.trim());
     formData.append("descripcion", descripcion.trim());
     formData.append("tipo", tipo);
@@ -326,6 +326,8 @@ function EvidenciaForm() {
     setStatus("loading");
     try {
       const creada = await registerEvidencia(formData);
+      // La actividad quedó completada en el backend: ya no se ofrece como pendiente
+      if (actividad) setMisActividades((prev) => prev.filter((a) => String(a.id) !== actividad));
       limpiarFormulario();
       setStatus("success");
       if (creada?.id) setRegistradas((prev) => [creada, ...prev.filter((ev) => ev.id !== creada.id)]);
@@ -339,6 +341,7 @@ function EvidenciaForm() {
     }
   }
 
+  const actividadesDeEtapa = etapa ? misActividades.filter((a) => String(a.hito) === etapa) : [];
   const textoProyecto = cargandoProyecto ? "Cargando..." : proyecto?.nombre || "Sin proyecto asignado";
 
   return (
@@ -425,6 +428,7 @@ function EvidenciaForm() {
                       value={etapa}
                       onChange={(e) => {
                         setEtapa(e.target.value);
+                        setActividad("");
                         limpiarErrorCampo("etapa");
                       }}
                       aria-invalid={Boolean(errors.etapa)}
@@ -455,6 +459,38 @@ function EvidenciaForm() {
                   {datosError && <p className={ERROR_CLASS} role="alert">{datosError}</p>}
                 </div>
               </div>
+
+              {actividadesDeEtapa.length > 0 && (
+                <div className="space-y-1">
+                  <label htmlFor="actividad" className={LABEL_CLASS}>
+                    Actividad del plan de trabajo
+                  </label>
+                  <div className="relative">
+                    <select
+                      id="actividad"
+                      value={actividad}
+                      onChange={(e) => {
+                        setActividad(e.target.value);
+                        limpiarErrorCampo("actividad");
+                      }}
+                      aria-invalid={Boolean(errors.actividad)}
+                      className={`${INPUT_CLASS} appearance-none pr-9`}
+                    >
+                      <option value="">Ninguna (evidencia general de la etapa)</option>
+                      {actividadesDeEtapa.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.entregable ? `${a.nombre} · ${a.entregable}` : a.nombre}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  </div>
+                  <p className={HINT_CLASS}>
+                    Tienes actividades pendientes en esta etapa. Si la evidencia es su entregable, elígela y quedará completada.
+                  </p>
+                  {errors.actividad && <p className={ERROR_CLASS} role="alert">{errors.actividad}</p>}
+                </div>
+              )}
 
               <div className="space-y-1">
                 <label htmlFor="titulo" className={LABEL_CLASS}>

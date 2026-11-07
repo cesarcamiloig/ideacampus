@@ -7,6 +7,7 @@ import {
     LogOut,
     Users,
     ClipboardCheck,
+    ClipboardList,
     BookOpen,
     Award,
     Bell,
@@ -178,6 +179,7 @@ export default function MainLayout({
                 icon: FolderKanban,
                 children: [
                     { id: "equipo", label: "Equipo Emprendedor", icon: Users },
+                    { id: "plan-trabajo", label: "Plan de Trabajo", icon: ClipboardList },
                     { id: "evidencias", label: "Evidencias de Avance", icon: FileUp },
                 ],
             },
