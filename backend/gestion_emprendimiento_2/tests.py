@@ -1254,3 +1254,335 @@ class AsignarMentorProyectoTests(APITestCase):
         res = self.client.post("/api/proyectos/asignar-mentor/", payload, format="json")
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
+
+
+# ==============================================================================
+# GENNOVA-77 / GENNOVA-78: Pruebas Unitarias para Línea de Tiempo Evolutiva (HU-08)
+# ==============================================================================
+
+class LineaTiempoEvolutivaTests(APITestCase):
+    """
+    Suite de pruebas para validar la HU-08 (Línea de Tiempo Evolutiva):
+    - GENNOVA-77: Endpoint de consulta RESTful y control estricto de roles (Tutor, Coordinador, Dirección).
+    - GENNOVA-78: Lógica de ordenamiento cronológico estricto y formato de respuesta para el frontend.
+    """
+
+    def setUp(self):
+        from datetime import date
+        from gestion_acompaniamiento.models import Tutor
+        from gestion_convocatorias.models import Convocatoria, Iniciativa
+
+        # 1. Configurar Roles institucionales
+        self.rol_tutor, _ = Rol.objects.get_or_create(
+            nombre_rol="tutor", defaults={"descripcion": "Tutor Académico"}
+        )
+        self.rol_coordinador, _ = Rol.objects.get_or_create(
+            nombre_rol="coordinador", defaults={"descripcion": "Coordinador de Emprendimiento"}
+        )
+        self.rol_direccion, _ = Rol.objects.get_or_create(
+            nombre_rol="direccion_del_programa", defaults={"descripcion": "Dirección del Programa"}
+        )
+        self.rol_estudiante, _ = Rol.objects.get_or_create(
+            nombre_rol="estudiante", defaults={"descripcion": "Estudiante"}
+        )
+        self.rol_mentor, _ = Rol.objects.get_or_create(
+            nombre_rol="mentor", defaults={"descripcion": "Mentor Externo"}
+        )
+
+        # 2. Configurar Usuarios autorizados
+        self.usuario_tutor = Usuario.objects.create(
+            nombre="Ing. Tutor Academico",
+            correo="tutor.linea@ufps.edu.co",
+            google_id="gid-tutor-linea",
+            estado="activo",
+        )
+        UsuarioRol.objects.create(usuario=self.usuario_tutor, rol=self.rol_tutor, estado="activo")
+        self.tutor_perfil = Tutor.objects.create(
+            usuario=self.usuario_tutor,
+            area_conocimiento="Ingeniería de Software",
+            estado="activo",
+        )
+        self.token_tutor = generar_token(self.usuario_tutor, "tutor")
+
+        self.usuario_coordinador = Usuario.objects.create(
+            nombre="Dra. Coordinadora",
+            correo="coord.linea@ufps.edu.co",
+            google_id="gid-coord-linea",
+            estado="activo",
+        )
+        UsuarioRol.objects.create(usuario=self.usuario_coordinador, rol=self.rol_coordinador, estado="activo")
+        self.token_coordinador = generar_token(self.usuario_coordinador, "coordinador")
+
+        self.usuario_direccion = Usuario.objects.create(
+            nombre="Dr. Director Programa",
+            correo="dir.linea@ufps.edu.co",
+            google_id="gid-dir-linea",
+            estado="activo",
+        )
+        UsuarioRol.objects.create(usuario=self.usuario_direccion, rol=self.rol_direccion, estado="activo")
+        self.token_direccion = generar_token(self.usuario_direccion, "direccion_del_programa")
+
+        # 3. Configurar Usuarios no autorizados (Estudiante y Mentor)
+        self.usuario_estudiante = Usuario.objects.create(
+            nombre="Estudiante No Autorizado",
+            correo="est.noautorizado@ufps.edu.co",
+            google_id="gid-est-noaut",
+            estado="activo",
+        )
+        UsuarioRol.objects.create(usuario=self.usuario_estudiante, rol=self.rol_estudiante, estado="activo")
+        self.token_estudiante = generar_token(self.usuario_estudiante, "estudiante")
+
+        self.usuario_mentor = Usuario.objects.create(
+            nombre="Mentor Externo",
+            correo="mentor.linea@ufps.edu.co",
+            google_id="gid-mentor-linea",
+            estado="activo",
+        )
+        UsuarioRol.objects.create(usuario=self.usuario_mentor, rol=self.rol_mentor, estado="activo")
+        self.token_mentor = generar_token(self.usuario_mentor, "mentor")
+
+        # 4. Configurar Convocatoria, Iniciativa y Proyecto
+        now = timezone.now()
+        self.convocatoria = Convocatoria.objects.create(
+            nombre="Convocatoria Trazabilidad 2026",
+            fecha_apertura=now - timedelta(days=30),
+            fecha_cierre=now + timedelta(days=30),
+            estado="abierta",
+        )
+
+        self.iniciativa = Iniciativa.objects.create(
+            convocatoria=self.convocatoria,
+            usuario=self.usuario_estudiante,
+            nombre="Iniciativa Ecosistema IoT",
+            descripcion="Plataforma de monitoreo ambiental",
+            tipo="innovacion",
+            origen_academico="semillero",
+            estado="aprobada",
+            etapa_actual="M3",
+        )
+
+       # Verificar si una señal ya creó el proyecto automáticamente para esta iniciativa
+        proyecto_existente = Proyecto.objects.filter(iniciativa=self.iniciativa).first()
+        
+        if proyecto_existente:
+            self.proyecto = proyecto_existente
+            self.proyecto.nombre_proyecto = "Proyecto Ecosistema IoT"
+            self.proyecto.descripcion = "Proyecto formalizado de monitoreo ambiental"
+            self.proyecto.coordinador = self.usuario_coordinador
+            self.proyecto.tutor = self.tutor_perfil
+            self.proyecto.estado = Proyecto.Estado.ACTIVO
+            self.proyecto.save()
+        else:
+            self.proyecto = Proyecto.objects.create(
+                iniciativa=self.iniciativa,
+                nombre_proyecto="Proyecto Ecosistema IoT",
+                descripcion="Proyecto formalizado de monitoreo ambiental",
+                coordinador=self.usuario_coordinador,
+                tutor=self.tutor_perfil,
+                estado=Proyecto.Estado.ACTIVO,
+            )
+
+        # 5. Plan de Trabajo e Hitos con fechas desordenadas deliberadamente
+        self.plan = PlanTrabajo.objects.create(
+            iniciativa=self.iniciativa,
+            titulo="Plan Operativo IoT",
+            estado=PlanTrabajo.Estado.EN_PROGRESO,
+        )
+
+        # Hito 1: Fecha más lejana (Diciembre 2026)
+        self.hito_tardio = HitoPlanTrabajo.objects.create(
+            plan_trabajo=self.plan,
+            nombre="Despliegue y Pruebas en Campo",
+            descripcion="Instalación de sensores en el campus",
+            fecha_limite=date(2026, 12, 15),
+            orden=3,
+            completado=False,
+        )
+
+        # Hito 2: Fecha más temprana (Febrero 2026)
+        self.hito_temprano = HitoPlanTrabajo.objects.create(
+            plan_trabajo=self.plan,
+            nombre="Arquitectura y Diseño Preliminar",
+            descripcion="Diseño de circuitos y prototipo",
+            fecha_limite=date(2026, 2, 10),
+            orden=1,
+            completado=True,
+            fecha_completado=timezone.make_aware(timezone.datetime(2026, 2, 10, 10, 0, 0)),
+        )
+
+        # Hito 3: Fecha intermedia (Junio 2026)
+        self.hito_intermedio = HitoPlanTrabajo.objects.create(
+            plan_trabajo=self.plan,
+            nombre="Desarrollo de Firmware y API",
+            descripcion="Integración de microcontroladores",
+            fecha_limite=date(2026, 6, 20),
+            orden=2,
+            completado=False,
+        )
+
+        # Crear actividad y entregable con observaciones para enriquecer la trazabilidad
+        self.estudiante_obj = Estudiante.objects.create(
+            usuario=self.usuario_estudiante,
+            codigo="1151999",
+            semestre=8,
+        )
+
+        self.actividad = ActividadPlanTrabajo.objects.create(
+            plan_trabajo=self.plan,
+            hito=self.hito_temprano,
+            responsable=self.estudiante_obj,
+            nombre="Elaboración de esquemático",
+            estado=ActividadPlanTrabajo.Estado.COMPLETADA,
+        )
+
+        EntregableActividad.objects.create(
+            plan_trabajo=self.plan,
+            actividad=self.actividad,
+            nombre="Documento de Diseño v1.0",
+            estado=EntregableActividad.Estado.APROBADO,
+            observaciones="Diseño de arquitectura validado por el tutor académico.",
+        )
+
+    def test_rechazo_roles_no_autorizados_403(self):
+        """
+        GENNOVA-77: Valida que roles no autorizados (Estudiante, Mentor) sean rechazados con 403 Forbidden.
+        """
+        url = f"/api/proyectos/{self.proyecto.id_proyecto}/linea-tiempo/"
+
+        # 1. Rechazo a Estudiante
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_estudiante}")
+        res_estudiante = self.client.get(url)
+        self.assertEqual(res_estudiante.status_code, status.HTTP_403_FORBIDDEN)
+
+        # 2. Rechazo a Mentor
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_mentor}")
+        res_mentor = self.client.get(url)
+        self.assertEqual(res_mentor.status_code, status.HTTP_403_FORBIDDEN)
+
+        # 3. Rechazo a usuario sin autenticación (401/403)
+        self.client.credentials()
+        res_anon = self.client.get(url)
+        self.assertIn(res_anon.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
+
+    def test_respuesta_exitosa_roles_autorizados_200(self):
+        """
+        GENNOVA-77: Valida que los roles autorizados ('Tutor', 'Coordinador', 'Direccion') obtengan 200 OK.
+        """
+        url = f"/api/proyectos/{self.proyecto.id_proyecto}/linea-tiempo/"
+
+        # 1. Acceso de Tutor
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_tutor}")
+        res_tutor = self.client.get(url)
+        self.assertEqual(res_tutor.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(res_tutor.data, list)
+
+        # 2. Acceso de Coordinador
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+        res_coord = self.client.get(url)
+        self.assertEqual(res_coord.status_code, status.HTTP_200_OK)
+
+        # 3. Acceso de Dirección del Programa
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_direccion}")
+        res_dir = self.client.get(url)
+        self.assertEqual(res_dir.status_code, status.HTTP_200_OK)
+
+    def test_ordenamiento_cronologico_estricto(self):
+        """
+        GENNOVA-78: Valida que la respuesta esté estrictamente ordenada de forma cronológica ascendente
+        (de más antiguo a más reciente) y que formatee correctamente fecha, estado, responsable y observaciones.
+        """
+        from datetime import datetime
+
+        url = f"/api/proyectos/{self.proyecto.id_proyecto}/linea-tiempo/"
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.data
+
+        self.assertGreaterEqual(len(data), 3, "Debe contener los hitos y eventos del proyecto.")
+
+        # Verificar que todos los elementos cumplan con el contrato de datos requerido
+        for item in data:
+            self.assertIn("fecha", item)
+            self.assertIn("estado", item)
+            self.assertIn("responsable", item)
+            self.assertIn("observaciones", item)
+            self.assertIsNotNone(item["fecha"], "La fecha no debe ser nula.")
+            self.assertIsNotNone(item["estado"], "El estado no debe ser nulo.")
+
+        # Verificar orden cronológico estricto (fecha[i] <= fecha[i+1])
+        fechas = [
+            datetime.fromisoformat(item["fecha"].replace("Z", "+00:00"))
+            for item in data
+        ]
+
+        for i in range(len(fechas) - 1):
+            self.assertLessEqual(
+                fechas[i],
+                fechas[i + 1],
+                f"Incoherencia cronológica: {fechas[i]} es posterior a {fechas[i+1]}"
+            )
+
+        # Verificar que el hito más temprano aparezca antes que el tardío
+        nombres = [item.get("nombre") for item in data]
+        idx_temprano = nombres.index("Arquitectura y Diseño Preliminar")
+        idx_intermedio = nombres.index("Desarrollo de Firmware y API")
+        idx_tardio = nombres.index("Despliegue y Pruebas en Campo")
+
+        self.assertLess(idx_temprano, idx_intermedio)
+        self.assertLess(idx_intermedio, idx_tardio)
+
+        # Validar observaciones y responsable del hito enriquecido
+        item_temprano = data[idx_temprano]
+        self.assertEqual(item_temprano["responsable"], self.usuario_estudiante.nombre)
+        self.assertIn("Diseño de arquitectura validado", item_temprano["observaciones"])
+
+    def test_ordenamiento_cronologico_descendente_parametro(self):
+        """
+        GENNOVA-78: Valida que el parámetro ?orden=desc retorne los eventos en orden cronológico descendente.
+        """
+        from datetime import datetime
+
+        url = f"/api/proyectos/{self.proyecto.id_proyecto}/linea-tiempo/?orden=desc"
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.data
+
+        fechas = [
+            datetime.fromisoformat(item["fecha"].replace("Z", "+00:00"))
+            for item in data
+        ]
+
+        for i in range(len(fechas) - 1):
+            self.assertGreaterEqual(
+                fechas[i],
+                fechas[i + 1],
+                f"Incoherencia en orden descendente: {fechas[i]} es menor a {fechas[i+1]}"
+            )
+
+    def test_consulta_por_ruta_iniciativa(self):
+        """
+        GENNOVA-77: Valida que la ruta por iniciativa (/api/iniciativas/<id_iniciativa>/linea-tiempo/)
+        retorne la misma trazabilidad cronológica exitosa.
+        """
+        url = f"/api/iniciativas/{self.iniciativa.id_iniciativa}/linea-tiempo/"
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_tutor}")
+
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(response.data, list)
+        self.assertGreaterEqual(len(response.data), 3)
+
+    def test_proyecto_o_iniciativa_no_encontrada_404(self):
+        """
+        GENNOVA-77: Valida respuesta 404 ante un identificador inexistente.
+        """
+        url = "/api/proyectos/999999/linea-tiempo/"
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_coordinador}")
+
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIn("error", response.data)

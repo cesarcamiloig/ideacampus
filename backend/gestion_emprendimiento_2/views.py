@@ -6,6 +6,7 @@ from django.db.models import Q
 
 from gestion_administrativa.authentication import JWTAuthentication
 from gestion_administrativa.permissions import EsEstudiante, TieneRolPermitido
+from .permissions import EsTutorCoordinadorODireccion
 from gestion_administrativa.models import Usuario, UsuarioRol
 
 from .models import (
@@ -23,6 +24,7 @@ from .services import (
     obtener_mentores_disponibles,
     asignar_mentor_a_proyecto,
     desasignar_mentor_de_proyecto,
+    obtener_linea_tiempo_proyecto,
 )
 from .serializers import (
     EstudianteDisponibleSerializer,
@@ -37,6 +39,7 @@ from .serializers import (
     AsignarMentorSerializer,
     DesasignarMentorSerializer,
     ProyectoMentorDetalleSerializer,
+    EtapaLineaTiempoSerializer,
 )
 
 
@@ -1531,3 +1534,55 @@ class DesasignarMentorProyectoView(APIView):
     def patch(self, request, id_proyecto=None, id_mentor=None):
         return self._procesar_desasignacion(request, id_proyecto, id_mentor)
 
+
+
+# ==============================================================================
+# GENNOVA-77: Endpoint de Consulta de Línea de Tiempo Evolutiva (HU-08)
+# ==============================================================================
+
+class LineaTiempoProyectoView(APIView):
+    """
+    GENNOVA-77 (HU-08): Endpoint RESTful de consulta de la línea de tiempo evolutiva
+    de un proyecto o iniciativa.
+
+    Requisito estricto de negocio: Solo puede ser consumido por los roles 'Tutor', 'Coordinador' y 'Direccion'.
+    Invoca a la capa de servicios (GENNOVA-78) y retorna la lista serializada estrictamente ordenada.
+    """
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [EsTutorCoordinadorODireccion]
+    roles_permitidos = (
+        "tutor",
+        "Tutor",
+        "coordinador",
+        "Coordinador",
+        "direccion",
+        "Direccion",
+        "direccion_del_programa",
+    )
+
+    def get(self, request, id_proyecto=None, id_iniciativa=None):
+        orden_param = request.query_params.get("orden", "asc").lower()
+        orden_ascendente = orden_param != "desc"
+
+        eventos = obtener_linea_tiempo_proyecto(
+            id_proyecto=id_proyecto,
+            id_iniciativa=id_iniciativa,
+            orden_ascendente=orden_ascendente,
+        )
+
+        if eventos is None:
+            return Response(
+                {"error": "No se encontró el proyecto o iniciativa especificada."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = EtapaLineaTiempoSerializer(eventos, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class LineaTiempoIniciativaView(LineaTiempoProyectoView):
+    """
+    GENNOVA-77 (HU-08): Endpoint alternativo que recibe el ID de la iniciativa por parámetro de ruta.
+    Reutiliza el mismo control de acceso por roles y serialización estricta.
+    """
+    pass

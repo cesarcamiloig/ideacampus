@@ -21,6 +21,8 @@ from .views import (
     ActividadPlanTrabajoDetailView,
     EntregableActividadListCreateView,
     EntregableActividadDetailView,
+    LineaTiempoProyectoView,
+    LineaTiempoIniciativaView,
 )
 
 urlpatterns = [
@@ -52,4 +54,7 @@ urlpatterns = [
     path('actividades/<int:id_actividad>/', ActividadPlanTrabajoDetailView.as_view(), name='plan_trabajo_actividad_detalle'),
     path('actividades/<int:id_actividad>/entregables/', EntregableActividadListCreateView.as_view(), name='actividad_entregables'),
     path('entregables/<int:id_entregable>/', EntregableActividadDetailView.as_view(), name='entregable_detalle'),
+    # HU-08: Línea de Tiempo Evolutiva (GENNOVA-77 / GENNOVA-78)
+    path('proyectos/<int:id_proyecto>/linea-tiempo/', LineaTiempoProyectoView.as_view(), name='proyecto_linea_tiempo'),
+    path('iniciativas/<int:id_iniciativa>/linea-tiempo/', LineaTiempoIniciativaView.as_view(), name='iniciativa_linea_tiempo'),
 ]
