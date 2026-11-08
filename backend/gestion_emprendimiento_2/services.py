@@ -1,11 +1,52 @@
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from gestion_administrativa.models import Usuario
 from gestion_acompaniamiento.models import Mentor
 
-from .models import Proyecto, ProyectoMentor, usuarios_con_rol_activo
+from .models import EquipoEmprendedor, Proyecto, ProyectoMentor, usuarios_con_rol_activo
+
+ESTADOS_APROBADOS = ("aprobada", "aceptada")
+
+
+def proyectos_del_estudiante(usuario):
+    """
+    Proyectos en los que participa el estudiante: es titular de su iniciativa
+    aprobada o está incluido en su equipo.
+    """
+    return Proyecto.objects.filter(
+        Q(iniciativa__usuario=usuario, iniciativa__estado__in=ESTADOS_APROBADOS)
+        | Q(iniciativa__equipo__miembros__usuario=usuario)
+    ).distinct()
+
+
+def proyectos_del_tutor(usuario):
+    """Proyectos en los que el usuario es el tutor asignado (los retroalimenta)."""
+    return Proyecto.objects.filter(tutor__usuario=usuario)
+
+
+def equipo_del_proyecto(proyecto):
+    try:
+        return proyecto.iniciativa.equipo
+    except EquipoEmprendedor.DoesNotExist:
+        return None
+
+
+def es_lider_del_proyecto(usuario, proyecto):
+    """El líder del equipo emprendedor del proyecto."""
+    equipo = equipo_del_proyecto(proyecto)
+    return bool(equipo) and equipo.estudiante_lider.usuario_id == usuario.pk
+
+
+def es_integrante_del_equipo(usuario, proyecto):
+    """El usuario pertenece al equipo del proyecto (el líder también cuenta)."""
+    equipo = equipo_del_proyecto(proyecto)
+    if not equipo:
+        return False
+    return (equipo.estudiante_lider.usuario_id == usuario.pk
+            or equipo.miembros.filter(usuario=usuario).exists())
 
 
 def coordinadores_activos():
@@ -233,7 +274,7 @@ def obtener_linea_tiempo_proyecto(id_proyecto=None, id_iniciativa=None, orden_as
     """
     from gestion_convocatorias.models import Iniciativa
     from gestion_evaluacion.models import Evaluacion
-    from .models import PlanTrabajo, HitoPlanTrabajo
+    from .models import PlanTrabajo
 
     proyecto = None
     iniciativa = None
@@ -265,65 +306,62 @@ def obtener_linea_tiempo_proyecto(id_proyecto=None, id_iniciativa=None, orden_as
 
     eventos = []
 
-    # 1. Hitos del Plan de Trabajo (HU-20: Hito clave o etapa estructurada)
-    plan = PlanTrabajo.objects.filter(iniciativa=iniciativa).first() if iniciativa else None
-    if not plan and proyecto:
-        plan = PlanTrabajo.objects.filter(iniciativa=proyecto.iniciativa).first()
+    # 1. Hitos del Plan de Trabajo (HU-20: Planes de trabajo del proyecto por hito)
+    planes = []
+    if proyecto:
+        planes = list(PlanTrabajo.objects.filter(proyecto=proyecto).select_related(
+            'hito', 'hito__rubrica'
+        ).prefetch_related('actividades__responsable', 'actividades__evidencias'))
+    elif iniciativa and hasattr(iniciativa, 'proyecto'):
+        planes = list(PlanTrabajo.objects.filter(proyecto=iniciativa.proyecto).select_related(
+            'hito', 'hito__rubrica'
+        ).prefetch_related('actividades__responsable', 'actividades__evidencias'))
 
-    if plan:
-        hitos = plan.hitos.all().prefetch_related(
-            'actividades__responsable__usuario',
-            'actividades__entregables'
+    for plan in planes:
+        hito = plan.hito
+        numero_hito = hito.numero_hito if hito else 1
+        nombre_hito = hito.nombre if hito else plan.titulo
+
+        fecha_hito = (
+            normalizar_fecha_cronologica(plan.fecha_fin)
+            if plan.fecha_fin
+            else (normalizar_fecha_cronologica(plan.fecha_inicio) if plan.fecha_inicio else plan.fecha_creacion)
         )
-        for hito in hitos:
-            fecha_hito = (
-                hito.fecha_completado
-                if hito.completado and hito.fecha_completado
-                else (normalizar_fecha_cronologica(hito.fecha_limite) if hito.fecha_limite else plan.fecha_creacion)
-            )
 
-            estado_hito = (
-                "completado"
-                if hito.completado
-                else ("en_progreso" if hito.actividades.filter(estado="en_progreso").exists() else "pendiente")
-            )
+        estado_hito = plan.estado
 
-            # Responsable asignado en las actividades del hito
-            actividad_con_responsable = hito.actividades.filter(
-                responsable__isnull=False
-            ).select_related('responsable__usuario').first()
+        # Responsable asignado en las actividades del plan
+        actividad_con_responsable = plan.actividades.filter(
+            responsable__isnull=False
+        ).select_related('responsable').first()
 
-            if actividad_con_responsable and actividad_con_responsable.responsable and actividad_con_responsable.responsable.usuario:
-                responsable = actividad_con_responsable.responsable.usuario.nombre
-            elif proyecto and proyecto.tutor and proyecto.tutor.usuario:
-                responsable = proyecto.tutor.usuario.nombre
-            elif iniciativa and iniciativa.usuario:
-                responsable = iniciativa.usuario.nombre
-            else:
-                responsable = "Equipo Emprendedor"
+        if actividad_con_responsable and actividad_con_responsable.responsable:
+            responsable = actividad_con_responsable.responsable.nombre
+        elif proyecto and proyecto.tutor and proyecto.tutor.usuario:
+            responsable = proyecto.tutor.usuario.nombre
+        elif iniciativa and iniciativa.usuario:
+            responsable = iniciativa.usuario.nombre
+        else:
+            responsable = "Equipo Emprendedor"
 
-            # Observaciones registradas en entregables o descripción del hito
-            entregable_con_obs = None
-            for act in hito.actividades.all():
-                for ent in act.entregables.all():
-                    if ent.observaciones:
-                        entregable_con_obs = ent.observaciones
-                        break
-                if entregable_con_obs:
-                    break
+        # Observaciones registradas en actividades o descripción del plan
+        actividad_con_entregable = plan.actividades.exclude(entregable="").first()
+        observaciones = (
+            actividad_con_entregable.entregable
+            if actividad_con_entregable and actividad_con_entregable.entregable
+            else (plan.descripcion or (hito.descripcion if hito else f"Etapa: {nombre_hito}"))
+        )
 
-            observaciones = entregable_con_obs or hito.descripcion or f"Etapa: {hito.nombre}"
-
-            eventos.append({
-                "id_etapa": hito.id_hito,
-                "nombre": hito.nombre,
-                "fecha": fecha_hito,
-                "estado": estado_hito,
-                "responsable": responsable,
-                "observaciones": observaciones,
-                "tipo_evento": "hito_plan_trabajo",
-                "orden": hito.orden,
-            })
+        eventos.append({
+            "id_etapa": hito.id_subrubrica if hito else plan.pk,
+            "nombre": nombre_hito,
+            "fecha": fecha_hito,
+            "estado": estado_hito,
+            "responsable": responsable,
+            "observaciones": observaciones,
+            "tipo_evento": "hito_plan_trabajo",
+            "orden": numero_hito,
+        })
 
     # 2. Evaluaciones asociadas al proyecto
     if proyecto:

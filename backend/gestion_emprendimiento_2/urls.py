@@ -1,5 +1,8 @@
 from django.urls import path
+from rest_framework.routers import DefaultRouter
 from .views import (
+    ActividadViewSet,
+    PlanTrabajoViewSet,
     EstudiantesDisponiblesView,
     CrearEquipoView,
     MiEquipoView,
@@ -12,15 +15,6 @@ from .views import (
     DesasignarMentorProyectoView,
     TutoresDisponiblesView,
     AsignarTutorView,
-    PlanTrabajoIniciativaView,
-    PlanTrabajoProyectoView,
-    PlanTrabajoDetalleView,
-    HitoPlanTrabajoListCreateView,
-    HitoPlanTrabajoDetailView,
-    ActividadPlanTrabajoListCreateView,
-    ActividadPlanTrabajoDetailView,
-    EntregableActividadListCreateView,
-    EntregableActividadDetailView,
     LineaTiempoProyectoView,
     LineaTiempoIniciativaView,
 )
@@ -34,7 +28,7 @@ urlpatterns = [
     path('equipos/<int:id_equipo>/miembros/<int:id_usuario>/', EquipoMiembroView.as_view(), name='equipo_eliminar_miembro'),
     path('proyectos/evaluadores/', EvaluadoresDisponiblesView.as_view(), name='evaluadores_disponibles'),
     path('proyectos/<int:id_proyecto>/evaluador/', AsignarEvaluadorView.as_view(), name='proyecto_asignar_evaluador'),
-    # GENNOVA-80: Gesti?n y asignaci?n de mentores
+    # GENNOVA-80: Gestión y asignación de mentores
     path('proyectos/mentores/disponibles/', MentoresDisponiblesView.as_view(), name='mentores_disponibles'),
     path('proyectos/<int:id_proyecto>/mentores-disponibles/', MentoresDisponiblesView.as_view(), name='proyecto_mentores_disponibles'),
     path('proyectos/asignar-mentor/', AsignarMentorProyectoView.as_view(), name='asignar_mentor_proyecto'),
@@ -43,18 +37,13 @@ urlpatterns = [
     path('proyectos/desasignar-mentor/', DesasignarMentorProyectoView.as_view(), name='desasignar_mentor_directo'),
     path('proyectos/tutores/', TutoresDisponiblesView.as_view(), name='tutores_disponibles'),
     path('proyectos/<int:id_proyecto>/tutor/', AsignarTutorView.as_view(), name='proyecto_asignar_tutor'),
-
-    # HU-20: Plan de Trabajo y Entregables
-    path('iniciativas/<int:id_iniciativa>/plan-trabajo/', PlanTrabajoIniciativaView.as_view(), name='iniciativa_plan_trabajo'),
-    path('proyectos/<int:id_proyecto>/plan-trabajo/', PlanTrabajoProyectoView.as_view(), name='proyecto_plan_trabajo'),
-    path('planes-trabajo/<int:id_plan>/', PlanTrabajoDetalleView.as_view(), name='plan_trabajo_detalle'),
-    path('planes-trabajo/<int:id_plan>/hitos/', HitoPlanTrabajoListCreateView.as_view(), name='plan_trabajo_hitos'),
-    path('hitos/<int:id_hito>/', HitoPlanTrabajoDetailView.as_view(), name='plan_trabajo_hito_detalle'),
-    path('planes-trabajo/<int:id_plan>/actividades/', ActividadPlanTrabajoListCreateView.as_view(), name='plan_trabajo_actividades'),
-    path('actividades/<int:id_actividad>/', ActividadPlanTrabajoDetailView.as_view(), name='plan_trabajo_actividad_detalle'),
-    path('actividades/<int:id_actividad>/entregables/', EntregableActividadListCreateView.as_view(), name='actividad_entregables'),
-    path('entregables/<int:id_entregable>/', EntregableActividadDetailView.as_view(), name='entregable_detalle'),
     # HU-08: Línea de Tiempo Evolutiva (GENNOVA-77 / GENNOVA-78)
     path('proyectos/<int:id_proyecto>/linea-tiempo/', LineaTiempoProyectoView.as_view(), name='proyecto_linea_tiempo'),
     path('iniciativas/<int:id_iniciativa>/linea-tiempo/', LineaTiempoIniciativaView.as_view(), name='iniciativa_linea_tiempo'),
 ]
+
+# HU-20: Planes de trabajo (uno por hito) y sus actividades
+router = DefaultRouter()
+router.register('plan-trabajo', PlanTrabajoViewSet, basename='plan-trabajo')
+router.register('actividad', ActividadViewSet, basename='actividad')
+urlpatterns += router.urls

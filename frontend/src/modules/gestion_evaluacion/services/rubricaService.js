@@ -30,6 +30,19 @@ export function getHitos(tipoIniciativa) {
     return apiClient.get(`/rubricas/hitos/?tipo_iniciativa=${encodeURIComponent(tipoIniciativa)}`)
 }
 
+// Hitos ya como lista; si el endpoint de hitos aún no está disponible, salen de la rúbrica completa
+export async function getHitosDeTipo(tipoIniciativa) {
+    try {
+        const hitos = await getHitos(tipoIniciativa)
+        return Array.isArray(hitos) ? hitos : hitos?.results || []
+    } catch (err) {
+        if (err.status !== 404) throw err
+        const rubricas = await getRubricas()
+        const lista = Array.isArray(rubricas) ? rubricas : rubricas?.results || []
+        return lista.find((r) => r.tipo_iniciativa === tipoIniciativa)?.subrubricas || []
+    }
+}
+
 // Solo admin y direccion_del_programa. Responde con la rúbrica actualizada (los nuevos ya traen id).
 export function updateRubrica(id, rubrica) {
     return apiClient.put(`/rubricas/${id}/`, rubrica)

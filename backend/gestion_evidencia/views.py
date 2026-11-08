@@ -16,13 +16,17 @@ from gestion_evaluacion.models import SubRubrica
 from .models import DocumentoEvidencia, Evidencia, RegistroAvance, RetroalimentacionAvance
 from .serializers import (
     EvidenciaCrearSerializer,
+    EvidenciaEditarSerializer,
     EvidenciaSerializer,
     RegistroAvanceSerializer,
     RegistroAvanceCrearSerializer,
     RetroalimentacionCrearSerializer,
     RetroalimentacionAvanceSerializer,
+    borrar_documentos,
     proyectos_del_estudiante,
     proyectos_del_tutor,
+    puede_gestionar_evidencia,
+    reabrir_actividad_sin_evidencias,
 )
 
 
@@ -31,14 +35,10 @@ DOCUMENTOS_SIN_CONTENIDO = Prefetch(
     "documentos", queryset=DocumentoEvidencia.objects.defer("contenido")
 )
 
+ROLES_LECTURA = ("estudiante", "admin", "direccion_del_programa",
+                 "coordinador", "tutor", "mentor", "evaluador")
+ACCIONES_ESCRITURA = ("create", "update", "partial_update", "destroy")
 
-def es_lider_del_proyecto(usuario, proyecto):
-    """Solo el líder del equipo emprendedor del proyecto puede eliminar sus evidencias."""
-    try:
-        equipo = proyecto.iniciativa.equipo
-    except EquipoEmprendedor.DoesNotExist:
-        return False
-    return equipo.estudiante_lider.usuario_id == usuario.pk
 
 
 class EvidenciaViewSet(mixins.CreateModelMixin,
@@ -50,14 +50,13 @@ class EvidenciaViewSet(mixins.CreateModelMixin,
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     roles_crear = ("estudiante",)
-    roles_lectura = ("estudiante", "admin", "direccion_del_programa",
-                     "coordinador", "tutor", "mentor", "evaluador")
+    roles_lectura = ROLES_LECTURA
     # Ver las evidencias de "mi proyecto": el estudiante que participa y el tutor que lo retroalimenta
     roles_mi_proyecto = ("estudiante", "tutor")
 
     @property
     def roles_permitidos(self):
-        if self.action in ("create", "destroy"):
+        if self.action in ACCIONES_ESCRITURA:
             return self.roles_crear
         if self.action == "mi_proyecto":
             return self.roles_mi_proyecto
@@ -65,7 +64,7 @@ class EvidenciaViewSet(mixins.CreateModelMixin,
 
     def get_queryset(self):
         qs = (Evidencia.objects
-              .select_related("proyecto__iniciativa", "etapa", "usuario")
+              .select_related("proyecto__iniciativa", "etapa", "usuario", "actividad")
               .prefetch_related(DOCUMENTOS_SIN_CONTENIDO))
         proyecto = self.request.query_params.get("proyecto")
         if proyecto:
@@ -77,7 +76,11 @@ class EvidenciaViewSet(mixins.CreateModelMixin,
         return qs
 
     def get_serializer_class(self):
-        return EvidenciaCrearSerializer if self.action == "create" else EvidenciaSerializer
+        if self.action == "create":
+            return EvidenciaCrearSerializer
+        if self.action in ("update", "partial_update"):
+            return EvidenciaEditarSerializer
+        return EvidenciaSerializer
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -86,32 +89,55 @@ class EvidenciaViewSet(mixins.CreateModelMixin,
         salida = EvidenciaSerializer(evidencia, context={"request": request})
         return Response(salida.data, status=status.HTTP_201_CREATED)
 
-    def destroy(self, request, *args, **kwargs):
+    def _evidencia_gestionable(self, request, pk):
         """
-        Elimina una evidencia con todos sus adjuntos. Solo puede hacerlo el líder del equipo
-        del proyecto, sea quien sea el integrante que la subió.
+        Devuelve (evidencia, None) si el usuario puede editarla o eliminarla:
+        el líder del equipo con todas las del proyecto y los integrantes solo con las propias.
+        Si no, (None, respuesta de error).
         """
         evidencia = (Evidencia.objects
-                     .select_related("proyecto__iniciativa__equipo__estudiante_lider")
-                     .filter(pk=kwargs.get("pk"))
+                     .select_related("proyecto__iniciativa__equipo__estudiante_lider", "actividad")
+                     .filter(pk=pk)
                      .first())
         if not evidencia:
-            return Response({"error": "Evidencia no encontrada."}, status=status.HTTP_404_NOT_FOUND)
-        if not es_lider_del_proyecto(request.user, evidencia.proyecto):
-            return Response(
-                {"error": "Solo el líder del equipo puede eliminar las evidencias del proyecto."},
+            return None, Response({"error": "Evidencia no encontrada."}, status=status.HTTP_404_NOT_FOUND)
+        if not puede_gestionar_evidencia(request.user, evidencia):
+            return None, Response(
+                {"error": "Solo el líder del equipo o quien subió la evidencia puede modificarla o eliminarla."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        return evidencia, None
+
+    def update(self, request, *args, **kwargs):
+        evidencia, error = self._evidencia_gestionable(request, kwargs.get("pk"))
+        if error:
+            return error
+        serializer = self.get_serializer(
+            evidencia, data=request.data, partial=kwargs.pop("partial", False))
+        serializer.is_valid(raise_exception=True)
+        evidencia = serializer.save()
+        salida = EvidenciaSerializer(evidencia, context={"request": request})
+        return Response(salida.data)
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs["partial"] = True
+        return self.update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        """Elimina una evidencia con todos sus adjuntos."""
+        evidencia, error = self._evidencia_gestionable(request, kwargs.get("pk"))
+        if error:
+            return error
         # El registro de avance es un control formal: no puede perder la evidencia que lo respalda
         if evidencia.registros_avance.exists():
             return Response(
                 {"error": "Esta evidencia respalda un registro de avance y no se puede eliminar."},
                 status=status.HTTP_409_CONFLICT,
             )
-        # Los adjuntos antiguos guardados en disco también se borran del almacenamiento
-        for documento in evidencia.documentos.exclude(archivo="").exclude(archivo__isnull=True):
-            documento.archivo.delete(save=False)
+        actividad = evidencia.actividad
+        borrar_documentos(evidencia)
         evidencia.delete()
+        reabrir_actividad_sin_evidencias(actividad)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=["get"], url_path="mi-proyecto")
@@ -119,65 +145,74 @@ class EvidenciaViewSet(mixins.CreateModelMixin,
         """
         Evidencias de "mis" proyectos, según el rol activo:
         - estudiante: proyectos en los que participa (titular de la iniciativa aprobada
-          o integrante del equipo), subidas por él o por su equipo.
-        - tutor: proyectos en los que es el tutor asignado, para retroalimentarlas.
-        Acepta ?proyecto=ID para limitarse a uno de esos proyectos.
+          o integrante del equipo).
+        - tutor: proyectos que tiene asignados (los retroalimenta).
         """
-        if getattr(request.user, "rol_activo", None) == "tutor":
-            proyectos = proyectos_del_tutor(request.user)
-        else:
-            proyectos = proyectos_del_estudiante(request.user)
-
-        qs = (Evidencia.objects
-              .filter(proyecto__in=proyectos)
-              .select_related("proyecto__iniciativa", "etapa", "usuario")
-              .prefetch_related(DOCUMENTOS_SIN_CONTENIDO))
-        proyecto = request.query_params.get("proyecto")
-        if proyecto:
-            qs = qs.filter(proyecto_id=proyecto) if proyecto.isdigit() else qs.none()
-        serializer = EvidenciaSerializer(qs, many=True, context={"request": request})
-        return Response(serializer.data)
-
-    @action(detail=False, methods=["get"], url_path=r"documentos/(?P<doc_id>\d+)/descargar")
-    def descargar_documento(self, request, doc_id=None):
-        """
-        Descarga un archivo adjunto a una evidencia. El contenido vive en la base de datos,
-        así que lo puede descargar cualquiera con acceso al proyecto, no solo quien lo subió:
-        - estudiante: proyectos en los que participa (titular o integrante del equipo).
-        - tutor: proyectos en los que es el tutor asignado.
-        - demás roles de lectura: cualquier proyecto.
-        """
-        documento = (DocumentoEvidencia.objects
-                     .select_related("evidencia")
-                     .filter(pk=doc_id, enlace__isnull=True)
-                     .first())
-        if not documento:
-            return Response({"error": "Archivo no encontrado."}, status=status.HTTP_404_NOT_FOUND)
-
-        rol = getattr(request.user, "rol_activo", None)
-        proyectos = None
-        if rol == "estudiante":
-            proyectos = proyectos_del_estudiante(request.user)
-        elif rol == "tutor":
-            proyectos = proyectos_del_tutor(request.user)
-        if proyectos is not None and not proyectos.filter(pk=documento.evidencia.proyecto_id).exists():
+        proyectos = proyectos_segun_rol(request.user)
+        if proyectos is None:
             return Response(
-                {"error": "No tienes acceso a las evidencias de este proyecto."},
+                {"error": "Solo estudiantes y tutores pueden consultar las evidencias de su proyecto."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        evidencias = (
+            Evidencia.objects.filter(proyecto__in=proyectos)
+            .select_related("proyecto__iniciativa", "etapa", "usuario", "actividad")
+            .prefetch_related(DOCUMENTOS_SIN_CONTENIDO)
+        )
+        return Response(EvidenciaSerializer(evidencias, many=True, context={"request": request}).data)
 
-        nombre = documento.nombre_original or f"evidencia-{documento.pk}"
-        if documento.contenido is not None:
-            tipo = (documento.tipo_contenido
-                    or mimetypes.guess_type(nombre)[0]
-                    or "application/octet-stream")
-            respuesta = HttpResponse(bytes(documento.contenido), content_type=tipo)
-            respuesta["Content-Disposition"] = content_disposition_header(as_attachment=True, filename=nombre)
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path=r"descargar-documento/(?P<doc_id>\d+)",
+        name="evidencia-descargar-documento",
+    )
+    def descargar_documento(self, request, doc_id=None):
+        doc = (
+            DocumentoEvidencia.objects.select_related(
+                "evidencia__proyecto__iniciativa",
+                "evidencia__proyecto__tutor__usuario",
+            )
+            .filter(pk=doc_id)
+            .first()
+        )
+        if not doc or not doc.es_archivo:
+            return Response({"error": "Archivo no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        # La evidencia completa pasa por el control de permisos del ViewSet
+        evidencia = doc.evidencia
+        # El rol estudiante solo puede descargar archivos de proyectos en los que participa
+        if getattr(request.user, "rol_activo", None) == "estudiante":
+            if not proyectos_del_estudiante(request.user).filter(pk=evidencia.proyecto_id).exists():
+                return Response(
+                    {"error": "No tienes acceso a los archivos de este proyecto."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        # 1. Contenido binario guardado en la base de datos (flujo estándar)
+        if doc.contenido is not None:
+            # Django maneja BinaryField como `bytes` o como un `memoryview`
+            contenido = bytes(doc.contenido)
+            tipo = doc.tipo_contenido or "application/octet-stream"
+            nombre = doc.nombre_original or f"documento_{doc.pk}"
+            respuesta = HttpResponse(contenido, content_type=tipo)
+            respuesta["Content-Disposition"] = content_disposition_header(False, nombre)
+            respuesta["Content-Length"] = len(contenido)
             return respuesta
 
-        # Adjuntos subidos antes de guardar el contenido en la base de datos
-        if documento.archivo and documento.archivo.storage.exists(documento.archivo.name):
-            return FileResponse(documento.archivo.open("rb"), as_attachment=True, filename=nombre)
+        # 2. Adjuntos subidos antes de la migración que persisten en disco
+        if doc.archivo:
+            try:
+                nombre = doc.nombre_original or doc.archivo.name.rsplit("/", 1)[-1]
+                tipo, _ = mimetypes.guess_type(nombre)
+                return FileResponse(
+                    doc.archivo.open("rb"),
+                    as_attachment=False,
+                    filename=nombre,
+                    content_type=tipo or "application/octet-stream",
+                )
+            except FileNotFoundError:
+                pass
 
         return Response(
             {"error": "El archivo se subió antes de guardarse en la base de datos y ya no está "
