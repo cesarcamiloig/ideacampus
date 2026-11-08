@@ -36,7 +36,7 @@ Adicionalmente, se investigaron de manera exhaustiva las tablas, relaciones, cla
 | :---: | :--- | :--- | :--- | :---: | :---: | :---: |
 | **#40** | `feat(avance): registrar y validar el avance por etapas con evidencia .` (HU-19) | `cesarcamiloig` | `feat/HU-19-registro-validacion-avance` → `develop` | **Closed (Merged)** | **Integrado** | `3b0a6e1` |
 | **#41** | `feat: Endpoint de Línea de Tiempo (HU-08)` | `cesarcamiloig` | `feat/HU-08-backend-linea-tiempo` → `develop` | **Closed (Merged)** | **Integrado** | `a7b9420` |
-| **#42** | `Feat/mejoras frontend` | `cesarcamiloig` | `feat/mejoras-frontend` → `main` *(errónea)* | **Open en GitHub** | **Integrado en `develop`** | `0c473f6` |
+| **#42** | `Feat/mejoras frontend` | `cesarcamiloig` | `feat/mejoras-frontend` → `main` *(base errónea)* | **Closed (Integrado en `develop`)** | **Integrado en `develop`** | `0c473f6` |
 | **#43** | `feat(linea-tiempo): mostrar cronologicamente las etapas de una iniciativa (HU-08)` | `cesarcamiloig` | `feat/HU-08-frontend-linea-tiempo` → `develop` | **Closed (Merged)** | **Integrado** | `f12e406` |
 
 ---
