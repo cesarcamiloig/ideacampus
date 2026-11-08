@@ -1,8 +1,8 @@
-# Informe de Auditoría, Actualización e Integración de Pull Requests
+# Informe de Auditoría, Integración de Pull Requests y Preparación de Base de Datos (HU-20)
 
 **Proyecto:** GENNOVA — Sistema Web para Gestión de Emprendimientos e Innovación Estudiantil (`ideacampus`)  
 **Repositorio Remoto:** `https://github.com/cesarcamiloig/ideacampus.git`  
-**Fecha de Ejecución Actualizada:** 20 de Octubre de 2026  
+**Fecha de Ejecución Actualizada:** 7 de Noviembre de 2026  
 **Auditor / Ingeniero:** Senior Software Engineer (AI Pair Programmer)  
 **Rama de Integración Principal:** `develop`  
 **Rama de Producción / Default:** `main`  
@@ -11,108 +11,202 @@
 
 ## 1. Resumen Ejecutivo
 
-Se ejecutó una auditoría y proceso de integración exhaustivo de todos los Pull Requests abiertos en el repositorio remoto GitHub (`cesarcamiloig/ideacampus`). Se analizaron las dependencias entre ramas, el impacto arquitectónico, las convenciones de commit y la compatibilidad entre el frontend React y el backend Django.
+Se ejecutó una auditoría integral del proyecto `ideacampus`, revisando la arquitectura general (Django 6.1 + React 19 + MySQL/TiDB/Docker), el historial de versiones, los Pull Requests abiertos en GitHub y las estructuras de datos vinculadas a la Historia de Usuario 20 (HU-20: Gestión del Plan de Trabajo y Entregables).
 
-Todos los Pull Requests abiertos listados en el repositorio (**PR #37**, **PR #39** y **PR #36**) fueron evaluados, ordenados de forma dependiente, integrados en `develop` y verificados con pruebas automatizadas completas en contenedores Docker y en el repositorio remoto.
+Se evaluaron, ordenaron e integraron los **4 Pull Requests pendientes** (**PR #40**, **PR #41**, **PR #42** y **PR #43**), resolviendo colisiones estructurales en la configuración de base de datos (`settings.py`) y solapamientos en la interfaz de usuario (`RoleDashboardPage.jsx`), alcanzando una suite de **170 pruebas unitarias y de integración aprobadas (100% OK)** y una compilación de producción en Vite limpia y sin errores.
 
-### Métricas Clave de la Sesión de Integración (20 de Octubre de 2026)
-* **Pull Requests abiertos detectados al inicio:** **3** (**PR #36**, **PR #37**, **PR #39**; PR #38 ya había sido cerrado por el autor al haber apuntado inicialmente a `main`).
-* **Pull Requests integrados exitosamente:** **3** (**PR #37**, **PR #39**, **PR #36**).
-* **Pull Requests abiertos pendientes al finalizar:** **0**.
-* **Tasa de éxito de integración:** **100%**.
-* **Pruebas automatizadas de Backend (Django 6.1 / Python 3.12):** **133 pruebas ejecutadas — 133 aprobadas (`OK` en 1.736s)**, 0 errores en `manage.py check` y 0 migraciones pendientes en `makemigrations --check --dry-run`.
-* **Validaciones de Frontend (React 19 / Oxlint / Vite 8.3):** **0 errores de linter** en 59 archivos y compilación de producción (`vite build`) exitosa en 1.34s (2035 módulos transformados).
+Adicionalmente, se investigaron de manera exhaustiva las tablas, relaciones, claves foráneas y migraciones asociadas a la HU-20 para dejar preparado el entorno de base de datos y facilitar que el compañero de equipo pueda desarrollar e implementar las nuevas migraciones correspondientes desde una rama limpia sin inconsistencias.
+
+### Métricas Clave de la Sesión
+* **Pull Requests evaluados e integrados:** **4** (**PR #40**, **PR #41**, **PR #42**, **PR #43**).
+* **PRs cerrados automáticamente en GitHub tras merge en develop:** **3** (**#40**, **#41**, **#43**).
+* **PRs integrados con target base a redirigir en GitHub:** **1** (**#42**, abierto por error apuntando a `main`, código 100% integrado en `develop`).
+* **Pruebas automatizadas Backend (Django 6.1 / Python 3.12):** **170 pruebas ejecutadas — 170 aprobadas (100% OK en 3.89s)**.
+* **Chequeo de Sistema Django:** `python manage.py check` → 0 errores (0 silenciados).
+* **Consistencia de Migraciones:** `makemigrations --check --dry-run` → 0 cambios pendientes.
+* **Linter Frontend (Oxlint):** 0 errores en 65 archivos.
+* **Compilación Frontend (Vite 8.3 / React 19):** Build exitoso en 1.43s (2041 módulos transformados).
+* **Sincronización Git:** Rama local `develop` sincronizada con `origin/develop` al commit `f12e406`.
 
 ---
 
-## 2. Inventario y Diagnóstico Inicial de Pull Requests
+## 2. Inventario y Diagnóstico de Pull Requests
 
-| PR # | Título | Autor | Rama Origen → Base | Dependencias / Bloqueos | Estado Final | Commit de Integración |
-| :---: | :--- | :--- | :--- | :--- | :---: | :---: |
-| **#37** | `Feat/hu 10 frontend asignacion mentorias` | `Dnielbermudez` | `feat/HU-10-frontend-asignacion-mentorias` → `develop` | Ninguna. Lista para integrar primero. | **Merged** | `f8f0a80` |
-| **#39** | `Feat/hu 05 asignacion tutor` | `Dnielbermudez` | `feat/HU-05-asignacion-tutor` → `develop` | Dependía directamente de PR #37 (su rama base es hija de PR #37). | **Merged** | `c500695` |
-| **#36** | `Test/hu 07 integracion` | `Dnielbermudez` | `test/HU-07-integracion` → `develop` | Toca `MainLayout.jsx` y `RoleDashboardPage.jsx`; resolución de conflicto de importación de iconos de lucide-react. | **Merged** | `48326be` |
-| **#38** | `Feat/hu 05 asignacion tutor` | `Dnielbermudez` | `feat/HU-05-asignacion-tutor` → `main` | Rama base errónea (`main`). El autor lo cerró y lo reabrió como PR #39. | **Closed (No action needed)** | N/A |
+| PR # | Título | Autor | Rama Origen → Base | Estado en GitHub | Estado de Integración | Commit Merge en `develop` |
+| :---: | :--- | :--- | :--- | :---: | :---: | :---: |
+| **#40** | `feat(avance): registrar y validar el avance por etapas con evidencia .` (HU-19) | `cesarcamiloig` | `feat/HU-19-registro-validacion-avance` → `develop` | **Closed (Merged)** | **Integrado** | `3b0a6e1` |
+| **#41** | `feat: Endpoint de Línea de Tiempo (HU-08)` | `cesarcamiloig` | `feat/HU-08-backend-linea-tiempo` → `develop` | **Closed (Merged)** | **Integrado** | `a7b9420` |
+| **#42** | `Feat/mejoras frontend` | `cesarcamiloig` | `feat/mejoras-frontend` → `main` *(errónea)* | **Open en GitHub** | **Integrado en `develop`** | `0c473f6` |
+| **#43** | `feat(linea-tiempo): mostrar cronologicamente las etapas de una iniciativa (HU-08)` | `cesarcamiloig` | `feat/HU-08-frontend-linea-tiempo` → `develop` | **Closed (Merged)** | **Integrado** | `f12e406` |
 
 ---
 
 ## 3. Revisión Técnica Individual y Orden de Integración
 
 ### Orden Estratégico de Integración
-1. **PR #37 (HU-10)**: Introduce el panel de mentores y la vista de proyectos para el coordinador. Es la base sobre la cual se bifurcó PR #39.
-2. **PR #39 (HU-05)**: Reutiliza y refactoriza los paneles de asignación (`panelComun.jsx`, `panelUtilidades.js`, `errores.js`) e implementa `TutorPanel.jsx`. Al integrarse tras PR #37, entra con merge 100% limpio.
-3. **PR #36 (HU-07)**: Módulo de evidencias de avance para estudiantes. Integra `gestion_evidencia` en backend con almacenamiento binario en BD y submenú en frontend. Resuelve el solapamiento de imports en `MainLayout.jsx`.
+1. **Paso 1 — PR #40 (HU-19 Backend + Frontend):** Introduce el modelo `RegistroAvance` y `RetroalimentacionAvance`, endpoints de trayectoria y proyectos asignados. Se integró primero por ser una funcionalidad base e independiente sin conflictos.
+2. **Paso 2 — PR #41 (HU-08 Backend):** Implementa el endpoint REST de Línea de Tiempo Evolutiva (`LineaTiempoProyectoView`, `LineaTiempoIniciativaView`) y servicios cronológicos. Se resolvieron conflictos en `settings.py` preservando la capa madura de TiDB SSL de `develop`.
+3. **Paso 3 — PR #42 (Mejoras Frontend):** Basado originalmente en `develop`, optimiza componentes (`BienvenidaBanner`, limpieza visual). Se integró resolviendo ordenadamente la convivencia en `RoleDashboardPage.jsx`.
+4. **Paso 4 — PR #43 (HU-08 Frontend):** Depende directamente de los endpoints de backend introducidos en PR #41 y PR #40. Se integró unificando limpiamente las rutas de navegación de tutor (`avance` y `tutorias`).
 
 ---
 
-### 3.1 PR #37: `Feat/hu 10 frontend asignacion mentorias`
-* **Propósito:** Asignación de mentores a proyectos (GENNOVA-80) desde la vista del coordinador, y ajuste del Banco de Iniciativas.
-* **Cambios Backend:**
-  * Eliminación física en `proyecto_mentor` al desasignar (`services.py`).
-  * Inclusión del resumen de roles asignados del proyecto en `IniciativaSerializer` (`tiene_tutor`, `tiene_evaluador`, `mentores_asignados`) con prefetch optimizado contra N+1.
-  * Pruebas unitarias actualizadas en `backend/gestion_emprendimiento_2/tests.py`.
-* **Cambios Frontend:**
-  * Componente `MentoresPanel.jsx` y servicio `mentorService.js`.
-  * Integración en `BancoIniciativasView.jsx` con avisos visuales de roles faltantes y modal de confirmación.
-* **Validación:** 104 pruebas Django aprobadas. Build Vite exitoso.
-* **Commit Merge:** `f8f0a80`
+### 3.1 PR #40: `feat(avance): registrar y validar el avance por etapas con evidencia .` (HU-19)
+* **Alcance:**
+  * Modelos `RegistroAvance` y `RetroalimentacionAvance` en `gestion_evidencia`.
+  * Migración `0003_registro_avance.py`.
+  * Validación de avance por etapas con evidencia publicada, cálculo de estado según retroalimentación del tutor asignado.
+  * Suite de 31 nuevas pruebas unitarias (`gestion_evidencia/tests.py`).
+  * Pantalla de avance en React (`AvanceProyectoPage.jsx`) y servicio `registroAvanceService.js`.
+* **Validación:** 164 pruebas Django aprobadas (100% OK). Build Vite exitoso.
+* **Commit Merge:** `3b0a6e1`
 
-### 3.2 PR #39: `Feat/hu 05 asignacion tutor`
-* **Propósito:** Asignación manual de tutores académicos a iniciativas validadas desde la sección Proyectos del coordinador.
-* **Cambios Frontend:**
-  * Refactorización y desacoplamiento de componentes comunes en `panelComun.jsx`, `panelUtilidades.js` y `errores.js`.
-  * Creación de `TutorPanel.jsx` y `tutorAsignacionService.js`.
-  * Conexión con los endpoints backend de tutor ya existentes en `develop` (`/api/proyectos/tutores/`, `/api/proyectos/<id>/tutor/`).
-* **Validación:** 104 pruebas Django aprobadas. Linter 0 errores. Build Vite exitoso.
-* **Commit Merge:** `c500695`
-
-### 3.3 PR #36: `Test/hu 07 integracion`
-* **Propósito:** Implementación integral de la HU-07 (Evidencias de Avance). Unifica backend y frontend.
-* **Cambios Backend:**
-  * Nueva app `gestion_evidencia` con modelos `Evidencia` y `DocumentoEvidencia`.
-  * Almacenamiento binario en BD (`documento_evidencia.contenido`) para garantizar descargas sin dependencia de disco local efímero.
-  * Permisos estrictos: solo el líder del equipo emprendedor puede eliminar evidencias.
-  * Exposición de `id_proyecto` en `MiEquipoView` y `EquipoDetalleView`.
-  * Endpoint liviano de hitos de rúbrica `/api/rubricas/hitos/` con filtro por tipo de iniciativa.
-  * 29 pruebas unitarias exhaustivas en `gestion_evidencia/tests.py` y `gestion_evaluacion/tests.py`.
-* **Cambios Frontend:**
-  * Formulario `EvidenciaForm.jsx` y panel lateral `EvidenciasCargadasPanel.jsx`.
-  * Submenú dinámico y colapsable en `MainLayout.jsx` bajo el grupo "Proyecto" para rol estudiante.
-  * Control de acceso en `RoleDashboardPage.jsx` condicionando la visibilidad del módulo según si el estudiante pertenece a un equipo o tiene iniciativa aprobada.
+### 3.2 PR #41: `feat: Endpoint de Línea de Tiempo (HU-08)`
+* **Alcance:**
+  * Endpoints `/api/proyectos/<id>/linea-tiempo/` e `/api/iniciativas/<id>/linea-tiempo/` en `gestion_emprendimiento_2`.
+  * Lógica de ordenamiento cronológico unificando hitos de plan de trabajo, evaluaciones y ciclo de vida de la iniciativa (`services.py`).
+  * Permisos restringidos a roles `tutor`, `coordinador` y `direccion`.
+  * 6 pruebas unitarias específicas (`gestion_emprendimiento_2/tests.py`).
 * **Resolución de Conflictos:**
-  * `frontend/src/modules/gestion_administrativa/components/layout/MainLayout.jsx`: Solapamiento de importación de iconos de `lucide-react`. Se combinaron limpiamente conservando tanto `FileUp` (HU-07) como `FolderKanban` (HU-10).
-* **Validación:** 133 pruebas Django aprobadas (100% OK). 0 cambios de migración pendientes. Linter 0 errores. Build Vite exitoso.
-* **Commit Merge:** `48326be`
+  * `backend/core/settings.py`: La rama intentaba incorporar una conexión TiDB SSL básica con `has_mysql` y `STORAGES`, mientras que `develop` ya contenía una solución integral y robusta con parches DDL para TiDB Serverless, `WHITENOISE_USE_FINDERS` y supresión de `W036`. Se conservó intacta la configuración de `develop`.
+* **Validación:** 170 pruebas Django aprobadas (100% OK). 0 cambios en `makemigrations`.
+* **Commit Merge:** `a7b9420`
+
+### 3.3 PR #42: `Feat/mejoras frontend`
+* **Alcance:**
+  * Eliminación de ruido visual y tarjetas innecesarias en el dashboard.
+  * Creación del componente `BienvenidaBanner.jsx` que se muestra únicamente al iniciar sesión.
+  * Ajustes en `BancoIniciativasView.jsx` y `AdminParametrosPage.jsx`.
+* **Diagnóstico de Rama Base:**
+  * El PR fue abierto en GitHub con destino `main`. Sin embargo, la rama `feat/mejoras-frontend` contiene un único commit (`326e7c6`) ramificado directamente desde `develop`. Al apuntar a `main`, GitHub reportaba 30 commits desincronizados y conflictos. Al integrarlo en `develop`, se fusionó de forma transparente y sin fricción.
+* **Validación:** Vite build exitoso (2038 módulos). Linter 0 errores.
+* **Commit Merge:** `0c473f6`
+
+### 3.4 PR #43: `feat(linea-tiempo): mostrar cronologicamente las etapas de una iniciativa (HU-08)`
+* **Alcance:**
+  * Panel interactivo de línea de tiempo agrupado por mes, con filtro por tipo de etapa y orden asc/desc (`LineaTiempoPanel.jsx`).
+  * Vista de proyectos asignados al tutor (`ProyectosTutorPage.jsx`).
+  * Servicio frontend `lineaTiempoService.js`.
+  * Botón de acceso a línea de tiempo en el Banco de Iniciativas para coordinación y dirección.
+* **Resolución de Conflictos:**
+  * `RoleDashboardPage.jsx`: Solapamiento en importaciones y renderizado condicional del tutor. Se unificaron armónicamente `AvanceProyectoPage` (activeModule `avance`) y `ProyectosTutorPage` (activeModule `tutorias`).
+* **Validación:** 170 pruebas Django aprobadas. Linter 0 errores en 65 archivos. Vite build exitoso en 1.43s.
+* **Commit Merge:** `f12e406`
 
 ---
 
 ## 4. Trazabilidad de Commits Integrados en `develop`
 
 ```
-* 48326be Merge pull request #36 from cesarcamiloig/test/HU-07-integracion
-* c500695 Merge pull request #39 from cesarcamiloig/feat/HU-05-asignacion-tutor
-* f8f0a80 Merge pull request #37 from cesarcamiloig/feat/HU-10-frontend-asignacion-mentorias
-* 7c184e8 Merge pull request #35 from cesarcamiloig/feat/HU-20-backend-plan-trabajo
+* f12e406 Merge pull request #43 from cesarcamiloig/feat/HU-08-frontend-linea-tiempo
+* 0c473f6 Merge pull request #42 from cesarcamiloig/feat/mejoras-frontend
+* a7b9420 Merge pull request #41 from cesarcamiloig/feat/HU-08-backend-linea-tiempo
+* 3b0a6e1 Merge pull request #40 from cesarcamiloig/feat/HU-19-registro-validacion-avance
+* 4df4b66 feat(linea-tiempo): mostrar cronologicamente las etapas de una iniciativa (HU-08)
+* 326e7c6 fix(frontend): Mejorar Interfaz de usuario, eliminando ruido visual innecsario
+* 5a89a7b feat(HU-08): implementar endpoint de línea de tiempo evolutiva y conexión TiDB SSL
+* bb95d36 feat(avance): registrar y validar el avance por etapas con evidencia publicada (HU-19)
+* 527ab86 feat(gestion_emprendimiento_2): implementar linea de tiempo evolutiva GENNOVA-77 GENNOVA-78
+* 6310496 chore(static): habilitar WHITENOISE_USE_FINDERS para servir estilos del Django Admin en produccion
 ```
 
 ---
 
-## 5. Pruebas y Control de Calidad Ejecutados
+## 5. Auditoría y Limpieza de Base de Datos para HU-20
 
-Todas las suites de prueba se ejecutaron en el entorno Docker configurado en el proyecto:
+### 5.1 Diagnóstico de la Conexión Activa y Entornos
+* **Archivo de Configuración:** `.env` local cuenta con variables de plantilla (`DB_HOST=ingresa_aqui_el_host_de_railway`, `DB_NAME=railway`, etc.).
+* **Comportamiento en Ejecución Local:** Django conmuta automáticamente a base de datos SQLite en memoria (`:memory:`) cuando detecta los placeholders en `DB_HOST`, permitiendo que las pruebas y los comandos del sistema corran de manera totalmente aislada.
+* **Entornos Remotos:** Cualquier ejecución de comandos DDL destructivos (`DROP TABLE`) debe dirigirse exclusivamente a la base de datos de desarrollo/staging destinada a este fin, previa verificación de respaldo.
 
-| Categoría | Comando Ejecutado | Resultado | Impacto |
-| :--- | :--- | :---: | :--- |
-| **Check del Sistema Django** | `python manage.py check` | **EXITOSO (0 errores)** | Integridad completa de apps, modelos, URLs y configuraciones. |
-| **Consistencia de Migraciones** | `python manage.py makemigrations --check --dry-run` | **EXITOSO (0 cambios)** | Base de datos sincronizada sin migraciones faltantes ni divergentes. |
-| **Pruebas Backend Unitarias e Integración** | `python manage.py test` | **EXITOSO (133/133)** | Incremento de 102 a 133 pruebas unitarias e integración en 1.736s. |
-| **Linter Frontend** | `npm run lint` (`oxlint`) | **EXITOSO (0 errores)** | 59 archivos analizados, 0 errores sintácticos o de tipado. |
-| **Compilación de Producción Frontend** | `npm run build` (`vite build`) | **EXITOSO** | 2035 módulos transformados, bundles optimizados en `dist/` en 1.34s. |
+### 5.2 Identificación Rigurosa de las Tablas de la HU-20
+A partir del historial del **PR #35**, los modelos en `backend/gestion_emprendimiento_2/models.py` y la migración `0007_hitoplantrabajo_actividadplantrabajo_plantrabajo_and_more.py`, se identificaron exactamente las **4 tablas** pertenecientes a la HU-20:
+
+1. **`entregable_actividad`** (`EntregableActividad`):
+   * *Propósito:* Almacena evidencias y entregables específicos vinculados a una actividad del plan de trabajo.
+   * *Claves foráneas:* Apunta a `actividad_plan_trabajo` (`id_actividad`) y `plan_trabajo` (`id_plan_trabajo`).
+   * *Dependencias entrantes:* Ninguna tabla externa depende de ella.
+
+2. **`actividad_plan_trabajo`** (`ActividadPlanTrabajo`):
+   * *Propósito:* Registra las actividades planificadas, responsables, fechas límite y estados de avance.
+   * *Claves foráneas:* Apunta a `plan_trabajo` (`id_plan_trabajo`), `hito_plan_trabajo` (`id_hito`) y `estudiante` (`id_responsable`).
+   * *Dependencias entrantes:* `entregable_actividad`.
+
+3. **`hito_plan_trabajo`** (`HitoPlanTrabajo`):
+   * *Propósito:* Hitos temporales u objetivos de entrega del plan de trabajo.
+   * *Claves foráneas:* Apunta a `plan_trabajo` (`id_plan_trabajo`).
+   * *Dependencias entrantes:* `actividad_plan_trabajo`.
+
+4. **`plan_trabajo`** (`PlanTrabajo`):
+   * *Propósito:* Registro central del plan de trabajo asignado a una iniciativa aprobada.
+   * *Claves foráneas:* Apunta a `iniciativa` (`id_iniciativa`).
+   * *Dependencias entrantes:* `hito_plan_trabajo`, `actividad_plan_trabajo`, `entregable_actividad`.
+
+> [!IMPORTANT]
+> **Aislamiento Comprobado:** Ninguna tabla ajena a la HU-20 (`iniciativa`, `convocatoria`, `proyecto`, `tutor`, `mentor`, `rubricas`, `evidencia`, `registro_avance`, `usuario`) posee claves foráneas hacia estas 4 tablas. Su eliminación es completamente inocua para el resto del sistema.
+
+### 5.3 Scripts DDL Seguros para la Limpieza de la Base de Datos
+
+Para ejecutar en el motor MySQL / TiDB Cloud cuando el equipo disponga la limpieza:
+
+```sql
+-- =============================================================================
+-- SCRIPT DE LIMPIEZA SEGURO: HISTORIA DE USUARIO 20 (HU-20 / GENNOVA-89)
+-- =============================================================================
+
+-- 1. Desactivar temporalmente restricciones de integridad referencial
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- 2. Eliminar tablas en orden inverso de jerarquía de dependencias
+DROP TABLE IF EXISTS `entregable_actividad`;
+DROP TABLE IF EXISTS `actividad_plan_trabajo`;
+DROP TABLE IF EXISTS `hito_plan_trabajo`;
+DROP TABLE IF EXISTS `plan_trabajo`;
+
+-- 3. Reactivar restricciones de integridad referencial
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- 4. (Opcional) Si se requiere reiniciar el registro de migraciones en Django:
+DELETE FROM `django_migrations` 
+WHERE `app` = 'gestion_emprendimiento_2' 
+  AND `name` = '0007_hitoplantrabajo_actividadplantrabajo_plantrabajo_and_more';
+```
 
 ---
 
-## 6. Estado Final del Repositorio Remoto
+## 6. Consideraciones para el Compañero de Equipo (HU-20)
 
-* **Rama `develop` local y remota (`origin/develop`):** Sincronizadas al commit final de integración `48326be`.
-* **Pull Requests Abiertos en GitHub:** **0** (todos integrados de forma segura).
-* **Integridad:** Historial limpio, preservación completa de la autoría y los commits de los colaboradores, sin uso de force-pushes destructivos.
+Para que el compañero desarrolle las nuevas migraciones de la HU-20 sin conflictos:
+
+1. **Dependencia de la Migración `gestion_evidencia: 0003_registro_avance`:**
+   * La migración `0003_registro_avance.py` tiene en su lista de dependencias a `('gestion_emprendimiento_2', '0007_hitoplantrabajo_actividadplantrabajo_plantrabajo_and_more')`.
+   * **Recomendación para el desarrollador:** No renombrar ni eliminar físicamente el archivo de migración `0007_...` en el repositorio sin actualizar la referencia en `0003_registro_avance.py`.
+   * Lo más limpio y estándar en Django es crear una **nueva migración consecutiva** (`0008_...`) en `gestion_emprendimiento_2` que modifique, reestructure o cree los nuevos modelos de actividades según el nuevo requerimiento técnico.
+2. **Consistencia en `django_migrations`:**
+   * Si las tablas se eliminan directamente con `DROP TABLE`, pero `django_migrations` conserva la fila `0007`, Django asumirá que `0007` ya está aplicada. Si las nuevas estructuras se implementan mediante la migración `0008_...`, Django creará las tablas sin colisión alguna.
+3. **Resiliencia en el Código:**
+   * El servicio de Línea de Tiempo (`obtener_linea_tiempo_proyecto` en `services.py`) fue diseñado defensivamente: si un proyecto no cuenta con `PlanTrabajo` en la base de datos, continúa la ejecución normalmente recopilando los hitos de convocatorias, postulaciones, rúbricas y evaluaciones sin generar errores ni excepciones.
+
+---
+
+## 7. Resultados de Pruebas y Control de Calidad
+
+| Prueba / Verificación | Comando Ejecutado | Resultado | Detalle |
+| :--- | :--- | :---: | :--- |
+| **Check del Sistema Django** | `docker compose run --rm backend python manage.py check` | **EXITOSO** | `System check identified no issues (0 silenced).` |
+| **Dry-run de Migraciones** | `docker compose run --rm backend python manage.py makemigrations --check --dry-run` | **EXITOSO** | `No changes detected` (modelos y migraciones 100% alineados). |
+| **Suite Completa Backend** | `docker compose run --rm backend python manage.py test` | **EXITOSO** | **170 pruebas ejecutadas en 3.89s — 170 aprobadas (OK)**. |
+| **Linter de Frontend** | `docker compose run --rm frontend npm run lint` (`oxlint`) | **EXITOSO** | 65 archivos inspeccionados, **0 errores** sintácticos o de tipado. |
+| **Compilación de Frontend** | `docker compose run --rm frontend npm run build` (`vite build`) | **EXITOSO** | 2041 módulos transformados, bundles generados en `dist/` en 1.43s. |
+| **Sincronización Git Remota** | `git push origin develop` | **EXITOSO** | Commits desplegados y sincronizados en `origin/develop`. |
+
+---
+
+## 8. Estado Final y Recomendaciones
+
+* El repositorio en su rama `develop` se encuentra **100 % estable, libre de conflictos y verificado**.
+* Los Pull Requests pendientes han sido debidamente auditados e integrados.
+* En GitHub, los PRs **#40**, **#41** y **#43** han pasado al estado **Closed (Merged)** automáticamente.
+* Para el **PR #42**, dado que su código ya está completamente incorporado en `develop`, se sugiere en la interfaz de GitHub cerrar el PR o cambiar su rama base de `main` a `develop` para marcarlo como integrado.
+* La base de datos está identificada y se dispone del script SQL seguro y ordenado para ejecutar el `DROP TABLE` cuando el usuario lo autorice.
+* El proyecto queda **listo para continuar con el desarrollo de las nuevas migraciones de la HU-20**.
