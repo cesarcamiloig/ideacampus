@@ -4,16 +4,37 @@ import LoginPage from "./modules/gestion_administrativa/pages/LoginPage";
 import AdminParametrosPage from "./modules/gestion_administrativa/pages/AdminParametrosPage";
 import ConvocatoriasPage from "./modules/gestion_convocatorias/pages/ConvocatoriasPage";
 import RoleDashboardPage from "./modules/gestion_administrativa/pages/RoleDashboardPage";
+import { consumirBienvenidaPendiente } from "./modules/gestion_administrativa/services/authService";
 
 function AppContent() {
   const { isAuthenticated, usuario, refreshSession } = useAuth();
   const rolActivo = usuario?.rol?.trim().toLowerCase();
   const [currentModule, setCurrentModule] = useState(null);
+  const [mostrarBienvenida, setMostrarBienvenida] = useState(false);
 
   // Al conmutar de rol, reiniciar el módulo activo para cargar la vista inicial del nuevo rol
   useEffect(() => {
     setCurrentModule(null);
   }, [rolActivo]);
+
+  // La bienvenida aparece solo en la primera pantalla tras iniciar sesión:
+  // al recargar con la sesión ya abierta la marca ya se consumió
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setMostrarBienvenida(false);
+    } else if (consumirBienvenidaPendiente()) {
+      setMostrarBienvenida(true);
+    }
+  }, [isAuthenticated]);
+
+  // Cualquier navegación del usuario (apartados, notificaciones, cambio de rol) oculta la bienvenida;
+  // las redirecciones automáticas no
+  function navegar(modulo, opciones) {
+    if (!opciones?.automatico) {
+      setMostrarBienvenida(false);
+    }
+    setCurrentModule(modulo);
+  }
 
   if (!isAuthenticated) {
     return <LoginPage onLoginSuccess={refreshSession} />;
@@ -22,15 +43,15 @@ function AppContent() {
   // 1. Administrador del Sistema
   if (rolActivo === "admin" || rolActivo === "administrador") {
     if (currentModule === "convocatorias") {
-      return <ConvocatoriasPage key="admin-convocatorias" onNavigate={setCurrentModule} activeModule="convocatorias" />;
+      return <ConvocatoriasPage key="admin-convocatorias" onNavigate={navegar} activeModule="convocatorias" />;
     }
     if (currentModule === "emprendimientos") {
-      return <RoleDashboardPage key="admin-emprendimientos" role="admin" onNavigate={setCurrentModule} defaultModule="emprendimientos" />;
+      return <RoleDashboardPage key="admin-emprendimientos" role="admin" onNavigate={navegar} defaultModule="emprendimientos" mostrarBienvenida={mostrarBienvenida} />;
     }
     if (currentModule === "alertas") {
-      return <RoleDashboardPage key="admin-alertas" role="admin" onNavigate={setCurrentModule} defaultModule="alertas" />;
+      return <RoleDashboardPage key="admin-alertas" role="admin" onNavigate={navegar} defaultModule="alertas" mostrarBienvenida={mostrarBienvenida} />;
     }
-    return <AdminParametrosPage key="admin-parametros" onNavigate={setCurrentModule} />;
+    return <AdminParametrosPage key="admin-parametros" onNavigate={navegar} mostrarBienvenida={mostrarBienvenida} />;
   }
 
   // 2. Coordinador de Emprendimiento
@@ -38,7 +59,7 @@ function AppContent() {
     // El coordinador no gestiona convocatorias: entra a Proyectos (también si una
     // notificación o alerta intenta llevarlo a convocatorias)
     const activeModule = !currentModule || currentModule === "convocatorias" ? "iniciativas" : currentModule;
-    return <RoleDashboardPage key={`coord-${activeModule}`} role={rolActivo} onNavigate={setCurrentModule} defaultModule={activeModule} />;
+    return <RoleDashboardPage key={`coord-${activeModule}`} role={rolActivo} onNavigate={navegar} defaultModule={activeModule} mostrarBienvenida={mostrarBienvenida} />;
   }
 
   // Dirección del Programa administra convocatorias desde la misma interfaz.
@@ -46,11 +67,11 @@ function AppContent() {
     ["direccion_del_programa", "direccion"].includes(rolActivo) &&
     currentModule === "convocatorias"
   ) {
-    return <ConvocatoriasPage key="direccion-convocatorias" onNavigate={setCurrentModule} activeModule="convocatorias" />;
+    return <ConvocatoriasPage key="direccion-convocatorias" onNavigate={navegar} activeModule="convocatorias" />;
   }
 
   // 3. Estudiante Emprendedor y otros roles institucionales
-  return <RoleDashboardPage key={rolActivo} role={rolActivo} onNavigate={setCurrentModule} defaultModule={currentModule} />;
+  return <RoleDashboardPage key={rolActivo} role={rolActivo} onNavigate={navegar} defaultModule={currentModule} mostrarBienvenida={mostrarBienvenida} />;
 }
 
 class ErrorBoundary extends React.Component {

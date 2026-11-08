@@ -5,6 +5,9 @@ import PeriodosTab from "../components/PeriodosTab"
 import RolesTab from "../components/RolesTab"
 import { getPeriodos } from "../services/parametroService"
 import RubricasTab from "../../gestion_evaluacion/components/RubricasTab"
+import BienvenidaBanner from "../components/BienvenidaBanner"
+import { ROLE_CONFIG } from "./RoleDashboardPage"
+import { useAuth } from "../../../context/AuthContext"
 
 const TABS = [
   { id: "variables", label: "Variables" },
@@ -13,7 +16,8 @@ const TABS = [
   { id: "rubricas", label: "Rúbricas" },
 ]
 
-export default function AdminParametrosPage({ onNavigate }) {
+export default function AdminParametrosPage({ onNavigate, mostrarBienvenida = false }) {
+  const { usuario } = useAuth()
   const [activeTab, setActiveTab] = useState("variables")
   const [activePeriodos, setActivePeriodos] = useState([])
 
@@ -40,6 +44,12 @@ export default function AdminParametrosPage({ onNavigate }) {
       }}
     >
       <div className="mx-auto w-full max-w-5xl">
+        {/* El admin entra a esta página al iniciar sesión */}
+        {mostrarBienvenida && (
+          <div className="mb-6">
+            <BienvenidaBanner roleConfig={ROLE_CONFIG.admin} usuario={usuario} />
+          </div>
+        )}
         <h1 className="mb-6 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
           Módulo de Administración Paramétrica
         </h1>
