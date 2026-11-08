@@ -106,6 +106,9 @@ export default function EvidenciasCargadasPanel({
   onReintentar,
   puedeEliminar = false,
   onEliminada,
+  titulo = "Evidencias cargadas",
+  subtitulo = "Avances que tu equipo ha cargado en el proyecto.",
+  mensajeVacio = "Aún no se han registrado evidencias en este proyecto.",
 }) {
   const [filtro, setFiltro] = useState("todas");
   const botonCerrarRef = useRef(null);
@@ -164,8 +167,8 @@ export default function EvidenciasCargadasPanel({
         <div className="space-y-3 border-b border-slate-100 p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h3 id="titulo-evidencias-cargadas" className="text-sm font-bold text-slate-900">Evidencias cargadas</h3>
-              <p className="text-xs text-slate-500">Avances que tu equipo ha cargado en el proyecto.</p>
+              <h3 id="titulo-evidencias-cargadas" className="text-sm font-bold text-slate-900">{titulo}</h3>
+              <p className="text-xs text-slate-500">{subtitulo}</p>
             </div>
             <button
               ref={botonCerrarRef}
@@ -219,7 +222,7 @@ export default function EvidenciasCargadasPanel({
         ) : visibles.length === 0 ? (
           <p className="py-8 text-center text-xs text-slate-400">
             {evidencias.length === 0
-              ? "Aún no se han registrado evidencias en este proyecto."
+              ? mensajeVacio
               : "No hay evidencias de este tipo."}
           </p>
         ) : (

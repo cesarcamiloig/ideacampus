@@ -73,11 +73,20 @@ class EvidenciaBaseTests(APITestCase):
             numero_hito=1, nombre="Hito 1", ponderacion="100",
         )
 
+    def actividad_de(self, usuario, iniciativa):
+        """Actividad pendiente del plan de trabajo del hito 1 asignada a ``usuario``."""
+        plan, _ = PlanTrabajo.objects.get_or_create(proyecto=iniciativa.proyecto, hito=self.hito)
+        return Actividad.objects.create(
+            plan_trabajo=plan, responsable=usuario, creado_por=usuario,
+            nombre="Entregable", fecha_fin=timezone.localdate() + timedelta(days=7))
+
     def subir(self, usuario, iniciativa, rol="estudiante"):
+        # Toda evidencia se sube como entregable de una actividad del usuario
+        actividad = self.actividad_de(usuario, iniciativa)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {generar_token(usuario, rol)}")
         archivo = SimpleUploadedFile("avance.pdf", b"%PDF-1.4 avance", content_type="application/pdf")
         return self.client.post(self.URL, {
-            "proyecto": iniciativa.proyecto.pk, "etapa": self.hito.pk, "titulo": "Avance",
+            "proyecto": iniciativa.proyecto.pk, "actividad": actividad.pk, "titulo": "Avance",
             "tipo": "documento", "archivos": [archivo],
         }, format="multipart")
 
@@ -459,6 +468,27 @@ class ActividadTests(EquipoConMiembroMixin, EvidenciaBaseTests):
         actividad.refresh_from_db()
         self.assertEqual(actividad.estado, "pendiente")
         self.assertIsNone(actividad.fecha_completada)
+
+    def test_sin_actividad_no_se_puede_subir_evidencia(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {generar_token(self.miembro, 'estudiante')}")
+        archivo = SimpleUploadedFile("avance.pdf", b"%PDF-1.4 avance", content_type="application/pdf")
+        res = self.client.post(self.URL, {
+            "proyecto": self.proyecto.pk, "etapa": self.hito.pk, "titulo": "Avance",
+            "tipo": "documento", "archivos": [archivo],
+        }, format="multipart")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("actividad", res.data)
+        self.assertFalse(Evidencia.objects.exists())
+
+    def test_actividad_de_otro_proyecto_da_400(self):
+        otro_proyecto = self.crear_otro_equipo()
+        otro_plan = PlanTrabajo.objects.create(proyecto=otro_proyecto, hito=self.hito)
+        actividad = Actividad.objects.create(
+            plan_trabajo=otro_plan, responsable=self.miembro, creado_por=self.ajeno,
+            nombre="Ajena", fecha_fin="2026-12-01")
+        res = self.subir_de_actividad(self.miembro, actividad.pk)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("actividad", res.data)
 
     def test_solo_el_responsable_sube_la_evidencia_de_la_actividad(self):
         actividad_id = self.crear_actividad(self.integrante).data["id"]

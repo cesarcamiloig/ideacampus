@@ -2,8 +2,8 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   AlertCircle,
   CalendarDays,
-  CheckCircle2,
   ClipboardList,
+  FolderOpen,
   Loader2,
   Package,
   Pencil,
@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../../context/AuthContext";
 import { obtenerMiEquipo } from "../services/equipoService";
+import { getEvidencias } from "../services/evidenciaService";
+import EvidenciasCargadasPanel from "../components/EvidenciasCargadasPanel";
 import {
   actualizarActividad,
   actualizarPlanTrabajo,
@@ -38,9 +40,9 @@ import {
 } from "../../gestion_evaluacion/components/estilos";
 
 const ESTADOS_PLAN = [
-  { id: "pendiente", label: "Pendiente", clase: "bg-slate-100 text-slate-700" },
-  { id: "en_curso", label: "En curso", clase: "bg-amber-50 text-amber-800" },
-  { id: "finalizado", label: "Finalizado", clase: "bg-emerald-50 text-emerald-800" },
+  { id: "pendiente", label: "Pendiente", clase: "bg-slate-200 text-slate-800" },
+  { id: "en_curso", label: "En curso", clase: "bg-slate-800 text-white" },
+  { id: "finalizado", label: "Finalizado", clase: "bg-ufps text-white" },
 ];
 
 const MAX_NOMBRE = 200;
@@ -48,18 +50,52 @@ const MAX_ENTREGABLE = 300;
 
 const FORMATO_FECHA = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short", year: "numeric" });
 
-function hoyISO() {
-  const hoy = new Date();
-  const mes = String(hoy.getMonth() + 1).padStart(2, "0");
-  const dia = String(hoy.getDate()).padStart(2, "0");
-  return `${hoy.getFullYear()}-${mes}-${dia}`;
-}
-
 // "2026-11-04" → "4 nov 2026" (se lee como fecha local para no correr el día por la zona horaria)
 function formatoFecha(iso) {
   if (!iso) return null;
   const [anio, mes, dia] = iso.split("-").map(Number);
   return FORMATO_FECHA.format(new Date(anio, mes - 1, dia));
+}
+
+const UNIDADES = [
+  "cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve",
+  "diez", "once", "doce", "trece", "catorce", "quince", "dieciséis", "diecisiete", "dieciocho", "diecinueve",
+  "veinte", "veintiuno", "veintidós", "veintitrés", "veinticuatro", "veinticinco", "veintiséis",
+  "veintisiete", "veintiocho", "veintinueve",
+];
+const DECENAS = { 3: "treinta", 4: "cuarenta", 5: "cincuenta", 6: "sesenta", 7: "setenta", 8: "ochenta", 9: "noventa" };
+
+// 2 → "dos", 21 → "veintiún", 31 → "treinta y un" (forma corta de "uno" ante sustantivo masculino)
+function numeroEnLetras(n) {
+  let texto;
+  if (n < 30) texto = UNIDADES[n];
+  else if (n < 100) texto = DECENAS[Math.floor(n / 10)] + (n % 10 ? ` y ${UNIDADES[n % 10]}` : "");
+  else return String(n);
+  return texto.replace(/veintiuno$/, "veintiún").replace(/uno$/, "un");
+}
+
+function cantidad(n, singular, plural) {
+  return n === 1 ? `Queda un ${singular}` : `Quedan ${numeroEnLetras(n)} ${plural}`;
+}
+
+// Tiempo que falta hasta la fecha fin: "Quedan dos días", "Queda un mes", "Quedan tres años"
+function tiempoRestante(fin) {
+  if (!fin) return null;
+  const [anio, mes, dia] = fin.split("-").map(Number);
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const limite = new Date(anio, mes - 1, dia);
+  const dias = Math.round((limite - hoy) / 86400000);
+
+  if (dias < 0) return { texto: "Plazo vencido", vencido: true };
+  if (dias === 0) return { texto: "Vence hoy", vencido: false };
+  if (dias < 31) return { texto: cantidad(dias, "día", "días"), vencido: false };
+
+  let meses = (limite.getFullYear() - hoy.getFullYear()) * 12 + (limite.getMonth() - hoy.getMonth());
+  if (limite.getDate() < hoy.getDate()) meses -= 1;
+  if (meses < 12) return { texto: cantidad(Math.max(meses, 1), "mes", "meses"), vencido: false };
+  const anios = Math.floor(meses / 12);
+  return { texto: cantidad(anios, "año", "años"), vencido: false };
 }
 
 function rangoFechas(inicio, fin) {
@@ -121,7 +157,7 @@ function Campo({ etiqueta, requerido, error, ayuda, children }) {
 function ErrorGeneral({ mensaje }) {
   if (!mensaje) return null;
   return (
-    <div role="alert" className="flex items-start gap-2 rounded-xl bg-ufps-suave p-3 text-sm text-ufps">
+    <div role="alert" className="flex items-start gap-2 rounded-xl border border-ufps bg-white p-3 text-sm text-ufps">
       <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
       <p>{mensaje}</p>
     </div>
@@ -409,195 +445,231 @@ function FormularioActividad({ plan, actividad, miembros, onGuardado, onCancelar
 // Vista del plan
 // ---------------------------------------------------------------------------
 
-function EstadoActividad({ actividad }) {
-  if (actividad.estado === "completada") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
-        <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-        Completada
-      </span>
-    );
-  }
-  if (actividad.fecha_fin && actividad.fecha_fin < hoyISO()) {
-    return (
-      <span className="inline-flex rounded-full bg-ufps-suave px-2.5 py-0.5 text-xs font-semibold text-ufps">
-        Vencida
-      </span>
-    );
-  }
+// Paleta UFPS: la actividad completada se ve en rojo; la que no, en gris
+const ESTILO_ACTIVIDAD = {
+  completada: {
+    borde: "border-ufps",
+    barra: "bg-ufps",
+    numero: "bg-ufps text-white",
+    titulo: "text-ufps",
+    distintivo: "bg-ufps text-white",
+    etiqueta: "Realizada",
+  },
+  noCompletada: {
+    borde: "border-slate-300",
+    barra: "bg-slate-400",
+    numero: "bg-slate-200 text-slate-800",
+    titulo: "text-slate-900",
+    distintivo: "bg-slate-800 text-white",
+    etiqueta: "Pendiente",
+  },
+};
+
+function DatoActividad({ etiqueta, icono: Icono, children }) {
   return (
-    <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
-      Pendiente
-    </span>
+    <div className="min-w-0 space-y-0.5">
+      <dt className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{etiqueta}</dt>
+      <dd className="flex items-start gap-1.5 text-xs text-slate-700">
+        <Icono className="mt-px h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+        <span className="min-w-0 break-words">{children}</span>
+      </dd>
+    </div>
   );
 }
 
-function FilaActividad({ actividad, esMia, esLider, onEditar, onEliminar }) {
+function FilaActividad({ actividad, numero, esLider, onEditar, onEliminar }) {
+  const completada = actividad.estado === "completada";
+  const estilo = completada ? ESTILO_ACTIVIDAD.completada : ESTILO_ACTIVIDAD.noCompletada;
+
   return (
-    <li className="flex flex-col gap-3 py-4 sm:flex-row sm:items-start">
-      <div className="min-w-0 flex-1 space-y-1.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm font-semibold text-slate-900">{actividad.nombre}</p>
-          <EstadoActividad actividad={actividad} />
-          {esMia && (
-            <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
-              Asignada a ti
-            </span>
+    <li className={`relative overflow-hidden rounded-xl border bg-white py-4 pl-5 pr-4 shadow-sm ${estilo.borde}`}>
+      <span className={`absolute inset-y-0 left-0 w-1 ${estilo.barra}`} aria-hidden="true" />
+
+      <div className="flex items-start gap-3">
+        <span
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${estilo.numero}`}
+          aria-label={`Actividad ${numero}`}
+        >
+          {numero}
+        </span>
+
+        <div className="min-w-0 flex-1 space-y-3">
+          <div className="space-y-1.5">
+            <h5 className={`text-base font-bold leading-snug ${estilo.titulo}`}>{actividad.nombre}</h5>
+            {actividad.descripcion && (
+              <div className="pt-1">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Descripción</p>
+                <p className="mt-0.5 text-sm font-normal leading-relaxed text-slate-600">{actividad.descripcion}</p>
+              </div>
+            )}
+          </div>
+
+          <dl className="grid grid-cols-1 gap-3 rounded-lg border border-slate-100 bg-superficie-alta p-3 sm:grid-cols-3">
+            <DatoActividad etiqueta="Responsable" icono={User}>
+              {actividad.responsable_nombre}
+            </DatoActividad>
+            <DatoActividad etiqueta="Fechas" icono={CalendarDays}>
+              {rangoFechas(actividad.fecha_inicio, actividad.fecha_fin)}
+            </DatoActividad>
+            <DatoActividad etiqueta="Entregable" icono={Package}>
+              {actividad.entregable || <span className="text-slate-400">Sin definir</span>}
+            </DatoActividad>
+          </dl>
+
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {/* Mismo formato que el estado del plan de trabajo */}
+          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${estilo.distintivo}`}>
+            {estilo.etiqueta}
+          </span>
+          {esLider && (
+            <div className="-my-1.5 flex gap-1">
+              <button
+                type="button"
+                onClick={onEditar}
+                className={BOTON_ICONO}
+                aria-label={`Editar la actividad ${actividad.nombre}`}
+              >
+                <Pencil className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={onEliminar}
+                className={BOTON_ICONO}
+                aria-label={`Eliminar la actividad ${actividad.nombre}`}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
           )}
         </div>
-        {actividad.descripcion && <p className="text-sm leading-relaxed text-slate-600">{actividad.descripcion}</p>}
-        <dl className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-600">
-          <div className="flex items-center gap-1.5">
-            <dt className="sr-only">Responsable</dt>
-            <User className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
-            <dd>{actividad.responsable_nombre}</dd>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <dt className="sr-only">Fechas</dt>
-            <CalendarDays className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
-            <dd>{rangoFechas(actividad.fecha_inicio, actividad.fecha_fin)}</dd>
-          </div>
-          {actividad.entregable && (
-            <div className="flex items-center gap-1.5">
-              <dt className="sr-only">Entregable</dt>
-              <Package className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
-              <dd>{actividad.entregable}</dd>
-            </div>
-          )}
-          {actividad.fecha_completada && (
-            <div className="flex items-center gap-1.5">
-              <dt className="sr-only">Completada el</dt>
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
-              <dd>Completada el {formatoFecha(actividad.fecha_completada)}</dd>
-            </div>
-          )}
-        </dl>
       </div>
-      {esLider && (
-        <div className="-my-1.5 flex shrink-0 gap-1">
-          <button
-            type="button"
-            onClick={onEditar}
-            className={BOTON_ICONO}
-            aria-label={`Editar la actividad ${actividad.nombre}`}
-          >
-            <Pencil className="h-4 w-4" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={onEliminar}
-            className={BOTON_ICONO}
-            aria-label={`Eliminar la actividad ${actividad.nombre}`}
-          >
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
-          </button>
-        </div>
-      )}
     </li>
   );
 }
 
-function SeccionHito({ hito, plan, actividades, esLider, idUsuario, onAccion }) {
+function SeccionHito({ hito, plan, actividades, totalEvidencias, esLider, onAccion }) {
   const estadoPlan = ESTADOS_PLAN.find((e) => e.id === plan?.estado) || ESTADOS_PLAN[0];
-  const completadas = actividades.filter((a) => a.estado === "completada").length;
-  const porcentaje = actividades.length > 0 ? Math.round((completadas / actividades.length) * 100) : 0;
+  // Un plan finalizado ya no tiene tiempo pendiente
+  const restante = plan && plan.estado !== "finalizado" ? tiempoRestante(plan.fecha_fin) : null;
 
   return (
     <section
       aria-labelledby={`hito-${hito.id}`}
-      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+      className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
     >
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 space-y-1">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-ufps">Hito {hito.numero_hito}</p>
-          <h3 id={`hito-${hito.id}`} className="text-lg font-semibold tracking-tight text-slate-900">
-            {hito.nombre}
-          </h3>
-          {plan && (
-            <p className="text-sm text-slate-600">
-              {plan.titulo} · {rangoFechas(plan.fecha_inicio, plan.fecha_fin)}
-            </p>
-          )}
-        </div>
-        {plan && (
-          <span className={`inline-flex shrink-0 self-start rounded-full px-3 py-1 text-xs font-semibold ${estadoPlan.clase}`}>
-            {estadoPlan.label}
-          </span>
-        )}
+      {/* 1. Hito: franja propia, solo con el número y el nombre del hito */}
+      <header className="border-b border-slate-200 bg-superficie-alta px-5 py-4 sm:px-6">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-ufps">Hito {hito.numero_hito}</p>
+        <h3 id={`hito-${hito.id}`} className="mt-1 text-lg font-semibold tracking-tight text-slate-900">
+          {hito.nombre}
+        </h3>
       </header>
 
-      {!plan ? (
-        <div className="mt-4 flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-slate-600">
-            {esLider
-              ? "Este hito aún no tiene plan de trabajo. Créalo para asignar actividades al equipo."
-              : "El líder del equipo aún no ha definido el plan de trabajo de este hito."}
-          </p>
-          {esLider && (
-            <button type="button" onClick={() => onAccion({ tipo: "plan", hito })} className={BOTON_PRIMARIO}>
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              Crear plan
-            </button>
-          )}
-        </div>
-      ) : (
-        <>
-          {plan.descripcion && <p className="mt-3 text-sm leading-relaxed text-slate-700">{plan.descripcion}</p>}
-
-          <div className="mt-4 space-y-1.5">
-            <div className="flex items-center justify-between text-xs text-slate-600">
-              <span>Avance de actividades</span>
-              <span className="font-semibold text-slate-900">
-                {completadas} de {actividades.length}
-              </span>
-            </div>
-            <div
-              className="h-2 overflow-hidden rounded-full bg-slate-100"
-              role="progressbar"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={porcentaje}
-              aria-label={`Avance del hito ${hito.numero_hito}`}
-            >
-              <div className="h-full rounded-full bg-emerald-500 transition-[width] duration-300" style={{ width: `${porcentaje}%` }} />
-            </div>
-          </div>
-
-          {actividades.length === 0 ? (
-            <p className="mt-4 text-sm text-slate-600">Todavía no hay actividades en este plan.</p>
-          ) : (
-            <ul className="mt-2 divide-y divide-slate-100">
-              {actividades.map((actividad) => (
-                <FilaActividad
-                  key={actividad.id}
-                  actividad={actividad}
-                  esMia={actividad.responsable === idUsuario}
-                  esLider={esLider}
-                  onEditar={() => onAccion({ tipo: "actividad", plan, actividad })}
-                  onEliminar={() => onAccion({ tipo: "eliminar-actividad", actividad })}
-                />
-              ))}
-            </ul>
-          )}
-
-          {esLider && (
-            <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
-              <button type="button" onClick={() => onAccion({ tipo: "actividad", plan })} className={BOTON_SECUNDARIO}>
+      <div className="p-5 sm:p-6">
+        {!plan ? (
+          <div className="flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-slate-600">
+              {esLider
+                ? "Este hito aún no tiene plan de trabajo. Créalo para asignar actividades al equipo."
+                : "El líder del equipo aún no ha definido el plan de trabajo de este hito."}
+            </p>
+            {esLider && (
+              <button type="button" onClick={() => onAccion({ tipo: "plan", hito })} className={BOTON_PRIMARIO}>
                 <Plus className="h-4 w-4" aria-hidden="true" />
-                Agregar actividad
+                Crear plan
               </button>
-              <button type="button" onClick={() => onAccion({ tipo: "plan", hito, plan })} className={BOTON_FANTASMA}>
-                <Pencil className="h-4 w-4" aria-hidden="true" />
-                Editar plan
-              </button>
-              <button type="button" onClick={() => onAccion({ tipo: "eliminar-plan", hito, plan })} className={BOTON_PELIGRO}>
-                <Trash2 className="h-4 w-4" aria-hidden="true" />
-                Eliminar plan
+            )}
+          </div>
+        ) : (
+          <>
+            {/* 2. Plan de trabajo: bloque aparte con su título, fechas, estado y descripción */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 space-y-1">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Plan de trabajo</p>
+                  <h4 className="text-base font-semibold text-slate-900">{plan.titulo}</h4>
+                </div>
+                <span className={`inline-flex shrink-0 self-start rounded-full px-3 py-1 text-xs font-semibold ${estadoPlan.clase}`}>
+                  {estadoPlan.label}
+                </span>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs">
+                <p className="flex items-center gap-1.5 text-slate-600">
+                  <CalendarDays className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                  {rangoFechas(plan.fecha_inicio, plan.fecha_fin)}
+                </p>
+                {restante && (
+                  <p className={`font-semibold ${restante.vencido ? "text-ufps" : "text-slate-800"}`}>
+                    {restante.texto}
+                  </p>
+                )}
+              </div>
+              {plan.descripcion && (
+                <p className="mt-3 border-t border-slate-200 pt-3 text-sm leading-relaxed text-slate-700">
+                  {plan.descripcion}
+                </p>
+              )}
+            </div>
+
+            {/* 3. Actividades del plan */}
+            <h4 className="mt-6 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              Actividades ({actividades.length})
+            </h4>
+
+            {actividades.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-600">Todavía no hay actividades en este plan.</p>
+            ) : (
+              <ul className="mt-3 space-y-3">
+                {actividades.map((actividad, indice) => (
+                  <FilaActividad
+                    key={actividad.id}
+                    actividad={actividad}
+                    numero={indice + 1}
+                    esLider={esLider}
+                    onEditar={() => onAccion({ tipo: "actividad", plan, actividad })}
+                    onEliminar={() => onAccion({ tipo: "eliminar-actividad", actividad })}
+                  />
+                ))}
+              </ul>
+            )}
+
+            <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+              {esLider && (
+                <>
+                  <button type="button" onClick={() => onAccion({ tipo: "actividad", plan })} className={BOTON_SECUNDARIO}>
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                    Agregar actividad
+                  </button>
+                  <button type="button" onClick={() => onAccion({ tipo: "plan", hito, plan })} className={BOTON_FANTASMA}>
+                    <Pencil className="h-4 w-4" aria-hidden="true" />
+                    Editar plan
+                  </button>
+                  <button type="button" onClick={() => onAccion({ tipo: "eliminar-plan", hito, plan })} className={BOTON_PELIGRO}>
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    Eliminar plan
+                  </button>
+                </>
+              )}
+              {/* Evidencias cargadas a este hito: las ve todo el equipo */}
+              <button
+                type="button"
+                onClick={() => onAccion({ tipo: "evidencias", hito })}
+                aria-haspopup="dialog"
+                className={`${BOTON_SECUNDARIO} sm:ml-auto`}
+              >
+                <FolderOpen className="h-4 w-4" aria-hidden="true" />
+                Evidencias del hito
+                {totalEvidencias !== null && (
+                  <span className="rounded-full bg-ufps px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                    {totalEvidencias}
+                  </span>
+                )}
               </button>
             </div>
-          )}
-        </>
-      )}
+          </>
+        )}
+      </div>
     </section>
   );
 }
@@ -621,6 +693,13 @@ export default function PlanTrabajoPage() {
   const [editor, setEditor] = useState(null); // { tipo: "plan" | "actividad", hito?, plan?, actividad? }
   const [aviso, setAviso] = useState(null);
 
+  // Evidencias del proyecto: el panel de cada hito muestra solo las de su etapa
+  const [evidencias, setEvidencias] = useState([]);
+  const [cargandoEvidencias, setCargandoEvidencias] = useState(true);
+  const [errorEvidencias, setErrorEvidencias] = useState("");
+  const [hitoEvidencias, setHitoEvidencias] = useState(null);
+  const cerrarEvidencias = useCallback(() => setHitoEvidencias(null), []);
+
   // logout cambia en cada render del AuthProvider: se guarda en una ref para no recargar los datos
   const logoutRef = useRef(logout);
   logoutRef.current = logout;
@@ -631,6 +710,19 @@ export default function PlanTrabajoPage() {
       return;
     }
     setAviso({ tipo: "error", titulo: mensaje, detalle: err?.message });
+  }, []);
+
+  const cargarEvidencias = useCallback(async () => {
+    setCargandoEvidencias(true);
+    setErrorEvidencias("");
+    try {
+      setEvidencias(await getEvidencias());
+    } catch (err) {
+      if (err?.status === 401) logoutRef.current?.();
+      else setErrorEvidencias(err.message || "No se pudieron cargar las evidencias.");
+    } finally {
+      setCargandoEvidencias(false);
+    }
   }, []);
 
   const cargar = useCallback(async () => {
@@ -647,6 +739,8 @@ export default function PlanTrabajoPage() {
       setProyecto({ id: iniciativa.id_proyecto, nombre: iniciativa.nombre, tipo: iniciativa.tipo });
       setEsLider(Boolean(equipo.es_lider));
       setMiembros(equipo.miembros || []);
+      // No bloquea la página: el panel muestra su propio estado de carga o error
+      cargarEvidencias();
 
       const [listaHitos, listaPlanes, listaActividades] = await Promise.all([
         getHitosDeTipo(iniciativa.tipo),
@@ -662,11 +756,23 @@ export default function PlanTrabajoPage() {
     } finally {
       setCargando(false);
     }
-  }, []);
+  }, [cargarEvidencias]);
 
   useEffect(() => {
     cargar();
   }, [cargar]);
+
+  function evidenciasDe(hito) {
+    return evidencias.filter((ev) => ev.etapa === hito.id && ev.proyecto === proyecto?.id);
+  }
+
+  function alEliminarEvidencia(id) {
+    setEvidencias((prev) => prev.filter((ev) => ev.id !== id));
+    // Si la actividad se queda sin evidencias, el backend la vuelve a dejar pendiente
+    getActividades({ proyecto: proyecto.id })
+      .then(setActividades)
+      .catch(() => {});
+  }
 
   function alGuardarPlan(guardado, mensaje) {
     setPlanes((prev) => {
@@ -723,6 +829,7 @@ export default function PlanTrabajoPage() {
   function manejarAccion(accion) {
     if (accion.tipo === "eliminar-plan") eliminarPlan(accion.hito, accion.plan);
     else if (accion.tipo === "eliminar-actividad") quitarActividad(accion.actividad);
+    else if (accion.tipo === "evidencias") setHitoEvidencias(accion.hito);
     else setEditor(accion);
   }
 
@@ -815,8 +922,8 @@ export default function PlanTrabajoPage() {
               hito={hito}
               plan={plan}
               actividades={actividadesDe(plan)}
+              totalEvidencias={cargandoEvidencias || errorEvidencias ? null : evidenciasDe(hito).length}
               esLider={esLider}
-              idUsuario={idUsuario}
               onAccion={manejarAccion}
             />
           );
@@ -856,6 +963,20 @@ export default function PlanTrabajoPage() {
           />
         </PanelLateral>
       )}
+
+      <EvidenciasCargadasPanel
+        open={Boolean(hitoEvidencias)}
+        onClose={cerrarEvidencias}
+        evidencias={hitoEvidencias ? evidenciasDe(hitoEvidencias) : []}
+        cargando={cargandoEvidencias}
+        error={errorEvidencias}
+        onReintentar={cargarEvidencias}
+        puedeEliminar={esLider}
+        onEliminada={alEliminarEvidencia}
+        titulo="Evidencias del hito"
+        subtitulo={hitoEvidencias ? `Hito ${hitoEvidencias.numero_hito} · ${hitoEvidencias.nombre}` : ""}
+        mensajeVacio="Aún no se han cargado evidencias en este hito."
+      />
     </div>
   );
 }

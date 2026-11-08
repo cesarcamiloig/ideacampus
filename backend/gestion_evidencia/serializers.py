@@ -11,7 +11,6 @@ from gestion_emprendimiento_2.services import (  # noqa: F401 (las vistas los im
     proyectos_del_estudiante,
     proyectos_del_tutor,
 )
-from gestion_evaluacion.models import SubRubrica
 from .models import Evidencia, DocumentoEvidencia, validar_tamano_archivo
 
 EXTENSIONES = ["pdf", "docx", "pptx", "png", "jpg", "jpeg"]
@@ -117,12 +116,10 @@ class EvidenciaSerializer(serializers.ModelSerializer):
 class EvidenciaCrearSerializer(serializers.ModelSerializer):
     proyecto = serializers.PrimaryKeyRelatedField(
         queryset=Proyecto.objects.select_related("iniciativa"))
+    # Toda evidencia es el entregable de una actividad del plan de trabajo; la etapa
+    # no se envía: es el hito del plan de trabajo de esa actividad
     actividad = serializers.PrimaryKeyRelatedField(
-        queryset=Actividad.objects.select_related("plan_trabajo__hito"),
-        required=False, allow_null=True)
-    # Con actividad, la etapa es el hito de su plan de trabajo y puede omitirse
-    etapa = serializers.PrimaryKeyRelatedField(
-        queryset=SubRubrica.objects.select_related("rubrica"), required=False)
+        queryset=Actividad.objects.select_related("plan_trabajo__hito__rubrica"))
     archivos = serializers.ListField(
         child=serializers.FileField(validators=[
             FileExtensionValidator(EXTENSIONES), validar_tamano_archivo]),
@@ -133,13 +130,13 @@ class EvidenciaCrearSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Evidencia
-        fields = ["proyecto", "actividad", "etapa", "titulo", "descripcion",
+        fields = ["proyecto", "actividad", "titulo", "descripcion",
                   "tipo", "archivos", "enlaces"]
 
     def validate(self, attrs):
         usuario = self.context["request"].user
         proyecto = attrs["proyecto"]
-        actividad = attrs.get("actividad")
+        actividad = attrs["actividad"]
         archivos = attrs.get("archivos", [])
         enlaces = attrs.get("enlaces", [])
 
@@ -150,26 +147,17 @@ class EvidenciaCrearSerializer(serializers.ModelSerializer):
                     "o un integrante del equipo de este proyecto."
                 )})
 
-        if actividad:
-            plan = actividad.plan_trabajo
-            if plan.proyecto_id != proyecto.pk:
-                raise serializers.ValidationError(
-                    {"actividad": "La actividad no pertenece a este proyecto."})
-            if actividad.responsable_id != usuario.pk:
-                raise serializers.ValidationError(
-                    {"actividad": "Solo el responsable de la actividad puede subir su evidencia."})
-            if "etapa" not in attrs:
-                attrs["etapa"] = plan.hito
-            elif attrs["etapa"].pk != plan.hito_id:
-                raise serializers.ValidationError(
-                    {"etapa": "La etapa debe ser el hito del plan de trabajo de la actividad."})
-        elif "etapa" not in attrs:
-            raise serializers.ValidationError({"etapa": "Este campo es requerido."})
-
-        etapa = attrs["etapa"]
-        if etapa.rubrica.tipo_iniciativa != proyecto.iniciativa.tipo:
+        plan = actividad.plan_trabajo
+        if plan.proyecto_id != proyecto.pk:
             raise serializers.ValidationError(
-                {"etapa": "La etapa no pertenece a la rúbrica de este tipo de proyecto."})
+                {"actividad": "La actividad no pertenece a este proyecto."})
+        if actividad.responsable_id != usuario.pk:
+            raise serializers.ValidationError(
+                {"actividad": "Solo el responsable de la actividad puede subir su evidencia."})
+        if plan.hito.rubrica.tipo_iniciativa != proyecto.iniciativa.tipo:
+            raise serializers.ValidationError(
+                {"actividad": "La etapa de la actividad no pertenece a la rúbrica de este tipo de proyecto."})
+        attrs["etapa"] = plan.hito
 
         if not archivos and not enlaces:
             raise serializers.ValidationError(
