@@ -33,7 +33,7 @@ function formatFecha(valor) {
 const ADJUNTO_CLASS =
   "flex w-full items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 text-left transition-colors hover:border-red-300 hover:bg-red-50/40 disabled:cursor-wait disabled:opacity-70";
 
-function DocumentoAdjunto({ doc }) {
+export function DocumentoAdjunto({ doc }) {
   const [descargando, setDescargando] = useState(false);
   const [error, setError] = useState("");
 

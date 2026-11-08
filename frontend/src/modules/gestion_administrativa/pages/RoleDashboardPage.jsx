@@ -18,6 +18,7 @@ import TutorProfileForm from "../../gestion_acompaniamiento/pages/TutorProfileFo
 import EstudianteIniciativasPage from "../../gestion_convocatorias/pages/EstudianteIniciativasPage";
 import EquipoPage from "../../gestion_emprendimiento_2/pages/EquipoPage";
 import EvidenciaForm from "../../gestion_emprendimiento_2/pages/EvidenciaForm";
+import AvanceProyectoPage from "../../gestion_emprendimiento_2/pages/AvanceProyectoPage";
 import BancoIniciativasView from "../../gestion_convocatorias/components/BancoIniciativasView";
 import AlertasPage from "../../gestion_convocatorias/pages/AlertasPage";
 import RubricasTab from "../../gestion_evaluacion/components/RubricasTab";
@@ -62,6 +63,13 @@ const ROLE_CONFIG = {
         details:
           "Registro de evidencias al finalizar cada etapa para la trazabilidad de la madurez tecnológica.",
         actionLabel: "Registrar evidencia",
+      },
+      avance: {
+        title: "Avance por Etapas",
+        desc: "Registra el avance de cada etapa con la evidencia publicada, sus dificultades, riesgos y recomendaciones.",
+        details:
+          "Control formal de la trayectoria del proyecto, validado por el tutor asignado.",
+        actionLabel: "Registrar avance",
       },
     },
     stats: [
@@ -116,6 +124,13 @@ const ROLE_CONFIG = {
         details:
           "Seguimiento al cumplimiento de hitos, compromisos técnicos y validación de avance.",
         actionLabel: "Ver iniciativas asignadas",
+      },
+      avance: {
+        title: "Avance de Proyectos",
+        desc: "Registra y valida el avance de los proyectos asignados con la evidencia publicada por cada equipo.",
+        details:
+          "Control formal de la trayectoria de cada proyecto a través de sus etapas.",
+        actionLabel: "Validar avance",
       },
       acompanamiento: {
         title: "Registro de Tutorías",
@@ -318,7 +333,7 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
 
   // Acceso al apartado "Proyecto" del estudiante:
   // - Equipo Emprendedor: si ya pertenece a un equipo o tiene una iniciativa aprobada con la cual crearlo.
-  // - Evidencias de Avance: solo si pertenece a un equipo.
+  // - Evidencias de Avance y Avance por Etapas: solo si pertenece a un equipo.
   const esEstudiante = normalizedRole === "estudiante";
   const [accesoProyecto, setAccesoProyecto] = useState({ cargando: esEstudiante, tieneEquipo: false, tieneAprobada: false });
 
@@ -346,7 +361,7 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
 
   const modulosOcultos = [];
   if (esEstudiante) {
-    if (!accesoProyecto.tieneEquipo) modulosOcultos.push("evidencias");
+    if (!accesoProyecto.tieneEquipo) modulosOcultos.push("evidencias", "avance");
     if (!accesoProyecto.tieneEquipo && !accesoProyecto.tieneAprobada) modulosOcultos.push("equipo");
   }
   const moduloBloqueado = modulosOcultos.includes(activeModule);
@@ -458,8 +473,10 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
             <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
               <RubricasTab key="rubricas" />
             </section>
+          ) : normalizedRole === "tutor" && activeModule === "avance" ? (
+            <AvanceProyectoPage key="avance" rol="tutor" />
           ) : normalizedRole === "estudiante" ? (
-            moduloBloqueado || (accesoProyecto.cargando && (activeModule === "equipo" || activeModule === "evidencias")) ? (
+            moduloBloqueado || (accesoProyecto.cargando && ["equipo", "evidencias", "avance"].includes(activeModule)) ? (
               <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white p-16 shadow-sm">
                 <Loader2 className="h-8 w-8 animate-spin text-red-600" />
               </div>
@@ -467,6 +484,8 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule }) {
               <EquipoPage key="equipo" onEstadoEquipoCambiado={cargarAccesoProyecto} />
             ) : activeModule === "evidencias" ? (
               <EvidenciaForm key="evidencias" />
+            ) : activeModule === "avance" ? (
+              <AvanceProyectoPage key="avance" rol="estudiante" />
             ) : (
               <EstudianteIniciativasPage
                 key={activeModule}
