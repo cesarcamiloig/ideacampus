@@ -20,6 +20,7 @@ import EstudianteIniciativasPage from "../../gestion_convocatorias/pages/Estudia
 import EquipoPage from "../../gestion_emprendimiento_2/pages/EquipoPage";
 import EvidenciaForm from "../../gestion_emprendimiento_2/pages/EvidenciaForm";
 import AvanceProyectoPage from "../../gestion_emprendimiento_2/pages/AvanceProyectoPage";
+import ProyectosTutorPage from "../../gestion_emprendimiento_2/pages/ProyectosTutorPage";
 import BancoIniciativasView from "../../gestion_convocatorias/components/BancoIniciativasView";
 import AlertasPage from "../../gestion_convocatorias/pages/AlertasPage";
 import RubricasTab from "../../gestion_evaluacion/components/RubricasTab";
@@ -387,8 +388,10 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule, mos
             <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
               <RubricasTab key="rubricas" />
             </section>
-          ) : normalizedRole === "tutor" && activeModule === "avance" ? (
+) : normalizedRole === "tutor" && activeModule === "avance" ? (
             <AvanceProyectoPage key="avance" rol="tutor" />
+          ) : normalizedRole === "tutor" && activeModule === "tutorias" ? (
+            <ProyectosTutorPage key="tutorias" />
           ) : normalizedRole === "estudiante" ? (
             moduloBloqueado || (accesoProyecto.cargando && ["equipo", "evidencias", "avance"].includes(activeModule)) ? (
               <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white p-16 shadow-sm">
