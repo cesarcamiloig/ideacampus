@@ -159,12 +159,15 @@ class EvidenciaViewSet(mixins.CreateModelMixin,
             .select_related("proyecto__iniciativa", "etapa", "usuario", "actividad")
             .prefetch_related(DOCUMENTOS_SIN_CONTENIDO)
         )
+        proyecto_param = request.query_params.get("proyecto")
+        if proyecto_param:
+            evidencias = evidencias.filter(proyecto_id=proyecto_param) if proyecto_param.isdigit() else evidencias.none()
         return Response(EvidenciaSerializer(evidencias, many=True, context={"request": request}).data)
 
     @action(
         detail=False,
         methods=["get"],
-        url_path=r"descargar-documento/(?P<doc_id>\d+)",
+        url_path=r"documentos/(?P<doc_id>\d+)/descargar",
         name="evidencia-descargar-documento",
     )
     def descargar_documento(self, request, doc_id=None):

@@ -353,7 +353,7 @@ def obtener_linea_tiempo_proyecto(id_proyecto=None, id_iniciativa=None, orden_as
         )
 
         eventos.append({
-            "id_etapa": hito.id_subrubrica if hito else plan.pk,
+            "id_etapa": hito.pk if hito else plan.pk,
             "nombre": nombre_hito,
             "fecha": fecha_hito,
             "estado": estado_hito,
