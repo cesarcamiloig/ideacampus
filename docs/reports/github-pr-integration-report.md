@@ -153,3 +153,17 @@ dist/assets/index-Cbweb2LK.js   749.46 kB │ gzip: 197.91 kB
    * Si en la base de datos MySQL/TiDB compartida existían tablas anteriores de la versión previa de HU-20 (`entregable_actividad`, `actividad_plan_trabajo`, `hito_plan_trabajo`), se puede ejecutar el script `database/limpieza_hu20.sql` antes de aplicar `python manage.py migrate` para garantizar una migración limpia y sin residuos.
 3. **Próximas Funcionalidades Pendientes:**
    * Las ramas `origin/feat/HU-17-asignacion-evaluadores` y `origin/HU-09-Backend-Evaluacion` podrán integrarse en sesiones posteriores mediante la apertura formal de sus respectivos Pull Requests hacia `develop`.
+
+---
+
+## 8. Resolución de InconsistentMigrationHistory en Render
+
+* **Problema detectado en despliegue Render:**
+  `django.db.migrations.exceptions.InconsistentMigrationHistory: Migration gestion_emprendimiento_2.0009_actividad is applied before its dependency gestion_evidencia.0004_actividad_evidencia_actividad on database 'default'.`
+* **Causa Raíz:**
+  En la base de datos remota de Render, la migración de `gestion_evidencia` ya había sido registrada previamente bajo su nombre original `0003_actividad_evidencia_actividad`. Al renombrarla localmente a `0004_...` para evitar colisión de prefijo numérico con `0003_registro_avance`, Django detectó en `check_consistent_history` que `0009_actividad` estaba aplicada pero su dependencia declarada `0004_actividad_evidencia_actividad` no figuraba en `django_migrations`.
+* **Solución Implementada:**
+  1. Se restauró el nombre original `gestion_evidencia.0003_actividad_evidencia_actividad` y su sucesora `gestion_evidencia.0004_mover_actividad_a_emprendimiento`.
+  2. Se corrigió la dependencia de `gestion_emprendimiento_2.0009_actividad` para que apunte nuevamente a `gestion_evidencia.0003_actividad_evidencia_actividad`.
+  3. Se creó la migración formal de merge `gestion_evidencia.0005_merge_avance_y_actividad` que unifica los dos grafos paralelos (`0003_registro_avance` de HU-19 y `0004_mover_actividad_a_emprendimiento` de HU-20).
+  4. Verificación completa ejecutada: 181/181 tests Django aprobados, `showmigrations` coherente sin advertencias, build de Vite exitoso.

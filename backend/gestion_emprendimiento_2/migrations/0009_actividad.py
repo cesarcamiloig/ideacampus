@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
         ('gestion_administrativa', '0005_roles_iniciales'),
         ('gestion_emprendimiento_2', '0008_remove_entregableactividad_actividad_and_more'),
         ('gestion_evaluacion', '0002_rubricas_iniciales'),
-        ('gestion_evidencia', '0004_actividad_evidencia_actividad'),
+        ('gestion_evidencia', '0003_actividad_evidencia_actividad'),
     ]
 
     operations = [

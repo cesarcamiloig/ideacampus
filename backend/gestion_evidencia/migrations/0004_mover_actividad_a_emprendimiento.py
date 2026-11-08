@@ -11,7 +11,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('gestion_emprendimiento_2', '0009_actividad'),
-        ('gestion_evidencia', '0004_actividad_evidencia_actividad'),
+        ('gestion_evidencia', '0003_actividad_evidencia_actividad'),
     ]
 
     operations = [
