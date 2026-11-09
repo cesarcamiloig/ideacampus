@@ -448,6 +448,57 @@ class AsignacionEvaluadorProyectoTests(APITestCase):
         res = self.client.patch(self.url, {"id_evaluador": self.evaluador.id_usuario}, format="json")
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_coordinador_consulta_asigna_y_comparte_evaluador_entre_proyectos(self):
+        from gestion_convocatorias.models import Iniciativa
+
+        rol_coordinador, _ = Rol.objects.get_or_create(
+            nombre_rol="coordinador", defaults={"descripcion": "Coordinador"}
+        )
+        coordinador = Usuario.objects.create(
+            nombre="Carla Coordinadora", correo="carla@ufps.edu.co", google_id="gid-carla", estado="activo"
+        )
+        UsuarioRol.objects.create(usuario=coordinador, rol=rol_coordinador, estado="activo")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {generar_token(coordinador, 'coordinador')}")
+
+        # Sin evaluador todavía
+        res = self.client.get(self.url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIsNone(res.data["id_evaluador"])
+        self.assertEqual(
+            [e["id_usuario"] for e in self.client.get("/api/proyectos/evaluadores/").data],
+            [self.evaluador.id_usuario],
+        )
+
+        # Lo asigna y la consulta devuelve sus datos
+        res = self.client.patch(self.url, {"id_evaluador": self.evaluador.id_usuario}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["evaluador_nombre"], "Eva Evaluadora")
+        res = self.client.get(self.url)
+        self.assertEqual(
+            (res.data["id_evaluador"], res.data["evaluador_correo"]),
+            (self.evaluador.id_usuario, "eva@ufps.edu.co"),
+        )
+
+        # El mismo evaluador puede quedar asignado a otro proyecto a la vez
+        otra = Iniciativa.objects.create(
+            convocatoria=self.proyecto.iniciativa.convocatoria, usuario=self.estudiante,
+            nombre="Otra iniciativa", tipo="innovacion", origen_academico="asignatura", estado="aprobada",
+        )
+        otro = Proyecto.objects.get(iniciativa=otra)
+        res = self.client.patch(
+            f"/api/proyectos/{otro.id_proyecto}/evaluador/", {"id_evaluador": self.evaluador.id_usuario}, format="json"
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(Proyecto.objects.filter(evaluador=self.evaluador).count(), 2)
+
+    def test_estudiante_no_consulta_evaluador_y_proyecto_inexistente_da_404(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_estudiante}")
+        self.assertEqual(self.client.get(self.url).status_code, status.HTTP_403_FORBIDDEN)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_direccion}")
+        self.assertEqual(
+            self.client.get("/api/proyectos/999999/evaluador/").status_code, status.HTTP_404_NOT_FOUND
+        )
+
     def test_modelo_valida_rol_evaluador(self):
         """La validación del modelo (usada por el admin) solo acepta evaluadores activos."""
         from django.core.exceptions import ValidationError

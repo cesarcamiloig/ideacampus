@@ -2,15 +2,6 @@ from django.db import models
 from gestion_administrativa.models import Usuario, PeriodoAcademico
 
 
-def usuarios_con_rol_activo(nombre_rol):
-    """Filtro de usuarios activos que tienen el rol indicado activo."""
-    return models.Q(
-        estado="activo",
-        usuariorol__rol__nombre_rol=nombre_rol,
-        usuariorol__estado="activo",
-    )
-
-
 class Convocatoria(models.Model):
     ESTADOS = (
         ('borrador', 'Borrador'),
@@ -89,7 +80,6 @@ class NotificacionConvocatoria(models.Model):
     def __str__(self):
         return f"{self.titulo} - Para: {self.usuario.correo} ({'Leída' if self.leida else 'No leída'})"
 
-
 class Iniciativa(models.Model):
     TIPO_CHOICES = (
         ('emprendimiento', 'Emprendimiento'),
@@ -136,33 +126,6 @@ class Iniciativa(models.Model):
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente')
     fecha_postulacion = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True, null=True, blank=True)
-
-    # HU-17: Asignación de Evaluadores a Iniciativas por parte del Coordinador
-    evaluador = models.ForeignKey(
-        Usuario,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        db_column='id_evaluador',
-        related_name='iniciativas_evaluadas',
-        limit_choices_to=usuarios_con_rol_activo('evaluador'),
-        help_text='Evaluador institucional asignado para calificar la iniciativa (HU-17).'
-    )
-    coordinador_asignador = models.ForeignKey(
-        Usuario,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        db_column='id_coordinador_asignador',
-        related_name='iniciativas_coordinadas_asignadas',
-        limit_choices_to=usuarios_con_rol_activo('coordinador'),
-        help_text='Coordinador que realizó la asignación del evaluador (HU-17).'
-    )
-    fecha_asignacion_evaluador = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text='Fecha y hora en la que se efectuó la asignación del evaluador.'
-    )
 
     class Meta:
         db_table = 'iniciativa'
