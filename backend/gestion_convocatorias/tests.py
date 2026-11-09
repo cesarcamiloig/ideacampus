@@ -304,6 +304,49 @@ class GestionConvocatoriasTests(APITestCase):
         res = self.client.post("/api/iniciativas/", payload, format="json")
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_mias_solo_devuelve_las_iniciativas_propias_aunque_tenga_roles_de_gestion(self):
+        """'Mis Iniciativas' no muestra las de otros aunque el usuario también sea admin."""
+        now = timezone.now()
+        conv = Convocatoria.objects.create(
+            nombre="Convocatoria Abierta",
+            fecha_apertura=now - timedelta(days=2),
+            fecha_cierre=now + timedelta(days=10),
+            estado="abierta",
+        )
+        todos_los_roles = Usuario.objects.create(
+            nombre="Usuario con todos los roles", correo="todos@ufps.edu.co",
+            google_id="todos-1", estado="activo",
+        )
+        for rol in (self.rol_estudiante, self.rol_admin, self.rol_coordinador, self.rol_direccion):
+            UsuarioRol.objects.create(usuario=todos_los_roles, rol=rol, estado="activo")
+        ajena = Iniciativa.objects.create(
+            convocatoria=conv, usuario=self.estudiante, nombre="De otro estudiante",
+            tipo="innovacion", origen_academico="asignatura",
+        )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {generar_token(todos_los_roles, 'estudiante')}"
+        )
+
+        # Sin postular todavía: la lista sale vacía, aunque el listado general le muestre la ajena
+        res = self.client.get("/api/iniciativas/mias/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data, [])
+        res = self.client.get("/api/iniciativas/")
+        self.assertIn(ajena.id_iniciativa, [i["id_iniciativa"] for i in res.data])
+
+        propia = Iniciativa.objects.create(
+            convocatoria=conv, usuario=todos_los_roles, nombre="La mía",
+            tipo="emprendimiento", origen_academico="asignatura",
+        )
+        res = self.client.get("/api/iniciativas/mias/")
+        self.assertEqual([i["id_iniciativa"] for i in res.data], [propia.id_iniciativa])
+
+        self.client.credentials()
+        self.assertIn(
+            self.client.get("/api/iniciativas/mias/").status_code,
+            (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN),
+        )
+
     def test_direccion_aprueba_iniciativa_y_notifica_estudiante(self):
         """La Dirección del Programa puede evaluar y aprobar una iniciativa (HU-03)."""
         from .models import Iniciativa

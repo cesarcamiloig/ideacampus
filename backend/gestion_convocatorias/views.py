@@ -390,14 +390,27 @@ class IniciativaViewSet(viewsets.ModelViewSet):
             rol_activo in roles_gestores
         )
 
+    @staticmethod
+    def _con_relaciones(queryset):
+        # 'proyecto' y sus mentores se precargan para el resumen del serializer (sin N+1)
+        return queryset.select_related('convocatoria', 'usuario', 'proyecto').prefetch_related(
+            'documentos', 'proyecto__asignaciones_mentor'
+        ).order_by('-fecha_postulacion')
+
     def get_queryset(self):
         usuario = self.request.user
-        # 'proyecto' y sus mentores se precargan para el resumen del serializer (sin N+1)
-        relaciones = ('convocatoria', 'usuario', 'proyecto')
-        precargas = ('documentos', 'proyecto__asignaciones_mentor')
         if self._es_gestor(usuario):
-            return Iniciativa.objects.all().select_related(*relaciones).prefetch_related(*precargas).order_by('-fecha_postulacion')
-        return Iniciativa.objects.filter(usuario=usuario).select_related(*relaciones).prefetch_related(*precargas).order_by('-fecha_postulacion')
+            return self._con_relaciones(Iniciativa.objects.all())
+        return self._con_relaciones(Iniciativa.objects.filter(usuario=usuario))
+
+    @action(detail=False, methods=['get'], url_path='mias')
+    def mias(self, request):
+        """
+        Iniciativas postuladas por el usuario de la sesión, sin importar sus otros roles:
+        un estudiante que también es admin solo ve aquí las suyas (interfaz "Mis Iniciativas").
+        """
+        iniciativas = self._con_relaciones(Iniciativa.objects.filter(usuario=request.user))
+        return Response(self.get_serializer(iniciativas, many=True).data, status=status.HTTP_200_OK)
 
     def perform_create(self, serializer):
         usuario = self.request.user
