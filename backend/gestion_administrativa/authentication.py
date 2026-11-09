@@ -60,7 +60,13 @@ class JWTAuthentication(BaseAuthentication):
         if not roles_vigentes:
             raise AuthenticationFailed("El usuario no posee roles activos asignados")
 
-        rol_activo = rol_token if (rol_token in roles_vigentes) else roles_vigentes[0]
+        # El rol elegido en el selector de la interfaz llega en X-Rol-Activo: el token conserva
+        # el rol del inicio de sesión. Solo se acepta si el usuario realmente tiene ese rol.
+        rol_solicitado = (request.headers.get("X-Rol-Activo") or "").strip().lower()
+        if rol_solicitado in roles_vigentes:
+            rol_activo = rol_solicitado
+        else:
+            rol_activo = rol_token if (rol_token in roles_vigentes) else roles_vigentes[0]
 
         usuario.rol_activo = rol_activo
         usuario.roles_activos = roles_vigentes

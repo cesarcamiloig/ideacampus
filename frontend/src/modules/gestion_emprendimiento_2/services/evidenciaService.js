@@ -33,3 +33,10 @@ export async function getEvidencias() {
   const data = await apiClient.get("/evidencias/mi-proyecto/");
   return Array.isArray(data) ? data : data?.results || [];
 }
+
+// Todas las evidencias de un proyecto. Para los roles institucionales (evaluador, coordinación…);
+// al estudiante el backend le devuelve solo las suyas.
+export async function getEvidenciasDeProyecto(idProyecto) {
+  const data = await apiClient.get(`/evidencias/?proyecto=${encodeURIComponent(idProyecto)}`);
+  return Array.isArray(data) ? data : data?.results || [];
+}

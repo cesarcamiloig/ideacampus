@@ -25,6 +25,8 @@ import PlanTrabajoPage from "../../gestion_emprendimiento_2/pages/PlanTrabajoPag
 import BancoIniciativasView from "../../gestion_convocatorias/components/BancoIniciativasView";
 import AlertasPage from "../../gestion_convocatorias/pages/AlertasPage";
 import RubricasTab from "../../gestion_evaluacion/components/RubricasTab";
+import EvaluacionHitosPage from "../../gestion_evaluacion/pages/EvaluacionHitosPage";
+import HistorialEvaluacionesPage from "../../gestion_evaluacion/pages/HistorialEvaluacionesPage";
 
 export const ROLE_CONFIG = {
   estudiante: {
@@ -392,6 +394,11 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule, mos
               }}
               activeRole={normalizedRole}
             />
+          ) : normalizedRole === "evaluador" && activeModule === "evaluaciones" ? (
+            <EvaluacionHitosPage key="evaluaciones" />
+          ) : normalizedRole === "evaluador" && activeModule === "rubricas" ? (
+            /* En el menú del evaluador, "rubricas" es su Historial de Calificaciones */
+            <HistorialEvaluacionesPage key="historial-evaluaciones" />
           ) : activeModule === "rubricas" ? (
             <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
               <RubricasTab key="rubricas" />
