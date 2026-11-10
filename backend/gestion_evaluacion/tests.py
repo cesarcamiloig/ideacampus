@@ -343,3 +343,54 @@ class HitosListaTests(APITestCase):
     def test_rol_sin_permiso_de_lectura_devuelve_403(self):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.tokens['secretaria']}")
         self.assertEqual(self.client.get(self.URL).status_code, status.HTTP_403_FORBIDDEN)
+
+
+class RegistroMadurezModelTests(APITestCase):
+    def setUp(self):
+        rol_evaluador, _ = Rol.objects.get_or_create(nombre_rol="evaluador")
+        rol_estudiante, _ = Rol.objects.get_or_create(nombre_rol="estudiante")
+
+        self.evaluador = Usuario.objects.create(
+            nombre="Evaluador Test", correo="evaluador.madurez@ufps.edu.co",
+            google_id="gid-eval-madurez", estado="activo"
+        )
+        UsuarioRol.objects.create(usuario=self.evaluador, rol=rol_evaluador, estado="activo")
+
+        self.estudiante = Usuario.objects.create(
+            nombre="Estudiante Test", correo="estudiante.madurez@ufps.edu.co",
+            google_id="gid-est-madurez", estado="activo"
+        )
+        UsuarioRol.objects.create(usuario=self.estudiante, rol=rol_estudiante, estado="activo")
+
+        ahora = timezone.now()
+        from gestion_convocatorias.models import Convocatoria, Iniciativa
+        from gestion_emprendimiento_2.models import Proyecto
+
+        convocatoria = Convocatoria.objects.create(
+            nombre="Convocatoria 2026", fecha_apertura=ahora - timedelta(days=1),
+            fecha_cierre=ahora + timedelta(days=10), estado="abierta"
+        )
+        self.iniciativa = Iniciativa.objects.create(
+            convocatoria=convocatoria, usuario=self.estudiante,
+            nombre="Iniciativa Madurez", tipo="emprendimiento",
+            origen_academico="asignatura", estado="aprobada"
+        )
+        self.proyecto = Proyecto.objects.get(iniciativa=self.iniciativa)
+        self.proyecto.evaluador = self.evaluador
+        self.proyecto.save()
+
+    def test_modelo_registro_madurez_creacion_e_historial(self):
+        from gestion_evaluacion.models import NivelMadurez, RegistroMadurez
+
+        # Nivel inicial por defecto debe ser M0
+        self.assertEqual(self.proyecto.nivel_madurez_actual, "M0")
+
+        reg = RegistroMadurez.objects.create(
+            proyecto=self.proyecto,
+            nivel=NivelMadurez.M1,
+            evaluador=self.evaluador,
+            criterio_cumplido="Formulación tecnológica validada",
+        )
+        self.assertEqual(reg.nivel, "M1")
+        self.assertEqual(self.proyecto.nivel_madurez_actual, "M1")
+        self.assertIn("M1", str(reg))
