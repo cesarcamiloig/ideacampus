@@ -394,3 +394,150 @@ class RegistroMadurezModelTests(APITestCase):
         self.assertEqual(reg.nivel, "M1")
         self.assertEqual(self.proyecto.nivel_madurez_actual, "M1")
         self.assertIn("M1", str(reg))
+
+
+class RegistroMadurezSerializerTests(APITestCase):
+    def setUp(self):
+        rol_evaluador, _ = Rol.objects.get_or_create(nombre_rol="evaluador")
+        rol_estudiante, _ = Rol.objects.get_or_create(nombre_rol="estudiante")
+        rol_tutor, _ = Rol.objects.get_or_create(nombre_rol="tutor")
+
+        self.evaluador = Usuario.objects.create(
+            nombre="Evaluador Asignado", correo="eval.asignado@ufps.edu.co",
+            google_id="gid-eval-asig", estado="activo"
+        )
+        UsuarioRol.objects.create(usuario=self.evaluador, rol=rol_evaluador, estado="activo")
+
+        self.titular = Usuario.objects.create(
+            nombre="Titular Proyecto", correo="titular.mad@ufps.edu.co",
+            google_id="gid-tit-mad", estado="activo"
+        )
+        UsuarioRol.objects.create(usuario=self.titular, rol=rol_estudiante, estado="activo")
+
+        self.otro_titular = Usuario.objects.create(
+            nombre="Otro Titular", correo="otro.tit@ufps.edu.co",
+            google_id="gid-otro-tit", estado="activo"
+        )
+        UsuarioRol.objects.create(usuario=self.otro_titular, rol=rol_estudiante, estado="activo")
+
+        self.tutor_user = Usuario.objects.create(
+            nombre="Tutor Asignado", correo="tutor.mad@ufps.edu.co",
+            google_id="gid-tut-mad", estado="activo"
+        )
+        UsuarioRol.objects.create(usuario=self.tutor_user, rol=rol_tutor, estado="activo")
+        from gestion_acompaniamiento.models import Tutor
+        self.perfil_tutor = Tutor.objects.create(usuario=self.tutor_user, area_conocimiento="Software")
+
+        ahora = timezone.now()
+        from gestion_convocatorias.models import Convocatoria, Iniciativa
+        from gestion_emprendimiento_2.models import Proyecto
+        from gestion_evaluacion.models import Rubrica, SubRubrica
+        from gestion_evidencia.models import Evidencia, RegistroAvance, RetroalimentacionAvance
+
+        convocatoria = Convocatoria.objects.create(
+            nombre="Convocatoria 2026-1", fecha_apertura=ahora - timedelta(days=1),
+            fecha_cierre=ahora + timedelta(days=10), estado="abierta"
+        )
+        self.iniciativa = Iniciativa.objects.create(
+            convocatoria=convocatoria, usuario=self.titular,
+            nombre="Iniciativa Principal", tipo="emprendimiento",
+            origen_academico="asignatura", estado="aprobada"
+        )
+        self.iniciativa_otra = Iniciativa.objects.create(
+            convocatoria=convocatoria, usuario=self.otro_titular,
+            nombre="Otra Iniciativa", tipo="emprendimiento",
+            origen_academico="asignatura", estado="aprobada"
+        )
+        self.proyecto = Proyecto.objects.get(iniciativa=self.iniciativa)
+        self.proyecto.evaluador = self.evaluador
+        self.proyecto.tutor = self.perfil_tutor
+        self.proyecto.save()
+
+        self.proyecto_otro = Proyecto.objects.get(iniciativa=self.iniciativa_otra)
+
+        self.rubrica = Rubrica.objects.get(tipo_iniciativa="emprendimiento")
+        self.etapa, _ = SubRubrica.objects.get_or_create(rubrica=self.rubrica, numero_hito=1, defaults={"nombre": "Hito 1", "ponderacion": "100"})
+
+        # Evidencia 1: validada por tutor
+        self.evidencia_validada = Evidencia.objects.create(
+            proyecto=self.proyecto, usuario=self.titular,
+            etapa=self.etapa, titulo="Evidencia 1", tipo="documento"
+        )
+        avance = RegistroAvance.objects.create(
+            proyecto=self.proyecto, etapa=self.etapa,
+            registrado_por=self.titular, descripcion_avance="Avance hito 1"
+        )
+        avance.evidencias.add(self.evidencia_validada)
+        RetroalimentacionAvance.objects.create(
+            registro_avance=avance, tutor=self.perfil_tutor,
+            comentario="Aprobado excelente", aprobado=True
+        )
+
+        # Evidencia 2: sin validar (sin retroalimentación aprobada)
+        self.evidencia_sin_validar = Evidencia.objects.create(
+            proyecto=self.proyecto, usuario=self.titular,
+            etapa=self.etapa, titulo="Evidencia 2", tipo="documento"
+        )
+
+        # Evidencia 3: de otro proyecto
+        self.evidencia_ajena = Evidencia.objects.create(
+            proyecto=self.proyecto_otro, usuario=self.otro_titular,
+            etapa=self.etapa, titulo="Evidencia Ajena", tipo="documento"
+        )
+
+    def test_serializador_crear_valida_evidencia_de_otro_proyecto(self):
+        from rest_framework import serializers
+        from gestion_evaluacion.serializers import RegistroMadurezCrearSerializer
+
+        serializer = RegistroMadurezCrearSerializer(data={
+            "nivel": "M1",
+            "criterio_cumplido": "Validación inicial",
+            "evidencias_ids": [self.evidencia_ajena.id],
+        }, context={"proyecto": self.proyecto, "evaluador": self.evaluador})
+
+        with self.assertRaises(serializers.ValidationError) as ctx:
+            serializer.is_valid(raise_exception=True)
+        self.assertIn("evidencias_ids", ctx.exception.detail)
+
+    def test_serializador_crear_valida_evidencia_no_aprobada_por_tutor(self):
+        from rest_framework import serializers
+        from gestion_evaluacion.serializers import RegistroMadurezCrearSerializer
+
+        serializer = RegistroMadurezCrearSerializer(data={
+            "nivel": "M1",
+            "criterio_cumplido": "Validación inicial",
+            "evidencias_ids": [self.evidencia_sin_validar.id],
+        }, context={"proyecto": self.proyecto, "evaluador": self.evaluador})
+
+        with self.assertRaises(serializers.ValidationError) as ctx:
+            serializer.is_valid(raise_exception=True)
+        self.assertIn("evidencias_ids", ctx.exception.detail)
+
+    def test_serializador_crear_exitoso_y_sincroniza_etapa_actual(self):
+        from gestion_evaluacion.models import RegistroMadurez
+        from gestion_evaluacion.serializers import RegistroMadurezCrearSerializer, RegistroMadurezSerializer
+
+        serializer = RegistroMadurezCrearSerializer(data={
+            "nivel": "M2",
+            "criterio_cumplido": "Concepto validado por evidencias aprobadas",
+            "evidencias_ids": [self.evidencia_validada.id],
+        }, context={"proyecto": self.proyecto, "evaluador": self.evaluador})
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        registro = serializer.save()
+
+        self.assertEqual(registro.nivel, "M2")
+        self.assertEqual(registro.evidencias.count(), 1)
+        self.proyecto.refresh_from_db()
+        self.assertEqual(self.proyecto.nivel_madurez_actual, "M2")
+        self.iniciativa.refresh_from_db()
+        self.assertEqual(self.iniciativa.etapa_actual, "Nivel M2")
+
+        # Serializador de lectura
+        data = RegistroMadurezSerializer(registro).data
+        self.assertEqual(data["id"], registro.id)
+        self.assertEqual(data["nivel"], "M2")
+        self.assertIn("M2: Concepto Validado", data["nivel_display"])
+        self.assertEqual(data["evaluador"]["id"], self.evaluador.pk)
+        self.assertEqual(len(data["evidencias"]), 1)
+        self.assertEqual(data["evidencias"][0]["id"], self.evidencia_validada.id)
