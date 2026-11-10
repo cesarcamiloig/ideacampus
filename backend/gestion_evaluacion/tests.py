@@ -541,3 +541,114 @@ class RegistroMadurezSerializerTests(APITestCase):
         self.assertEqual(data["evaluador"]["id"], self.evaluador.pk)
         self.assertEqual(len(data["evidencias"]), 1)
         self.assertEqual(data["evidencias"][0]["id"], self.evidencia_validada.id)
+
+
+class ProyectoMadurezViewTests(APITestCase):
+    def setUp(self):
+        rol_evaluador, _ = Rol.objects.get_or_create(nombre_rol="evaluador")
+        rol_estudiante, _ = Rol.objects.get_or_create(nombre_rol="estudiante")
+        rol_coordinador, _ = Rol.objects.get_or_create(nombre_rol="coordinador")
+
+        self.evaluador_asignado = Usuario.objects.create(
+            nombre="Evaluador Asignado", correo="eval.asig@ufps.edu.co",
+            google_id="gid-ev-asig-view", estado="activo"
+        )
+        UsuarioRol.objects.create(usuario=self.evaluador_asignado, rol=rol_evaluador, estado="activo")
+
+        self.evaluador_ajeno = Usuario.objects.create(
+            nombre="Evaluador Ajeno", correo="eval.ajeno@ufps.edu.co",
+            google_id="gid-ev-ajeno-view", estado="activo"
+        )
+        UsuarioRol.objects.create(usuario=self.evaluador_ajeno, rol=rol_evaluador, estado="activo")
+
+        self.coordinador = Usuario.objects.create(
+            nombre="Coordinador Académico", correo="coord@ufps.edu.co",
+            google_id="gid-coord-view", estado="activo"
+        )
+        UsuarioRol.objects.create(usuario=self.coordinador, rol=rol_coordinador, estado="activo")
+
+        self.estudiante = Usuario.objects.create(
+            nombre="Estudiante Titular", correo="est.titular@ufps.edu.co",
+            google_id="gid-est-view", estado="activo"
+        )
+        UsuarioRol.objects.create(usuario=self.estudiante, rol=rol_estudiante, estado="activo")
+
+        ahora = timezone.now()
+        from gestion_convocatorias.models import Convocatoria, Iniciativa
+        from gestion_emprendimiento_2.models import Proyecto
+
+        convocatoria = Convocatoria.objects.create(
+            nombre="Convocatoria 2026", fecha_apertura=ahora - timedelta(days=1),
+            fecha_cierre=ahora + timedelta(days=10), estado="abierta"
+        )
+        self.iniciativa = Iniciativa.objects.create(
+            convocatoria=convocatoria, usuario=self.estudiante,
+            nombre="Iniciativa Vista Madurez", tipo="emprendimiento",
+            origen_academico="asignatura", estado="aprobada"
+        )
+        self.proyecto = Proyecto.objects.get(iniciativa=self.iniciativa)
+        self.proyecto.evaluador = self.evaluador_asignado
+        self.proyecto.save()
+
+        self.url = f"/api/proyectos/{self.proyecto.pk}/madurez/"
+
+    def auth(self, usuario, rol):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {generar_token(usuario, rol)}")
+
+    def test_get_madurez_proyecto_autenticado_retorna_200_con_historial_y_niveles(self):
+        self.auth(self.estudiante, "estudiante")
+        res = self.client.get(self.url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["proyecto_id"], self.proyecto.pk)
+        self.assertEqual(res.data["nivel_actual"], "M0")
+        self.assertIn("niveles_disponibles", res.data)
+        self.assertEqual(len(res.data["niveles_disponibles"]), 10)
+        self.assertEqual(res.data["historial"], [])
+
+    def test_post_madurez_por_estudiante_retorna_403(self):
+        self.auth(self.estudiante, "estudiante")
+        res = self.client.post(self.url, {
+            "nivel": "M1",
+            "criterio_cumplido": "Intento de auto-evaluación",
+        }, format="json")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_post_madurez_por_evaluador_no_asignado_retorna_403(self):
+        self.auth(self.evaluador_ajeno, "evaluador")
+        res = self.client.post(self.url, {
+            "nivel": "M1",
+            "criterio_cumplido": "Evaluación sin asignación",
+        }, format="json")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("asignado", res.data.get("error", "").lower())
+
+    def test_post_madurez_por_evaluador_asignado_exitoso_201(self):
+        self.auth(self.evaluador_asignado, "evaluador")
+        res = self.client.post(self.url, {
+            "nivel": "M1",
+            "criterio_cumplido": "Principios básicos y solución definidos formalmente",
+        }, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data["nivel"], "M1")
+        self.assertEqual(res.data["evaluador"]["id"], self.evaluador_asignado.pk)
+
+        self.proyecto.refresh_from_db()
+        self.assertEqual(self.proyecto.nivel_madurez_actual, "M1")
+
+    def test_post_madurez_por_coordinador_exitoso_201(self):
+        self.auth(self.coordinador, "coordinador")
+        res = self.client.post(self.url, {
+            "nivel": "M1",
+            "criterio_cumplido": "Certificado por coordinación de programa",
+        }, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+    def test_put_y_patch_retornan_400_bloqueando_edicion_manual_directa(self):
+        self.auth(self.evaluador_asignado, "evaluador")
+        res_put = self.client.put(self.url, {"nivel": "M5"}, format="json")
+        self.assertEqual(res_put.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("no se puede editar directamente", res_put.data.get("error", ""))
+
+        res_patch = self.client.patch(self.url, {"nivel": "M5"}, format="json")
+        self.assertEqual(res_patch.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("no se puede editar directamente", res_patch.data.get("error", ""))
