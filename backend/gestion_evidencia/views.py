@@ -344,6 +344,41 @@ class RegistroAvanceViewSet(mixins.CreateModelMixin,
             tutor=perfil_tutor,
             **serializer.validated_data,
         )
+
+        # HU-19 / HU-12: Notificar con alerta automática al estudiante cuando se solicitan ajustes
+        if not retroalimentacion.aprobado:
+            from gestion_convocatorias.models import AlertaRol
+            iniciativa = registro.proyecto.iniciativa
+            destinatarios = set()
+            if iniciativa.usuario:
+                destinatarios.add(iniciativa.usuario)
+            equipo = getattr(iniciativa, "equipo", None)
+            if equipo:
+                if equipo.estudiante_lider and equipo.estudiante_lider.usuario:
+                    destinatarios.add(equipo.estudiante_lider.usuario)
+                for miembro in equipo.miembros.select_related("usuario").all():
+                    if miembro.usuario:
+                        destinatarios.add(miembro.usuario)
+
+            etapa_nombre = registro.etapa.nombre if registro.etapa else "la etapa"
+            comentario_texto = serializer.validated_data.get("comentario", "").strip()
+            titulo_alerta = f"Ajustes requeridos en avance de {etapa_nombre}"
+            mensaje_alerta = (
+                f"El tutor {perfil_tutor.usuario.nombre} ha solicitado ajustes en el avance: {comentario_texto}"
+            )
+
+            for dest in destinatarios:
+                AlertaRol.objects.create(
+                    usuario=dest,
+                    convocatoria=iniciativa.convocatoria,
+                    titulo=titulo_alerta,
+                    mensaje=mensaje_alerta,
+                    rol_destinatario="estudiante",
+                    tipo="entrega_documentacion",
+                    prioridad="alta",
+                    modulo_destino="avance",
+                )
+
         salida = RetroalimentacionAvanceSerializer(retroalimentacion, context={"request": request})
         return Response(salida.data, status=status.HTTP_201_CREATED)
 
