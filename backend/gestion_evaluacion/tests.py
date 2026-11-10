@@ -513,6 +513,28 @@ class RegistroMadurezSerializerTests(APITestCase):
             serializer.is_valid(raise_exception=True)
         self.assertIn("evidencias_ids", ctx.exception.detail)
 
+    def test_serializador_crear_valida_evaluacion_de_otro_proyecto(self):
+        from rest_framework import serializers
+        from gestion_evaluacion.serializers import RegistroMadurezCrearSerializer
+        from gestion_evaluacion.models import Evaluacion
+
+        evaluacion_ajena = Evaluacion.objects.create(
+            proyecto=self.proyecto_otro,
+            subrubrica=self.etapa,
+            evaluador=self.evaluador,
+            nota_final=Decimal("4.5"),
+        )
+
+        serializer = RegistroMadurezCrearSerializer(data={
+            "nivel": "M3",
+            "criterio_cumplido": "Evaluación vinculada ajena",
+            "evaluacion": evaluacion_ajena.id,
+        }, context={"proyecto": self.proyecto, "evaluador": self.evaluador})
+
+        with self.assertRaises(serializers.ValidationError) as ctx:
+            serializer.is_valid(raise_exception=True)
+        self.assertIn("evaluacion", ctx.exception.detail)
+
     def test_serializador_crear_exitoso_y_sincroniza_etapa_actual(self):
         from gestion_evaluacion.models import RegistroMadurez
         from gestion_evaluacion.serializers import RegistroMadurezCrearSerializer, RegistroMadurezSerializer

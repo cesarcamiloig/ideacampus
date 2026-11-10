@@ -329,6 +329,13 @@ class RegistroMadurezCrearSerializer(serializers.ModelSerializer):
             )
         return value
 
+    def validate_evaluacion(self, value):
+        if value:
+            proyecto = self.context.get("proyecto")
+            if proyecto and value.proyecto_id != proyecto.pk:
+                raise serializers.ValidationError("La evaluación formal no corresponde a este proyecto.")
+        return value
+
     def validate_evidencias_ids(self, ids):
         if not ids:
             return ids
