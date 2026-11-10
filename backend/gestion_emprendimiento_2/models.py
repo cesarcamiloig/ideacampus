@@ -127,6 +127,19 @@ class Proyecto(models.Model):
         """Equipo emprendedor de la iniciativa (se registra después de aprobarla, HU-04)."""
         return getattr(self.iniciativa, 'equipo', None)
 
+    @property
+    def nivel_madurez_actual(self):
+        """
+        Nivel de madurez tecnológica actual del proyecto (M0 a M9).
+        Por defecto inicia en M0 si no existen registros evaluados.
+        """
+        ultimo_registro = self.registros_madurez.first()
+        return ultimo_registro.nivel if ultimo_registro else "M0"
+
+    @property
+    def registro_madurez_vigente(self):
+        return self.registros_madurez.first()
+
 
 class ProyectoMentor(models.Model):
     proyecto = models.ForeignKey(

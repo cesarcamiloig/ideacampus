@@ -652,6 +652,19 @@ class RetroalimentacionAvanceTests(RegistroAvanceBaseTests):
     def test_registro_inexistente_da_404(self):
         res = self.retroalimentar(self.tutor, registro_id=999999)
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_retroalimentacion_con_solicitud_de_ajustes_genera_alerta_al_estudiante(self):
+        from gestion_convocatorias.models import AlertaRol
+        AlertaRol.objects.all().delete()
+
+        res = self.retroalimentar(self.tutor, aprobado=False, comentario="Faltan pruebas de laboratorio.")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+        alerta = AlertaRol.objects.filter(usuario=self.titular).first()
+        self.assertIsNotNone(alerta, "No se generó AlertaRol para el estudiante al solicitar ajustes")
+        self.assertEqual(alerta.prioridad, "alta")
+        self.assertIn("ajustes", alerta.titulo.lower())
+        self.assertIn("Faltan pruebas", alerta.mensaje)
 class EditarEvidenciaTests(EquipoConMiembroMixin, EvidenciaBaseTests):
     def setUp(self):
         super().setUp()

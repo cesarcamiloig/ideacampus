@@ -251,10 +251,15 @@ else:
             'OPTIONS': db_options,
         }
     }
-if 'test' in sys.argv or (any(cmd in sys.argv for cmd in ['makemigrations', 'check', 'showmigrations']) and (not db_host or 'ingresa_aqui' in db_host)):
+if 'test' in sys.argv:
     DATABASES['default'] = {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': ':memory:',
+    }
+elif not db_host or 'ingresa_aqui' in db_host or 'placeholder' in db_host:
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 
 

@@ -417,6 +417,58 @@ def obtener_linea_tiempo_proyecto(id_proyecto=None, id_iniciativa=None, orden_as
                 "orden": 2,
             })
 
+    # 4. Retroalimentaciones y validaciones de avance por etapas (HU-19)
+    if proyecto:
+        from gestion_evidencia.models import RetroalimentacionAvance
+        retroalimentaciones = (
+            RetroalimentacionAvance.objects.filter(registro_avance__proyecto=proyecto)
+            .select_related("registro_avance__etapa", "tutor__usuario")
+        )
+        for retro in retroalimentaciones:
+            etapa_nombre = (
+                retro.registro_avance.etapa.nombre
+                if retro.registro_avance and retro.registro_avance.etapa
+                else "Etapa"
+            )
+            estado_retro = "aprobado" if retro.aprobado else "requiere_ajustes"
+            eventos.append({
+                "id_etapa": retro.registro_avance.etapa_id if retro.registro_avance else None,
+                "nombre": f"Validación de Etapa: {etapa_nombre}",
+                "fecha": retro.fecha,
+                "estado": estado_retro,
+                "responsable": (
+                    retro.tutor.usuario.nombre
+                    if retro.tutor and retro.tutor.usuario
+                    else "Tutor"
+                ),
+                "observaciones": retro.comentario or ("Avance validado." if retro.aprobado else "Ajustes requeridos."),
+                "tipo_evento": "avance_etapa",
+                "orden": (
+                    retro.registro_avance.etapa.numero_hito
+                    if retro.registro_avance and retro.registro_avance.etapa
+                    else None
+                ),
+            })
+
+    # 5. Evaluaciones y ascensos de Madurez Tecnológica M0-M9 (HU-11)
+    if proyecto:
+        from gestion_evaluacion.models import RegistroMadurez
+        registros_madurez = (
+            RegistroMadurez.objects.filter(proyecto=proyecto)
+            .select_related("evaluador")
+        )
+        for reg in registros_madurez:
+            eventos.append({
+                "id_etapa": reg.pk,
+                "nombre": f"Madurez Tecnológica: Nivel {reg.nivel}",
+                "fecha": reg.fecha_registro,
+                "estado": f"Nivel {reg.nivel}",
+                "responsable": reg.evaluador.nombre if reg.evaluador else "Evaluador",
+                "observaciones": reg.criterio_cumplido or f"Nivel de madurez certificado: {reg.get_nivel_display()}",
+                "tipo_evento": "cambio_madurez",
+                "orden": None,
+            })
+
     # Ordenamiento cronológico estricto (GENNOVA-78)
     eventos.sort(
         key=lambda item: normalizar_fecha_cronologica(item.get("fecha")),

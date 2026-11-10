@@ -587,7 +587,8 @@ class EquipoMiembroView(APIView):
 
         return Response({"message": "Miembro eliminado del equipo exitosamente"}, status=status.HTTP_200_OK)
 
-ROLES_GESTORES_PROYECTO = ('admin', 'direccion_del_programa', 'direccion')
+# El coordinador gestiona el evaluador desde su vista de Proyectos, igual que el tutor
+ROLES_GESTORES_PROYECTO = ('admin', 'direccion_del_programa', 'direccion', 'coordinador')
 
 
 class EvaluadoresDisponiblesView(APIView):
@@ -606,12 +607,30 @@ class EvaluadoresDisponiblesView(APIView):
 
 class AsignarEvaluadorView(APIView):
     """
-    Asigna (o quita, enviando id_evaluador = null) el evaluador de un proyecto.
-    Solo se permiten usuarios con el rol 'evaluador' activo.
+    GET: evaluador actual del proyecto.
+    PATCH: asigna (o quita, enviando id_evaluador = null) el evaluador de un proyecto.
+    Solo se permiten usuarios con el rol 'evaluador' activo; un mismo evaluador
+    puede estar asignado a varios proyectos.
     """
     authentication_classes = [JWTAuthentication]
     permission_classes = [TieneRolPermitido]
     roles_permitidos = ROLES_GESTORES_PROYECTO
+
+    def get(self, request, id_proyecto):
+        proyecto = Proyecto.objects.select_related('evaluador').filter(pk=id_proyecto).first()
+        if proyecto is None:
+            return Response({"error": "Proyecto no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+        evaluador = proyecto.evaluador
+        return Response(
+            {
+                "id_proyecto": proyecto.id_proyecto,
+                "nombre_proyecto": proyecto.nombre_proyecto,
+                "id_evaluador": evaluador.id_usuario if evaluador else None,
+                "evaluador_nombre": evaluador.nombre if evaluador else None,
+                "evaluador_correo": evaluador.correo if evaluador else None,
+            },
+            status=status.HTTP_200_OK
+        )
 
     def patch(self, request, id_proyecto):
         proyecto = Proyecto.objects.filter(pk=id_proyecto).first()
@@ -639,8 +658,10 @@ class AsignarEvaluadorView(APIView):
         return Response(
             {
                 "id_proyecto": proyecto.id_proyecto,
+                "nombre_proyecto": proyecto.nombre_proyecto,
                 "id_evaluador": evaluador.id_usuario if evaluador else None,
                 "evaluador_nombre": evaluador.nombre if evaluador else None,
+                "evaluador_correo": evaluador.correo if evaluador else None,
             },
             status=status.HTTP_200_OK
         )

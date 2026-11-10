@@ -120,3 +120,77 @@ class NotaCriterio(models.Model):
 
     def __str__(self):
         return f"{self.criterio}: {self.nota}"
+
+
+
+# ---------------------------------------------------------------------------
+# HU-11 — Cálculo y Gestión de Madurez Tecnológica (M0-M9)
+# ---------------------------------------------------------------------------
+
+class NivelMadurez(models.TextChoices):
+    M0 = "M0", "M0: Ideación Inicial"
+    M1 = "M1", "M1: Formulación Tecnológica"
+    M2 = "M2", "M2: Concepto Validado"
+    M3 = "M3", "M3: Prueba de Concepto"
+    M4 = "M4", "M4: Prototipo Básico"
+    M5 = "M5", "M5: Prototipo de Alta Fidelidad"
+    M6 = "M6", "M6: Sistema de Demostración"
+    M7 = "M7", "M7: Validación Real"
+    M8 = "M8", "M8: Sistema Calificado"
+    M9 = "M9", "M9: Transferencia"
+
+
+class RegistroMadurez(models.Model):
+    """
+    Registro auditable de evaluación y transición de nivel de madurez (M0 a M9).
+    Realizado por el evaluador asignado o por la coordinación académica a partir
+    de evidencias validadas por el tutor y/o evaluaciones de hito.
+    Inmutable una vez registrado para garantizar trazabilidad ante procesos de acreditación (RNF13).
+    """
+    proyecto = models.ForeignKey(
+        "gestion_emprendimiento_2.Proyecto",
+        on_delete=models.CASCADE,
+        related_name="registros_madurez",
+        db_column="id_proyecto",
+    )
+    nivel = models.CharField(
+        max_length=5,
+        choices=NivelMadurez.choices,
+        help_text="Nivel de madurez tecnológica (M0 a M9).",
+    )
+    evaluador = models.ForeignKey(
+        Usuario,
+        on_delete=models.PROTECT,
+        related_name="evaluaciones_madurez",
+        db_column="id_usuario",
+        help_text="Usuario evaluador, coordinador o directivo que certifica el nivel.",
+    )
+    criterio_cumplido = models.TextField(
+        help_text="Criterio o justificación técnica que sustenta el nivel alcanzado.",
+    )
+    evidencias = models.ManyToManyField(
+        "gestion_evidencia.Evidencia",
+        blank=True,
+        related_name="registros_madurez",
+        db_table="registro_madurez_evidencia",
+        help_text="Evidencias validadas que respaldan el nivel alcanzado.",
+    )
+    evaluacion = models.ForeignKey(
+        Evaluacion,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="registros_madurez",
+        db_column="id_evaluacion",
+        help_text="Evaluación formal de rúbrica asociada opcionalmente.",
+    )
+    fecha_registro = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "registro_madurez"
+        ordering = ["-fecha_registro", "-id"]
+        verbose_name = "Registro de Madurez"
+        verbose_name_plural = "Registros de Madurez"
+
+    def __str__(self):
+        return f"Proyecto #{self.proyecto_id} - Nivel {self.nivel}"

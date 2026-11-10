@@ -262,3 +262,127 @@ class RubricaEdicionSerializer(serializers.ModelSerializer):
             self._sincronizar_criterios(hito, criterios)
 
         return instance
+
+
+
+# ---------------------------------------------------------------
+# Serializers de Madurez Tecnológica (HU-11)
+# ---------------------------------------------------------------
+from .models import NivelMadurez, RegistroMadurez
+from gestion_evidencia.models import Evidencia, RetroalimentacionAvance
+
+
+class EvaluadorSimpleSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source="id_usuario", read_only=True)
+    nombre = serializers.CharField(read_only=True)
+    correo = serializers.EmailField(read_only=True)
+
+
+class EvidenciaSimpleSerializer(serializers.ModelSerializer):
+    etapa_nombre = serializers.CharField(source="etapa.nombre", read_only=True)
+
+    class Meta:
+        model = Evidencia
+        fields = ["id", "titulo", "tipo", "etapa", "etapa_nombre", "creado"]
+        read_only_fields = fields
+
+
+class RegistroMadurezSerializer(serializers.ModelSerializer):
+    nivel_display = serializers.CharField(source="get_nivel_display", read_only=True)
+    evaluador = EvaluadorSimpleSerializer(read_only=True)
+    evidencias = EvidenciaSimpleSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = RegistroMadurez
+        fields = [
+            "id",
+            "proyecto",
+            "nivel",
+            "nivel_display",
+            "criterio_cumplido",
+            "evaluador",
+            "evidencias",
+            "evaluacion",
+            "fecha_registro",
+        ]
+        read_only_fields = fields
+
+
+class RegistroMadurezCrearSerializer(serializers.ModelSerializer):
+    evidencias_ids = serializers.ListField(
+        child=serializers.IntegerField(), required=False, default=list
+    )
+
+    class Meta:
+        model = RegistroMadurez
+        fields = [
+            "nivel",
+            "criterio_cumplido",
+            "evaluacion",
+            "evidencias_ids",
+        ]
+
+    def validate_nivel(self, value):
+        if value not in NivelMadurez.values:
+            raise serializers.ValidationError(
+                f"Nivel de madurez inválido: {value}. Use uno de {NivelMadurez.values}."
+            )
+        return value
+
+    def validate_evaluacion(self, value):
+        if value:
+            proyecto = self.context.get("proyecto")
+            if proyecto and value.proyecto_id != proyecto.pk:
+                raise serializers.ValidationError("La evaluación formal no corresponde a este proyecto.")
+        return value
+
+    def validate_evidencias_ids(self, ids):
+        if not ids:
+            return ids
+        proyecto = self.context.get("proyecto")
+        if not proyecto:
+            return ids
+
+        evidencias = Evidencia.objects.filter(pk__in=ids)
+        encontrados_ids = set(evidencias.values_list("id", flat=True))
+        faltantes = set(ids) - encontrados_ids
+        if faltantes:
+            raise serializers.ValidationError(f"Las evidencias {list(faltantes)} no existen.")
+
+        for ev in evidencias:
+            if ev.proyecto_id != proyecto.pk:
+                raise serializers.ValidationError(
+                    f"La evidencia #{ev.pk} pertenece al proyecto #{ev.proyecto_id}, no al proyecto #{proyecto.pk}."
+                )
+            # Regla RN-07: Solo evidencias validadas (aprobadas) por el tutor cuentan para madurez
+            validada = RetroalimentacionAvance.objects.filter(
+                registro_avance__evidencias=ev,
+                aprobado=True,
+            ).exists()
+            if not validada:
+                raise serializers.ValidationError(
+                    f"La evidencia #{ev.pk} ('{ev.titulo}') no cuenta con validación aprobada por el tutor (RN-07)."
+                )
+
+        return ids
+
+    @transaction.atomic
+    def create(self, validated_data):
+        evidencias_ids = validated_data.pop("evidencias_ids", [])
+        proyecto = self.context["proyecto"]
+        evaluador = self.context["evaluador"]
+
+        registro = RegistroMadurez.objects.create(
+            proyecto=proyecto,
+            evaluador=evaluador,
+            **validated_data
+        )
+        if evidencias_ids:
+            registro.evidencias.set(evidencias_ids)
+
+        # Sincronizar etapa actual de la iniciativa
+        iniciativa = proyecto.iniciativa
+        iniciativa.etapa_actual = f"Nivel {registro.nivel}"
+        iniciativa.save(update_fields=["etapa_actual"])
+
+        return registro

@@ -27,6 +27,7 @@ import DetalleExpedienteModal from "./DetalleExpedienteModal";
 import MentoresPanel from "../../gestion_acompaniamiento/components/MentoresPanel";
 import TutorPanel from "../../gestion_acompaniamiento/components/TutorPanel";
 import LineaTiempoPanel from "../../gestion_emprendimiento_2/components/LineaTiempoPanel";
+import EvaluadorPanel from "../../gestion_acompaniamiento/components/EvaluadorPanel";
 
 // Roles que pueden consultar la línea de tiempo evolutiva (el backend responde 403 a los demás)
 const ROLES_LINEA_TIEMPO = ["coordinador", "direccion_del_programa", "direccion"];
@@ -100,6 +101,8 @@ export default function BancoIniciativasView({ titulo = "Banco de Iniciativas y 
   const [iniciativaTutor, setIniciativaTutor] = useState(null);
   // HU-08: línea de tiempo evolutiva de la iniciativa
   const [iniciativaLineaTiempo, setIniciativaLineaTiempo] = useState(null);
+  // Panel del evaluador del proyecto
+  const [iniciativaEvaluador, setIniciativaEvaluador] = useState(null);
 
   // Actualiza el resumen de roles de una fila tras asignar o quitar desde un panel
   const actualizarProyecto = (idIniciativa, cambios) =>
@@ -489,7 +492,7 @@ export default function BancoIniciativasView({ titulo = "Banco de Iniciativas y 
                             )}
                           </div>
 
-                          {/* Tutor y Evaluador (este último aún sin funcionalidad) */}
+                          {/* Tutor y Evaluador */}
                           {esAprobada(item) && (
                             <div className="flex items-center justify-end gap-1.5">
                               <BotonRol
@@ -502,7 +505,7 @@ export default function BancoIniciativasView({ titulo = "Banco de Iniciativas y 
                                 etiqueta="Evaluador"
                                 Icono={ClipboardCheck}
                                 falta={!item.proyecto?.tiene_evaluador}
-                                proximamente
+                                onClick={() => setIniciativaEvaluador(item)}
                               />
                             </div>
                           )}
@@ -553,6 +556,17 @@ export default function BancoIniciativasView({ titulo = "Banco de Iniciativas y 
           idIniciativa={iniciativaLineaTiempo.id_iniciativa}
           nombre={iniciativaLineaTiempo.iniciativa?.titulo || iniciativaLineaTiempo.nombre}
           onClose={() => setIniciativaLineaTiempo(null)}
+        />
+      )}
+
+      {iniciativaEvaluador && (
+        <EvaluadorPanel
+          key={iniciativaEvaluador.id_iniciativa}
+          iniciativa={iniciativaEvaluador}
+          onClose={() => setIniciativaEvaluador(null)}
+          onEvaluadorCambiado={(tieneEvaluador) =>
+            actualizarProyecto(iniciativaEvaluador.id_iniciativa, { tiene_evaluador: tieneEvaluador })
+          }
         />
       )}
 
