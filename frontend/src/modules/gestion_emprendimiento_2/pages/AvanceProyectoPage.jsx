@@ -1,20 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, ChevronDown, Loader2, Plus, RefreshCw, Save } from "lucide-react";
+import { AlertCircle, ChevronDown, ClipboardCheck, Loader2, Plus, RefreshCw, Save, Send } from "lucide-react";
 import { useAuth } from "../../../context/AuthContext";
 import { DocumentoAdjunto } from "../components/EvidenciasCargadasPanel";
 import {
   getProyectosAvance,
   getTrayectoria,
   registrarAvance,
-  retroalimentarAvance,
+  revisarAvance,
 } from "../services/registroAvanceService";
-
-const ESTADOS_AVANCE = [
-  { id: "en_progreso", label: "En progreso" },
-  { id: "completado", label: "Completado" },
-  { id: "con_retraso", label: "Con retraso" },
-  { id: "bloqueado", label: "Bloqueado" },
-];
 
 const ESTADOS_VALIDACION = {
   sin_registro: { label: "Sin registro", clase: "bg-slate-100 text-slate-600" },
@@ -25,12 +18,9 @@ const ESTADOS_VALIDACION = {
 
 const FORMULARIO_VACIO = {
   evidencias: [],
-  estado_avance: "en_progreso",
-  porcentaje_avance: "",
   descripcion_avance: "",
   dificultades: "",
   riesgos: "",
-  recomendaciones: "",
 };
 
 // text-base en móvil: Safari de iPhone hace zoom automático en inputs con fuente menor a 16px
@@ -85,16 +75,44 @@ function EstadoValidacion({ estado }) {
   return <span className={`w-fit shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${clase}`}>{label}</span>;
 }
 
-function TextoRegistro({ titulo, texto }) {
+function TextoRegistro({ titulo, texto, clase = "text-slate-500" }) {
   if (!texto) return null;
   return (
     <div>
-      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{titulo}</p>
+      <p className={`text-[11px] font-bold uppercase tracking-wider ${clase}`}>{titulo}</p>
       <p className="mt-0.5 whitespace-pre-line break-words text-xs leading-relaxed text-slate-700">{texto}</p>
     </div>
   );
 }
 
+// Actividad del plan de trabajo a la que corresponde la evidencia (si se subió para una actividad)
+function ActividadEvidencia({ evidencia }) {
+  return evidencia.actividad_nombre ? (
+    <span className="font-medium text-slate-700">Actividad: {evidencia.actividad_nombre}</span>
+  ) : (
+    <span className="italic text-slate-400">Sin actividad asociada</span>
+  );
+}
+
+function CampoTexto({ id, titulo, ayuda, valor, error, onChange, rows = 2 }) {
+  return (
+    <div className="space-y-1">
+      <label htmlFor={id} className={LABEL_CLASS}>{titulo}</label>
+      <textarea
+        id={id}
+        rows={rows}
+        placeholder={ayuda}
+        value={valor}
+        onChange={(e) => onChange(e.target.value)}
+        aria-invalid={Boolean(error)}
+        className={`${INPUT_CLASS} resize-none`}
+      />
+      {error && <p className={ERROR_CLASS} role="alert">{error}</p>}
+    </div>
+  );
+}
+
+// Registro del avance de una etapa: solo lo hace el estudiante
 function FormularioRegistro({ proyectoId, etapa, onGuardado, onCancelar, onErrorSesion }) {
   const [datos, setDatos] = useState(FORMULARIO_VACIO);
   const [errors, setErrors] = useState({});
@@ -116,10 +134,6 @@ function FormularioRegistro({ proyectoId, etapa, onGuardado, onCancelar, onError
     const nuevos = {};
     if (datos.evidencias.length === 0) nuevos.evidencias = "Selecciona al menos una evidencia publicada.";
     if (!datos.descripcion_avance.trim()) nuevos.descripcion_avance = "Describe el avance logrado en esta etapa.";
-    const porcentaje = Number(datos.porcentaje_avance);
-    if (datos.porcentaje_avance !== "" && (!Number.isInteger(porcentaje) || porcentaje < 0 || porcentaje > 100)) {
-      nuevos.porcentaje_avance = "Indica un número entero entre 0 y 100.";
-    }
     return nuevos;
   }
 
@@ -132,42 +146,24 @@ function FormularioRegistro({ proyectoId, etapa, onGuardado, onCancelar, onError
     setGuardando(true);
     try {
       await registrarAvance({
-        ...datos,
         proyecto: proyectoId,
         etapa: etapa.id,
-        porcentaje_avance: datos.porcentaje_avance === "" ? null : Number(datos.porcentaje_avance),
+        evidencias: datos.evidencias,
         descripcion_avance: datos.descripcion_avance.trim(),
         dificultades: datos.dificultades.trim(),
         riesgos: datos.riesgos.trim(),
-        recomendaciones: datos.recomendaciones.trim(),
       });
       await onGuardado();
     } catch (err) {
       if (onErrorSesion(err)) return;
       setErrors(erroresDelServidor(
         err,
-        ["evidencias", "estado_avance", "porcentaje_avance", "descripcion_avance", "dificultades", "riesgos", "recomendaciones"],
+        ["evidencias", "descripcion_avance", "dificultades", "riesgos"],
         "No se pudo guardar el registro de avance."
       ));
       setGuardando(false);
     }
   }
-
-  const campoTexto = (campo, titulo, ayuda) => (
-    <div className="space-y-1">
-      <label htmlFor={`${campo}-${etapa.id}`} className={LABEL_CLASS}>{titulo}</label>
-      <textarea
-        id={`${campo}-${etapa.id}`}
-        rows={2}
-        placeholder={ayuda}
-        value={datos[campo]}
-        onChange={(e) => actualizar(campo, e.target.value)}
-        aria-invalid={Boolean(errors[campo])}
-        className={`${INPUT_CLASS} resize-none`}
-      />
-      {errors[campo] && <p className={ERROR_CLASS} role="alert">{errors[campo]}</p>}
-    </div>
-  );
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4 rounded-lg border border-red-200 bg-red-50/30 p-4">
@@ -181,47 +177,41 @@ function FormularioRegistro({ proyectoId, etapa, onGuardado, onCancelar, onError
               onChange={() => alternarEvidencia(ev.id)}
               className="mt-0.5 accent-red-600"
             />
-            <span className="break-words">{ev.titulo} · {ev.usuario_nombre} · {formatFecha(ev.creado)}</span>
+            <span className="min-w-0 break-words">
+              <span className="font-semibold text-slate-800">{ev.titulo}</span>
+              <span className="block text-[11px] text-slate-500">
+                <ActividadEvidencia evidencia={ev} /> · {ev.usuario_nombre} · {formatFecha(ev.creado)}
+              </span>
+            </span>
           </label>
         ))}
         {errors.evidencias && <p className={ERROR_CLASS} role="alert">{errors.evidencias}</p>}
       </fieldset>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="space-y-1">
-          <label htmlFor={`estado_avance-${etapa.id}`} className={LABEL_CLASS}>Estado del avance</label>
-          <select
-            id={`estado_avance-${etapa.id}`}
-            value={datos.estado_avance}
-            onChange={(e) => actualizar("estado_avance", e.target.value)}
-            className={INPUT_CLASS}
-          >
-            {ESTADOS_AVANCE.map((estado) => (
-              <option key={estado.id} value={estado.id}>{estado.label}</option>
-            ))}
-          </select>
-          {errors.estado_avance && <p className={ERROR_CLASS} role="alert">{errors.estado_avance}</p>}
-        </div>
-        <div className="space-y-1">
-          <label htmlFor={`porcentaje_avance-${etapa.id}`} className={LABEL_CLASS}>Porcentaje de avance (opcional)</label>
-          <input
-            id={`porcentaje_avance-${etapa.id}`}
-            type="number"
-            min="0"
-            max="100"
-            value={datos.porcentaje_avance}
-            onChange={(e) => actualizar("porcentaje_avance", e.target.value)}
-            aria-invalid={Boolean(errors.porcentaje_avance)}
-            className={INPUT_CLASS}
-          />
-          {errors.porcentaje_avance && <p className={ERROR_CLASS} role="alert">{errors.porcentaje_avance}</p>}
-        </div>
-      </div>
-
-      {campoTexto("descripcion_avance", "Descripción del avance *", "¿Qué se logró en esta etapa?")}
-      {campoTexto("dificultades", "Dificultades", "Obstáculos encontrados durante el desarrollo.")}
-      {campoTexto("riesgos", "Riesgos", "Riesgos que podrían afectar el proyecto.")}
-      {campoTexto("recomendaciones", "Recomendaciones", "Acciones de mejora propuestas.")}
+      <CampoTexto
+        id={`descripcion_avance-${etapa.id}`}
+        titulo="Descripción del avance *"
+        ayuda="¿Qué se logró en esta etapa?"
+        valor={datos.descripcion_avance}
+        error={errors.descripcion_avance}
+        onChange={(valor) => actualizar("descripcion_avance", valor)}
+      />
+      <CampoTexto
+        id={`dificultades-${etapa.id}`}
+        titulo="Dificultades"
+        ayuda="Obstáculos encontrados durante el desarrollo."
+        valor={datos.dificultades}
+        error={errors.dificultades}
+        onChange={(valor) => actualizar("dificultades", valor)}
+      />
+      <CampoTexto
+        id={`riesgos-${etapa.id}`}
+        titulo="Riesgos"
+        ayuda="Riesgos que podrían afectar el proyecto."
+        valor={datos.riesgos}
+        error={errors.riesgos}
+        onChange={(valor) => actualizar("riesgos", valor)}
+      />
 
       {errors.general && <MensajeError>{errors.general}</MensajeError>}
 
@@ -236,68 +226,80 @@ function FormularioRegistro({ proyectoId, etapa, onGuardado, onCancelar, onError
   );
 }
 
-function FormularioValidacion({ registroId, onGuardado, onCancelar, onErrorSesion }) {
-  const [comentario, setComentario] = useState("");
+// Revisión del avance: solo la hace el tutor asignado
+function FormularioRevision({ registroId, onGuardado, onCancelar, onErrorSesion }) {
+  const [datos, setDatos] = useState({ recomendaciones: "", errores: "" });
   const [errors, setErrors] = useState({});
   const [enviando, setEnviando] = useState(false);
 
-  async function enviar(aprobado) {
-    if (!comentario.trim()) {
-      setErrors({ comentario: "Escribe la retroalimentación para el equipo." });
+  function actualizar(campo, valor) {
+    setDatos((prev) => ({ ...prev, [campo]: valor }));
+    setErrors({});
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const recomendaciones = datos.recomendaciones.trim();
+    const errores = datos.errores.trim();
+    if (!recomendaciones && !errores) {
+      setErrors({ general: "Escribe al menos una recomendación o un error encontrado." });
       return;
     }
-    setErrors({});
     setEnviando(true);
     try {
-      await retroalimentarAvance(registroId, { comentario: comentario.trim(), aprobado });
+      await revisarAvance(registroId, { recomendaciones, errores });
       await onGuardado();
     } catch (err) {
       if (onErrorSesion(err)) return;
-      setErrors(erroresDelServidor(err, ["comentario"], "No se pudo guardar la retroalimentación."));
+      setErrors(erroresDelServidor(err, ["recomendaciones", "errores"], "No se pudo guardar la revisión."));
       setEnviando(false);
     }
   }
 
   return (
-    <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-      <div className="space-y-1">
-        <label htmlFor={`comentario-${registroId}`} className={LABEL_CLASS}>Retroalimentación del tutor *</label>
-        <textarea
-          id={`comentario-${registroId}`}
-          rows={2}
-          value={comentario}
-          onChange={(e) => setComentario(e.target.value)}
-          aria-invalid={Boolean(errors.comentario)}
-          className={`${INPUT_CLASS} resize-none`}
-        />
-        {errors.comentario && <p className={ERROR_CLASS} role="alert">{errors.comentario}</p>}
-      </div>
+    <form onSubmit={handleSubmit} noValidate className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <CampoTexto
+        id={`recomendaciones-${registroId}`}
+        titulo="Recomendaciones"
+        ayuda="Sugerencias para mejorar el avance del equipo."
+        valor={datos.recomendaciones}
+        error={errors.recomendaciones}
+        onChange={(valor) => actualizar("recomendaciones", valor)}
+        rows={3}
+      />
+      <CampoTexto
+        id={`errores-${registroId}`}
+        titulo="Errores"
+        ayuda="Lo que está mal y el equipo debe corregir."
+        valor={datos.errores}
+        error={errors.errores}
+        onChange={(valor) => actualizar("errores", valor)}
+        rows={3}
+      />
+      <p className="text-[11px] leading-relaxed text-slate-500">
+        Si señalas errores, el avance queda <strong className="font-semibold text-slate-700">con observaciones</strong> y
+        se avisa al equipo para que los corrija. Sin errores, queda <strong className="font-semibold text-slate-700">validado</strong>.
+      </p>
       {errors.general && <MensajeError>{errors.general}</MensajeError>}
       <div className="flex flex-wrap justify-end gap-2">
         <button type="button" onClick={onCancelar} disabled={enviando} className={BOTON_CANCELAR_CLASS}>Cancelar</button>
-        <button type="button" onClick={() => enviar(false)} disabled={enviando} className={BOTON_SECUNDARIO_CLASS}>
-          Dejar observaciones
-        </button>
-        <button type="button" onClick={() => enviar(true)} disabled={enviando} className={BOTON_PRIMARIO_CLASS}>
-          <CheckCircle2 className="h-4 w-4" />
-          Validar avance
+        <button type="submit" disabled={enviando} className={BOTON_PRIMARIO_CLASS}>
+          {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          {enviando ? "Enviando..." : "Enviar revisión"}
         </button>
       </div>
-    </div>
+    </form>
   );
 }
 
 function RegistroAvance({ registro, esTutor, onActualizado, onErrorSesion }) {
-  const [validando, setValidando] = useState(false);
+  const [revisando, setRevisando] = useState(false);
 
   return (
     <li className="space-y-3 rounded-lg border border-slate-200 p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-slate-900">
-            {registro.estado_avance_display}
-            {registro.porcentaje_avance !== null && ` · ${registro.porcentaje_avance}%`}
-          </p>
+          <p className="text-sm font-semibold text-slate-900">Avance registrado</p>
           <p className="mt-0.5 text-[11px] text-slate-500">
             {registro.registrado_por_nombre} · {formatFecha(registro.fecha_registro)}
           </p>
@@ -308,45 +310,52 @@ function RegistroAvance({ registro, esTutor, onActualizado, onErrorSesion }) {
       <TextoRegistro titulo="Avance" texto={registro.descripcion_avance} />
       <TextoRegistro titulo="Dificultades" texto={registro.dificultades} />
       <TextoRegistro titulo="Riesgos" texto={registro.riesgos} />
-      <TextoRegistro titulo="Recomendaciones" texto={registro.recomendaciones} />
 
       <div>
         <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Evidencia que lo respalda</p>
-        <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-slate-700">
-          {registro.evidencias.map((ev) => <li key={ev.id} className="break-words">{ev.titulo}</li>)}
+        <ul className="mt-1 space-y-1 text-xs text-slate-700">
+          {registro.evidencias.map((ev) => (
+            <li key={ev.id} className="break-words">
+              <span className="font-medium text-slate-800">{ev.titulo}</span>
+              <span className="text-[11px] text-slate-500"> · <ActividadEvidencia evidencia={ev} /></span>
+            </li>
+          ))}
         </ul>
       </div>
 
       {registro.retroalimentaciones.length > 0 && (
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Retroalimentación del tutor</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Revisión del tutor</p>
           <ul className="mt-1 space-y-2">
             {registro.retroalimentaciones.map((retro) => (
-              <li key={retro.id} className="rounded-md bg-slate-50 px-3 py-2">
+              <li key={retro.id} className="space-y-2 rounded-md bg-slate-50 px-3 py-2">
                 <p className="text-[11px] font-semibold text-slate-600">
                   {retro.aprobado ? "Validado" : "Con observaciones"} · {retro.tutor_nombre} · {formatFecha(retro.fecha)}
                 </p>
-                <p className="mt-0.5 whitespace-pre-line break-words text-xs text-slate-700">{retro.comentario}</p>
+                <TextoRegistro titulo="Recomendaciones" texto={retro.recomendaciones} />
+                <TextoRegistro titulo="Errores" texto={retro.errores} clase="text-red-600" />
+                {/* Revisiones anteriores al cambio: un único comentario */}
+                <TextoRegistro titulo="Comentario" texto={retro.comentario} />
               </li>
             ))}
           </ul>
         </div>
       )}
 
-      {esTutor && (validando ? (
-        <FormularioValidacion
+      {esTutor && (revisando ? (
+        <FormularioRevision
           registroId={registro.id}
-          onCancelar={() => setValidando(false)}
+          onCancelar={() => setRevisando(false)}
           onGuardado={async () => {
             await onActualizado();
-            setValidando(false);
+            setRevisando(false);
           }}
           onErrorSesion={onErrorSesion}
         />
       ) : (
-        <button type="button" onClick={() => setValidando(true)} className={BOTON_SECUNDARIO_CLASS}>
-          <CheckCircle2 className="h-4 w-4" />
-          Retroalimentar y validar
+        <button type="button" onClick={() => setRevisando(true)} className={BOTON_SECUNDARIO_CLASS}>
+          <ClipboardCheck className="h-4 w-4" />
+          Revisar avance
         </button>
       ))}
     </li>
@@ -392,9 +401,12 @@ function EtapaTrayectoria({ etapa, proyectoId, esTutor, abierta, onAlternar, onA
               <ul className="space-y-3">
                 {etapa.evidencias.map((ev) => (
                   <li key={ev.id} className="space-y-2">
-                    <p className="break-words text-xs font-semibold text-slate-800">
-                      {ev.titulo} <span className="font-normal text-slate-500">· {ev.usuario_nombre} · {formatFecha(ev.creado)}</span>
-                    </p>
+                    <div>
+                      <p className="break-words text-xs font-semibold text-slate-800">
+                        {ev.titulo} <span className="font-normal text-slate-500">· {ev.usuario_nombre} · {formatFecha(ev.creado)}</span>
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-slate-500"><ActividadEvidencia evidencia={ev} /></p>
+                    </div>
                     <ul className="space-y-2">
                       {ev.documentos.map((doc) => <DocumentoAdjunto key={doc.id} doc={doc} />)}
                     </ul>
@@ -413,7 +425,8 @@ function EtapaTrayectoria({ etapa, proyectoId, esTutor, abierta, onAlternar, onA
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h4 className="text-[11px] font-bold uppercase tracking-wider text-red-600">Registros de avance</h4>
-              {hayEvidencia && !registrando && (
+              {/* El avance lo registra el estudiante; el tutor lo revisa */}
+              {!esTutor && hayEvidencia && !registrando && (
                 <button type="button" onClick={() => setRegistrando(true)} className={BOTON_SECUNDARIO_CLASS}>
                   <Plus className="h-4 w-4" />
                   Registrar avance
@@ -433,7 +446,13 @@ function EtapaTrayectoria({ etapa, proyectoId, esTutor, abierta, onAlternar, onA
               />
             )}
             {etapa.registros.length === 0 ? (
-              !registrando && <p className="text-xs text-slate-500">Aún no se ha registrado avance en esta etapa.</p>
+              !registrando && (
+                <p className="text-xs text-slate-500">
+                  {esTutor
+                    ? "El equipo aún no ha registrado avance en esta etapa."
+                    : "Aún no se ha registrado avance en esta etapa."}
+                </p>
+              )
             ) : (
               <ul className="space-y-3">
                 {etapa.registros.map((registro) => (
@@ -454,7 +473,7 @@ function EtapaTrayectoria({ etapa, proyectoId, esTutor, abierta, onAlternar, onA
   );
 }
 
-// Trayectoria del proyecto por etapas: el estudiante y el tutor registran el avance; el tutor lo valida
+// Trayectoria del proyecto por etapas: el estudiante registra el avance; el tutor lo revisa
 export default function AvanceProyectoPage({ rol }) {
   const { logout } = useAuth();
   const esTutor = rol === "tutor";
@@ -546,8 +565,8 @@ export default function AvanceProyectoPage({ rol }) {
           <h2 className="mt-0.5 text-xl font-bold text-slate-900">Trayectoria por etapas</h2>
           <p className="mt-1 text-sm text-slate-600">
             {esTutor
-              ? "Registra y valida el avance de los proyectos que acompañas, con la evidencia publicada por el equipo."
-              : "Registra el avance de cada etapa con la evidencia publicada, sus dificultades, riesgos y recomendaciones."}
+              ? "Revisa el avance que registra el equipo en cada etapa: deja tus recomendaciones y señala los errores a corregir."
+              : "Registra el avance de cada etapa con la evidencia publicada, sus dificultades y riesgos. Tu tutor lo revisará."}
           </p>
         </div>
         {proyectos.length > 1 && (

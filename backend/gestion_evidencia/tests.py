@@ -328,12 +328,9 @@ class RegistroAvanceBaseTests(EvidenciaBaseTests):
             "proyecto": proyecto.pk,
             "etapa": etapa.pk,
             "evidencias": [self.publicar_evidencia(proyecto, etapa).pk],
-            "estado_avance": "en_progreso",
-            "porcentaje_avance": 30,
             "descripcion_avance": "Avanzamos en el diseño de la base de datos.",
             "dificultades": "Falta de acceso a servidores de prueba.",
             "riesgos": "Posible retraso si no se resuelven los permisos.",
-            "recomendaciones": "Solicitar acceso a TI con dos semanas de anticipación.",
             **extra,
         }
         return self.client.post(self.URL_AVANCE, payload, format="json")
@@ -348,7 +345,6 @@ class RegistroAvanceCrearTests(RegistroAvanceBaseTests):
         self.assertEqual(res.data["descripcion_avance"], "Avanzamos en el diseño de la base de datos.")
         self.assertEqual(res.data["dificultades"], "Falta de acceso a servidores de prueba.")
         self.assertEqual(res.data["riesgos"], "Posible retraso si no se resuelven los permisos.")
-        self.assertEqual(res.data["recomendaciones"], "Solicitar acceso a TI con dos semanas de anticipación.")
 
     def test_integrante_del_equipo_puede_crear_registro(self):
         res = self.crear_registro(self.integrante, self.iniciativa.proyecto)
@@ -372,14 +368,21 @@ class RegistroAvanceCrearTests(RegistroAvanceBaseTests):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("etapa", res.data)
 
-    def test_porcentaje_invalido_da_error(self):
+    def test_estado_porcentaje_y_recomendaciones_del_estudiante_se_ignoran(self):
+        # Las recomendaciones las da el tutor al revisar; estado y porcentaje ya no se registran
         res = self.crear_registro(
             self.titular, self.iniciativa_sin_equipo.proyecto,
-            porcentaje_avance=150,
+            estado_avance="completado", porcentaje_avance=150, recomendaciones="Las mías",
         )
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
+        registro = RegistroAvance.objects.get(pk=res.data["id"])
+        self.assertEqual(
+            (registro.estado_avance, registro.porcentaje_avance, registro.recomendaciones),
+            ("en_progreso", None, ""),
+        )
+        self.assertEqual(res.data["estado_validacion"], "pendiente")
 
-    def test_tutor_asignado_puede_crear_registro(self):
+    def test_el_tutor_no_registra_avance_aunque_este_asignado(self):
         from gestion_acompaniamiento.models import Tutor
 
         proyecto = self.iniciativa.proyecto
@@ -387,14 +390,28 @@ class RegistroAvanceCrearTests(RegistroAvanceBaseTests):
         proyecto.save(update_fields=["tutor"])
 
         res = self.crear_registro(self.tutor, proyecto, rol="tutor")
-        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
-        self.assertEqual(res.data["registrado_por_nombre"], "Tutor")
-        self.assertEqual(res.data["estado_validacion"], "pendiente")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(RegistroAvance.objects.exists())
 
-    def test_tutor_no_asignado_no_puede_crear_registro(self):
-        res = self.crear_registro(self.tutor, self.iniciativa.proyecto, rol="tutor")
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("proyecto", res.data)
+    def test_la_evidencia_del_registro_trae_su_actividad(self):
+        from gestion_emprendimiento_2.models import Actividad, PlanTrabajo
+
+        proyecto = self.iniciativa_sin_equipo.proyecto
+        plan = PlanTrabajo.objects.create(proyecto=proyecto, hito=self.hito)
+        actividad = Actividad.objects.create(
+            plan_trabajo=plan, responsable=self.titular, creado_por=self.titular,
+            nombre="Entrevistas a clientes", fecha_fin="2026-12-01",
+        )
+        evidencia = self.publicar_evidencia(proyecto)
+        Evidencia.objects.filter(pk=evidencia.pk).update(actividad=actividad)
+
+        res = self.crear_registro(self.titular, proyecto, evidencias=[evidencia.pk])
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
+        self.assertEqual(res.data["evidencias"][0]["actividad_nombre"], "Entrevistas a clientes")
+
+        trayectoria = self.client.get(f"{self.URL_AVANCE}trayectoria/", {"proyecto": proyecto.pk}).data
+        en_etapa = {e["id"]: e for e in trayectoria["etapas"][0]["evidencias"]}
+        self.assertEqual(en_etapa[evidencia.pk]["actividad_nombre"], "Entrevistas a clientes")
 
     def test_otros_roles_reciben_403_al_crear(self):
         rol_mentor, _ = Rol.objects.get_or_create(nombre_rol="mentor")
@@ -529,7 +546,7 @@ class TrayectoriaAvanceTests(RegistroAvanceBaseTests):
         primero = self.crear_registro(self.titular, self.proyecto).data["id"]
         self.autenticar(self.tutor, "tutor")
         self.client.post(
-            f"{self.URL_AVANCE}{primero}/retroalimentar/", {"comentario": "Bien", "aprobado": True}, format="json"
+            f"{self.URL_AVANCE}{primero}/retroalimentar/", {"recomendaciones": "Bien"}, format="json"
         )
         self.assertEqual(self.consultar(self.titular).data["etapas"][0]["estado_validacion"], "aprobado")
 
@@ -566,6 +583,34 @@ class TrayectoriaAvanceTests(RegistroAvanceBaseTests):
         self.autenticar(mentor, "mentor")
         self.assertEqual(self.client.get(url).status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_quien_entra_como_admin_y_cambia_a_tutor_ve_sus_proyectos(self):
+        # El mismo token sirve para todos sus roles; la interfaz envía el rol elegido en X-Rol-Activo
+        rol_admin, _ = Rol.objects.get_or_create(nombre_rol="admin")
+        UsuarioRol.objects.create(usuario=self.tutor, rol=rol_admin)
+        self.autenticar(self.tutor, "admin")
+        url = f"{self.URL_AVANCE}mis-proyectos/"
+
+        # Como admin no tiene proyectos propios (antes daba 500)
+        res = self.client.get(url, HTTP_X_ROL_ACTIVO="admin")
+        self.assertEqual((res.status_code, res.data), (status.HTTP_200_OK, []))
+
+        res = self.client.get(url, HTTP_X_ROL_ACTIVO="tutor")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual([p["id"] for p in res.data], [self.proyecto.pk])
+        self.assertEqual(
+            self.client.get(f"{self.URL_AVANCE}trayectoria/", {"proyecto": self.proyecto.pk},
+                            HTTP_X_ROL_ACTIVO="tutor").status_code,
+            status.HTTP_200_OK,
+        )
+
+    def test_la_cabecera_de_rol_no_da_roles_que_el_usuario_no_tiene(self):
+        # El integrante es solo estudiante: pedir "tutor" no lo vuelve tutor
+        self.autenticar(self.integrante)
+        res = self.client.get(f"{self.URL_AVANCE}mis-proyectos/", HTTP_X_ROL_ACTIVO="tutor")
+        self.assertEqual([p["id"] for p in res.data], [self.iniciativa.proyecto.pk])
+        res = self.client.get("/api/auth/me/", HTTP_X_ROL_ACTIVO="admin")
+        self.assertEqual(res.data["rol"], "estudiante")
+
 
 class RetroalimentacionAvanceTests(RegistroAvanceBaseTests):
 
@@ -586,16 +631,27 @@ class RetroalimentacionAvanceTests(RegistroAvanceBaseTests):
 
     def retroalimentar(self, usuario, registro_id=None, rol="tutor", **payload):
         self.autenticar(usuario, rol)
-        data = {"comentario": "Buen avance. Mejorar documentación.", "aprobado": True, **payload}
+        data = {"recomendaciones": "Mejorar la documentación.", "errores": "", **payload}
         rid = registro_id or self.registro_id
         return self.client.post(f"{self.URL_AVANCE}{rid}/retroalimentar/", data, format="json")
 
-    def test_tutor_asignado_puede_retroalimentar(self):
+    def test_tutor_revisa_con_recomendaciones_sin_errores_y_queda_aprobado(self):
         res = self.retroalimentar(self.tutor)
         self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
         self.assertEqual(RetroalimentacionAvance.objects.count(), 1)
         self.assertTrue(res.data["aprobado"])
-        self.assertEqual(res.data["comentario"], "Buen avance. Mejorar documentación.")
+        self.assertEqual(res.data["recomendaciones"], "Mejorar la documentación.")
+        self.assertEqual(res.data["errores"], "")
+
+    def test_si_el_tutor_senala_errores_queda_con_observaciones(self):
+        res = self.retroalimentar(self.tutor, errores="  Falta el diagrama de clases.  ")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
+        self.assertFalse(res.data["aprobado"])
+        self.assertEqual(res.data["errores"], "Falta el diagrama de clases.")
+
+    def test_el_aprobado_enviado_se_ignora(self):
+        res = self.retroalimentar(self.tutor, errores="Falta X", aprobado=True)
+        self.assertFalse(res.data["aprobado"])
 
     def test_estado_de_validacion_sigue_a_la_ultima_retroalimentacion(self):
         def estado():
@@ -603,17 +659,17 @@ class RetroalimentacionAvanceTests(RegistroAvanceBaseTests):
             return self.client.get(f"{self.URL_AVANCE}{self.registro_id}/").data["estado_validacion"]
 
         self.assertEqual(estado(), "pendiente")
-        self.retroalimentar(self.tutor, aprobado=False)
+        self.retroalimentar(self.tutor, errores="Falta el prototipo.")
         self.assertEqual(estado(), "observado")
-        self.retroalimentar(self.tutor, aprobado=True)
+        self.retroalimentar(self.tutor)
         self.assertEqual(estado(), "aprobado")
         # Las retroalimentaciones anteriores se conservan como historial
         self.assertEqual(RetroalimentacionAvance.objects.count(), 2)
 
-    def test_comentario_vacio_da_error(self):
-        res = self.retroalimentar(self.tutor, comentario="")
+    def test_revision_vacia_da_error(self):
+        res = self.retroalimentar(self.tutor, recomendaciones="  ", errores="")
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("comentario", res.data)
+        self.assertFalse(RetroalimentacionAvance.objects.exists())
 
     def test_retroalimentacion_aparece_en_el_detalle_del_registro(self):
         self.retroalimentar(self.tutor)
@@ -657,7 +713,7 @@ class RetroalimentacionAvanceTests(RegistroAvanceBaseTests):
         from gestion_convocatorias.models import AlertaRol
         AlertaRol.objects.all().delete()
 
-        res = self.retroalimentar(self.tutor, aprobado=False, comentario="Faltan pruebas de laboratorio.")
+        res = self.retroalimentar(self.tutor, errores="Faltan pruebas de laboratorio.")
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
 
         alerta = AlertaRol.objects.filter(usuario=self.titular).first()
@@ -665,6 +721,14 @@ class RetroalimentacionAvanceTests(RegistroAvanceBaseTests):
         self.assertEqual(alerta.prioridad, "alta")
         self.assertIn("ajustes", alerta.titulo.lower())
         self.assertIn("Faltan pruebas", alerta.mensaje)
+
+    def test_revision_sin_errores_no_genera_alerta(self):
+        from gestion_convocatorias.models import AlertaRol
+        AlertaRol.objects.all().delete()
+        self.assertEqual(self.retroalimentar(self.tutor).status_code, status.HTTP_201_CREATED)
+        self.assertFalse(AlertaRol.objects.filter(usuario=self.titular).exists())
+
+
 class EditarEvidenciaTests(EquipoConMiembroMixin, EvidenciaBaseTests):
     def setUp(self):
         super().setUp()

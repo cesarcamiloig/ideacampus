@@ -2,7 +2,7 @@ export const BASE_API_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:8000/api"
 ).replace(/\/$/, "");
 
-function rolSeleccionado() {
+function rolActivoGuardado() {
   try {
     return JSON.parse(localStorage.getItem("usuario") || "null")?.rol || null;
   } catch {
@@ -23,10 +23,10 @@ export async function apiRequest(
     const token = localStorage.getItem("token");
     if (token) {
       requestHeaders.Authorization = `Bearer ${token}`;
-      // El token guarda el rol con el que se inició sesión; el que se elige después en el
-      // selector de roles se envía aparte para que el backend filtre con el rol correcto
-      const rol = rolSeleccionado();
-      if (rol) requestHeaders["X-Rol-Activo"] = rol;
+      // Rol elegido en la interfaz: al cambiar de rol el token no cambia, así que el backend
+      // lo toma de aquí (solo lo acepta si es uno de los roles del usuario)
+      const rolActivo = rolActivoGuardado();
+      if (rolActivo) requestHeaders["X-Rol-Activo"] = rolActivo;
     }
   }
 

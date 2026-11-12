@@ -1,7 +1,7 @@
 import { apiClient } from "../../../services/apiClient";
 
-// Contrato de registro y validación de avance. Crean el estudiante del proyecto y su tutor asignado;
-// solo el tutor asignado valida.
+// Contrato de registro y revisión de avance. El estudiante del proyecto registra el avance;
+// el tutor asignado lo revisa con recomendaciones y errores.
 
 // Proyectos sobre los que el usuario lleva el control de avance: [{ id, nombre, tipo }]
 export async function getProyectosAvance() {
@@ -14,13 +14,14 @@ export async function getTrayectoria(idProyecto) {
   return apiClient.get(`/registros-avance/trayectoria/?proyecto=${idProyecto}`);
 }
 
-// { proyecto, etapa, evidencias: [ids], estado_avance, porcentaje_avance, descripcion_avance,
-//   dificultades, riesgos, recomendaciones }. Las evidencias deben estar publicadas en esa etapa.
+// Solo estudiantes: { proyecto, etapa, evidencias: [ids], descripcion_avance, dificultades, riesgos }.
+// Las evidencias deben estar publicadas en esa etapa.
 export async function registrarAvance(datos) {
   return apiClient.post("/registros-avance/", datos);
 }
 
-// { comentario, aprobado }: aprobado=true valida el avance; false lo deja con observaciones
-export async function retroalimentarAvance(idRegistro, datos) {
+// Solo el tutor asignado: { recomendaciones, errores } (al menos uno). Si hay errores el avance
+// queda con observaciones y se avisa al equipo; si no, queda validado.
+export async function revisarAvance(idRegistro, datos) {
   return apiClient.post(`/registros-avance/${idRegistro}/retroalimentar/`, datos);
 }

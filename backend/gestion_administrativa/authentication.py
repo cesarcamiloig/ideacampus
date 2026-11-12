@@ -24,24 +24,22 @@ class JWTAuthentication(BaseAuthentication):
         if usuario.estado != "activo":
             raise AuthenticationFailed("El usuario se encuentra inactivo")
 
-        rol_token = payload.get("rol")
         roles_token = payload.get("roles")
         if not isinstance(roles_token, list):
-            roles_token = [rol_token] if rol_token else []
+            # Tokens emitidos antes de quitar "rol" del token
+            roles_token = [payload["rol"]] if payload.get("rol") else []
 
-        if not roles_token and not rol_token:
+        if not roles_token:
             raise AuthenticationFailed("El token no contiene roles asignados")
 
+        # Los roles se vuelven a leer de la BD en cada petición: un rol retirado deja de valer
+        # aunque el token todavía lo traiga
         roles_bd = list(
             UsuarioRol.objects.filter(usuario=usuario, estado="activo")
             .select_related("rol")
+            .order_by("pk")
             .values_list("rol__nombre_rol", flat=True)
         )
-
-        # Validar que el rol principal del token (si no es estudiante) siga activo en BD
-        if rol_token and rol_token != "estudiante":
-            if rol_token not in roles_bd:
-                raise AuthenticationFailed("El rol del token no está asignado o activo")
 
         tiene_estudiante_inactivo = UsuarioRol.objects.filter(
             usuario=usuario, rol__nombre_rol="estudiante", estado="inactivo"
@@ -60,13 +58,12 @@ class JWTAuthentication(BaseAuthentication):
         if not roles_vigentes:
             raise AuthenticationFailed("El usuario no posee roles activos asignados")
 
-        # El rol elegido en el selector de la interfaz llega en X-Rol-Activo: el token conserva
-        # el rol del inicio de sesión. Solo se acepta si el usuario realmente tiene ese rol.
+        # Los permisos dependen de todos los roles vigentes. El rol activo solo indica desde qué
+        # rol se consulta (p. ej. "mis proyectos" como tutor o como estudiante): lo envía la
+        # interfaz en X-Rol-Activo y solo se acepta si es uno de los roles vigentes. Sin cabecera
+        # se usa el rol asignado más antiguo.
         rol_solicitado = (request.headers.get("X-Rol-Activo") or "").strip().lower()
-        if rol_solicitado in roles_vigentes:
-            rol_activo = rol_solicitado
-        else:
-            rol_activo = rol_token if (rol_token in roles_vigentes) else roles_vigentes[0]
+        rol_activo = rol_solicitado if rol_solicitado in roles_vigentes else roles_vigentes[0]
 
         usuario.rol_activo = rol_activo
         usuario.roles_activos = roles_vigentes

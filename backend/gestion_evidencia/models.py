@@ -120,8 +120,9 @@ class RegistroAvance(models.Model):
     """
     Registro formal del avance de un proyecto en una etapa (hito de la rúbrica),
     respaldado por la evidencia publicada en esa etapa e incluyendo descripción del
-    progreso, dificultades, riesgos y recomendaciones.
-    Lo crea el estudiante o el tutor que acompaña el proyecto.
+    progreso, dificultades y riesgos. Lo crea el estudiante; el tutor lo revisa.
+    estado_avance, porcentaje_avance y recomendaciones ya no se registran desde la API:
+    se conservan por los registros anteriores.
     """
 
     class EstadoAvance(models.TextChoices):
@@ -212,7 +213,8 @@ class RegistroAvance(models.Model):
 
 class RetroalimentacionAvance(models.Model):
     """
-    Retroalimentación que el tutor asignado deja sobre un registro de avance del equipo.
+    Revisión que el tutor asignado hace de un registro de avance del equipo: recomendaciones
+    y errores encontrados. Si señala errores el avance queda con observaciones; si no, aprobado.
     """
     registro_avance = models.ForeignKey(
         RegistroAvance,
@@ -226,7 +228,10 @@ class RetroalimentacionAvance(models.Model):
         related_name="retroalimentaciones_avance",
         db_column="id_tutor",
     )
-    comentario = models.TextField(help_text="Retroalimentación del tutor sobre el avance registrado.")
+    # Las revisiones anteriores se guardaban como un único comentario
+    comentario = models.TextField(blank=True, help_text="Retroalimentación del tutor sobre el avance registrado.")
+    recomendaciones = models.TextField(blank=True, help_text="Recomendaciones del tutor para mejorar el avance.")
+    errores = models.TextField(blank=True, help_text="Errores o aspectos por corregir que encontró el tutor.")
     aprobado = models.BooleanField(
         default=False,
         help_text="Indica si el tutor valida (aprueba) el avance declarado.",
