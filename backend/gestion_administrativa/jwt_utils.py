@@ -5,6 +5,11 @@ from .models import UsuarioRol
 
 
 def generar_token(usuario, rol=None):
+    """
+    El token solo lleva la lista de roles del usuario. El rol con el que trabaja no se guarda
+    aquí: lo elige en la interfaz y lo envía en cada petición (cabecera X-Rol-Activo).
+    `rol`, si se indica, se incluye en la lista (p. ej. el rol elegido al iniciar sesión).
+    """
     now = datetime.now(timezone.utc)
 
     roles_activos = list(
@@ -15,15 +20,12 @@ def generar_token(usuario, rol=None):
 
     if rol and rol not in roles_activos:
         roles_activos.append(rol)
-
-    rol_principal = rol or (roles_activos[0] if roles_activos else "estudiante")
-    if not roles_activos and rol_principal:
-        roles_activos = [rol_principal]
+    if not roles_activos:
+        roles_activos = ["estudiante"]
 
     payload = {
         "id_usuario": usuario.id_usuario,
         "correo": usuario.correo,
-        "rol": rol_principal,
         "roles": roles_activos,
         "iat": now,
         "exp": now + timedelta(hours=getattr(settings, "JWT_EXP_DELTA_HOURS", 24)),

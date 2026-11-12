@@ -230,7 +230,7 @@ class EvidenciaViewSet(mixins.CreateModelMixin,
 
 def evidencias_con_detalle():
     return (Evidencia.objects
-            .select_related("proyecto__iniciativa", "etapa", "usuario")
+            .select_related("proyecto__iniciativa", "etapa", "usuario", "actividad")
             .prefetch_related(DOCUMENTOS_SIN_CONTENIDO))
 
 
@@ -261,16 +261,16 @@ class RegistroAvanceViewSet(mixins.CreateModelMixin,
                              mixins.RetrieveModelMixin,
                              viewsets.GenericViewSet):
     """
-    ViewSet para que estudiantes y tutores registren el avance del proyecto por etapa,
-    con la evidencia publicada, dificultades, riesgos y recomendaciones, y para que
-    el tutor asignado valide formalmente cada registro.
+    ViewSet para que el estudiante registre el avance del proyecto por etapa, con la
+    evidencia publicada, dificultades y riesgos, y para que el tutor asignado lo revise
+    con recomendaciones y errores encontrados.
     """
     authentication_classes = [JWTAuthentication]
     permission_classes = [TieneRolPermitido]
     parser_classes = [JSONParser, FormParser]
     lookup_value_regex = r"\d+"
 
-    roles_crear = ("estudiante", "tutor")
+    roles_crear = ("estudiante",)
     roles_lectura = ("estudiante", "tutor", "admin", "coordinador",
                      "direccion_del_programa", "evaluador", "mentor")
     roles_retroalimentar = ("tutor",)
@@ -316,8 +316,9 @@ class RegistroAvanceViewSet(mixins.CreateModelMixin,
     @action(detail=True, methods=["post"], url_path="retroalimentar")
     def retroalimentar(self, request, pk=None):
         """
-        El tutor asignado al proyecto valida (aprobado=true) u observa (aprobado=false) un
-        registro de avance. Solo el tutor asignado al proyecto del registro puede usar este endpoint.
+        El tutor asignado al proyecto revisa un registro de avance con recomendaciones y errores.
+        Si señala errores queda con observaciones (y se avisa al equipo); si no, queda aprobado.
+        Solo el tutor asignado al proyecto del registro puede usar este endpoint.
         """
         registro = RegistroAvance.objects.select_related("proyecto").filter(pk=pk).first()
         if not registro:
@@ -361,10 +362,10 @@ class RegistroAvanceViewSet(mixins.CreateModelMixin,
                         destinatarios.add(miembro.usuario)
 
             etapa_nombre = registro.etapa.nombre if registro.etapa else "la etapa"
-            comentario_texto = serializer.validated_data.get("comentario", "").strip()
+            errores_texto = retroalimentacion.errores
             titulo_alerta = f"Ajustes requeridos en avance de {etapa_nombre}"
             mensaje_alerta = (
-                f"El tutor {perfil_tutor.usuario.nombre} ha solicitado ajustes en el avance: {comentario_texto}"
+                f"El tutor {perfil_tutor.usuario.nombre} encontró errores en el avance: {errores_texto}"
             )
 
             for dest in destinatarios:
@@ -385,7 +386,11 @@ class RegistroAvanceViewSet(mixins.CreateModelMixin,
     @action(detail=False, methods=["get"], url_path="mis-proyectos")
     def mis_proyectos(self, request):
         """Proyectos sobre los que el estudiante o el tutor lleva el control de avance."""
-        proyectos = proyectos_segun_rol(request.user).select_related("iniciativa")
+        # Con otro rol activo (p. ej. admin) no hay proyectos propios que listar
+        proyectos = proyectos_segun_rol(request.user)
+        if proyectos is None:
+            return Response([])
+        proyectos = proyectos.select_related("iniciativa")
         return Response([
             {"id": proyecto.pk, "nombre": proyecto.iniciativa.nombre, "tipo": proyecto.iniciativa.tipo}
             for proyecto in proyectos

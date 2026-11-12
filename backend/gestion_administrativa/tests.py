@@ -134,8 +134,15 @@ class AuthTests(TestCase):
         self.assertCountEqual(res_ok.data["usuario"]["roles_asignados"], ["estudiante", "admin"])
         self.assertCountEqual(res_ok.data["usuario"]["roles"], ["estudiante", "admin"])
 
+        # El token solo trae la lista de roles; la interfaz indica el rol elegido en cada petición
         token_admin = res_ok.data["token"]
-        req_admin = self.factory.get("/admin-only/", HTTP_AUTHORIZATION=f"Bearer {token_admin}")
+        payload_admin = verificar_token(token_admin)
+        self.assertNotIn("rol", payload_admin)
+        self.assertCountEqual(payload_admin["roles"], ["estudiante", "admin"])
+
+        req_admin = self.factory.get(
+            "/admin-only/", HTTP_AUTHORIZATION=f"Bearer {token_admin}", HTTP_X_ROL_ACTIVO="admin"
+        )
         res_admin = self.admin_only_view(req_admin)
         self.assertEqual(res_admin.status_code, 200)
         self.assertEqual(res_admin.data["rol"], "admin")

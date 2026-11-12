@@ -121,6 +121,11 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 
 CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'False').lower() in ('true', '1', 'yes')
 
+# El frontend indica en cada petición el rol con el que está trabajando (ver JWTAuthentication)
+from corsheaders.defaults import default_headers  # noqa: E402
+
+CORS_ALLOW_HEADERS = (*default_headers, 'x-rol-activo')
+
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
     for origin in os.getenv(

@@ -1,13 +1,22 @@
+from django.db.models import Count
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from gestion_administrativa.permissions import TieneRolPermitido
+from gestion_emprendimiento_2.models import Proyecto
 
+from .asignaciones import es_evaluador_asignado
 from .authentication import JWTAuthenticationRubricas
-from .models import Rubrica, SubRubrica
+from .calculos import nota_global
+from .models import Evaluacion, Rubrica, SubRubrica
 from .serializers import (
     CIEN,
+    EvaluacionEntradaSerializer,
+    EvaluacionSerializer,
     HitoListaSerializer,
     RubricaEdicionSerializer,
     RubricaSerializer,
@@ -109,12 +118,9 @@ class RubricaViewSet(PermisosRubricaMixin, mixins.UpdateModelMixin, viewsets.Rea
         return Response({"completa": not problemas, "problemas": problemas})
 
 
-
 # ---------------------------------------------------------------------------
 # HU-11 — Vista de Madurez Tecnológica (M0-M9)
 # ---------------------------------------------------------------------------
-from rest_framework.views import APIView
-from gestion_emprendimiento_2.models import Proyecto
 from .models import NivelMadurez, RegistroMadurez
 from .serializers import RegistroMadurezSerializer, RegistroMadurezCrearSerializer
 from gestion_administrativa.authentication import JWTAuthentication
@@ -210,3 +216,100 @@ class ProyectoMadurezView(APIView):
 
     def patch(self, request, id_proyecto):
         return self.put(request, id_proyecto)
+
+
+class EvaluacionViewSet(viewsets.ModelViewSet):
+    """
+    Evaluación de los hitos de un proyecto. Una por (proyecto, hito, evaluador);
+    se crea con POST y se reemplaza completa con PUT.
+    Filtros: ?proyecto=ID, ?subrubrica=ID
+    """
+    authentication_classes = [JWTAuthenticationRubricas]
+    permission_classes = [TieneRolPermitido]
+    http_method_names = ["get", "post", "put", "head", "options"]
+
+    roles_escritura = ("evaluador",)
+    roles_ver_todas = ("admin", "direccion_del_programa", "coordinador")
+    roles_lectura = roles_escritura + roles_ver_todas
+
+    @property
+    def roles_permitidos(self):
+        if self.action in ("create", "update", "mis_proyectos"):
+            return self.roles_escritura
+        return self.roles_lectura
+
+    def get_serializer_class(self):
+        if self.action in ("create", "update"):
+            return EvaluacionEntradaSerializer
+        return EvaluacionSerializer
+
+    @staticmethod
+    def _con_detalle():
+        return Evaluacion.objects.select_related("subrubrica", "evaluador").prefetch_related("notas__criterio")
+
+    def _respuesta(self, evaluacion, codigo=status.HTTP_200_OK):
+        recargada = self._con_detalle().get(pk=evaluacion.pk)
+        return Response(EvaluacionSerializer(recargada).data, status=codigo)
+
+    def get_queryset(self):
+        qs = self._con_detalle()
+        # Solo se ve todo con el rol activo de gestión, aunque se tengan otros roles
+        if getattr(self.request.user, "rol_activo", None) not in self.roles_ver_todas:
+            qs = qs.filter(evaluador=self.request.user)
+        for parametro in ("proyecto", "subrubrica"):
+            valor = self.request.query_params.get(parametro)
+            if valor:
+                # Un id no numérico no coincide con ninguno (evita un error 500)
+                qs = qs.filter(**{f"{parametro}_id": valor}) if valor.isdigit() else qs.none()
+        return qs
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return self._respuesta(serializer.save(), status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        # Sin el filtro de get_queryset: la evaluación ajena responde 403, no 404
+        evaluacion = get_object_or_404(
+            Evaluacion.objects.select_related("proyecto__iniciativa", "subrubrica__rubrica"),
+            pk=kwargs["pk"],
+        )
+        if evaluacion.evaluador_id != request.user.pk:
+            raise PermissionDenied("Solo el evaluador dueño puede modificar esta evaluación.")
+        serializer = self.get_serializer(evaluacion, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return self._respuesta(serializer.save())
+
+    @action(detail=False, methods=["get"], url_path="mis-proyectos")
+    def mis_proyectos(self, request):
+        """Proyectos activos que el evaluador puede evaluar, con su avance."""
+        proyectos = Proyecto.objects.filter(estado=Proyecto.Estado.ACTIVO).select_related("iniciativa")
+        hitos_por_tipo = dict(
+            SubRubrica.objects.values_list("rubrica__tipo_iniciativa").annotate(total=Count("pk"))
+        )
+        evaluados = dict(
+            Evaluacion.objects.filter(evaluador=request.user)
+            .values_list("proyecto_id").annotate(total=Count("subrubrica", distinct=True))
+        )
+        return Response([
+            {
+                "id": proyecto.pk,
+                "nombre_iniciativa": proyecto.iniciativa.nombre,
+                "tipo": proyecto.iniciativa.tipo,
+                "hitos_evaluados": evaluados.get(proyecto.pk, 0),
+                "hitos_totales": hitos_por_tipo.get(proyecto.iniciativa.tipo, 0),
+            }
+            for proyecto in proyectos
+            if es_evaluador_asignado(request.user, proyecto)
+        ])
+
+
+class ResultadosProyectoView(APIView):
+    """Nota global del proyecto y el detalle por hito."""
+    authentication_classes = [JWTAuthenticationRubricas]
+    permission_classes = [TieneRolPermitido]
+    roles_permitidos = ("evaluador", "admin", "direccion_del_programa", "coordinador", "tutor")
+
+    def get(self, request, id_proyecto):
+        proyecto = get_object_or_404(Proyecto.objects.select_related("iniciativa"), pk=id_proyecto)
+        return Response(nota_global(proyecto))

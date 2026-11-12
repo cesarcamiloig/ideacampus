@@ -88,19 +88,21 @@ export async function getConvocatoriasAbiertas(params = {}) {
 
 /**
  * Obtiene las postulaciones realizadas por el estudiante actual desde el backend.
+ * Usa /iniciativas/mias/ y no el listado general: si el usuario también tiene un rol
+ * de gestión (admin, coordinador...), el listado general le devolvería todas las iniciativas.
  */
 export async function getMisPostulaciones(usuario) {
   const usuarioId = usuario?.id_usuario || (typeof usuario === "string" || typeof usuario === "number" ? usuario : "default");
   const key = `${STORAGE_PREFIX}${usuarioId}`;
 
   try {
-    const remoteData = await apiClient.get("/iniciativas/");
+    const remoteData = await apiClient.get("/iniciativas/mias/");
     const lista = Array.isArray(remoteData) ? remoteData : remoteData?.results || [];
     const normalizadas = lista.map(normalizarIniciativaParaUI);
     localStorage.setItem(key, JSON.stringify(normalizadas));
     return normalizadas;
   } catch (err) {
-    console.warn("No se pudo conectar a /iniciativas/, verificando caché local:", err?.message);
+    console.warn("No se pudo conectar a /iniciativas/mias/, verificando caché local:", err?.message);
     // Fallback a almacenamiento local SOLO si hubo error de conexión
     try {
       const local = localStorage.getItem(key);

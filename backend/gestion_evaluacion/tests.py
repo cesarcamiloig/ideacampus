@@ -1,5 +1,6 @@
 from datetime import timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.utils import timezone
 from rest_framework import status
@@ -7,7 +8,10 @@ from rest_framework.test import APITestCase
 
 from gestion_administrativa.jwt_utils import generar_token
 from gestion_administrativa.models import Rol, Usuario, UsuarioRol
+from gestion_convocatorias.models import Convocatoria, Iniciativa
+from gestion_evidencia.models import Evidencia
 
+from .calculos import nota_global, nota_hito, nota_hito_promedio
 from .models import CriterioRubrica, Evaluacion, NotaCriterio, Rubrica, SubRubrica
 
 
@@ -674,3 +678,506 @@ class ProyectoMadurezViewTests(APITestCase):
         res_patch = self.client.patch(self.url, {"nivel": "M5"}, format="json")
         self.assertEqual(res_patch.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("no se puede editar directamente", res_patch.data.get("error", ""))
+
+
+class EvaluacionBaseTests(APITestCase):
+    """
+    Rúbrica de emprendimiento con 2 hitos (60 % y 40 %), con evidencias en ambos:
+    - Hito 1: C1 (peso 60, escala 1-5) y C2 (peso 40, escala 0-10).
+    - Hito 2: C3 (peso 100, escala 1-5).
+    """
+    URL = "/api/evaluaciones/"
+
+    def setUp(self):
+        self.usuarios = {}
+        self.tokens = {}
+        roles = {
+            "evaluador": "evaluador", "evaluador2": "evaluador", "admin": "admin",
+            "coordinador": "coordinador", "tutor": "tutor", "estudiante": "estudiante",
+        }
+        for i, (clave, rol) in enumerate(roles.items()):
+            rol_obj, _ = Rol.objects.get_or_create(nombre_rol=rol, defaults={"descripcion": rol})
+            usuario = Usuario.objects.create(
+                nombre=f"Usuario {clave}", correo=f"eval-{clave}@ufps.edu.co",
+                google_id=f"gid-eval-{i}", estado="activo",
+            )
+            UsuarioRol.objects.create(usuario=usuario, rol=rol_obj, estado="activo")
+            self.usuarios[clave] = usuario
+            self.tokens[clave] = generar_token(usuario, rol)
+
+        rubrica = Rubrica.objects.get(tipo_iniciativa="emprendimiento")
+        self.hito1 = SubRubrica.objects.create(rubrica=rubrica, numero_hito=1, nombre="Hito 1", ponderacion="60")
+        self.hito2 = SubRubrica.objects.create(rubrica=rubrica, numero_hito=2, nombre="Hito 2", ponderacion="40")
+        self.c1 = CriterioRubrica.objects.create(
+            subrubrica=self.hito1, nombre="C1", ponderacion="60", escala_min=1, escala_max=5)
+        self.c2 = CriterioRubrica.objects.create(
+            subrubrica=self.hito1, nombre="C2", ponderacion="40", escala_min=0, escala_max=10)
+        self.c3 = CriterioRubrica.objects.create(
+            subrubrica=self.hito2, nombre="C3", ponderacion="100", escala_min=1, escala_max=5)
+
+        self.proyecto = self.crear_proyecto("Iniciativa evaluada")
+        for hito in (self.hito1, self.hito2):
+            Evidencia.objects.create(
+                proyecto=self.proyecto, usuario=self.usuarios["estudiante"], etapa=hito,
+                titulo=f"Evidencia {hito.nombre}", tipo="documento",
+            )
+        self.como("evaluador")
+
+    def crear_proyecto(self, nombre, tipo="emprendimiento"):
+        ahora = timezone.now()
+        convocatoria = Convocatoria.objects.create(
+            nombre=f"Convocatoria {nombre}", fecha_apertura=ahora - timedelta(days=2),
+            fecha_cierre=ahora + timedelta(days=10), estado="abierta",
+        )
+        # Al quedar aprobada, la señal de gestion_emprendimiento_2 crea su Proyecto
+        return Iniciativa.objects.create(
+            convocatoria=convocatoria, usuario=self.usuarios["estudiante"], nombre=nombre,
+            tipo=tipo, origen_academico="asignatura", estado="aprobada",
+        ).proyecto
+
+    def como(self, clave):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.tokens[clave]}")
+
+    def cuerpo(self, nota1="4", nota2="8", **cambios):
+        return {
+            "proyecto": self.proyecto.pk, "subrubrica": self.hito1.pk, "comentario": "Buen avance",
+            "notas": [
+                {"criterio": self.c1.pk, "nota": nota1, "comentario": "Bien"},
+                {"criterio": self.c2.pk, "nota": nota2},
+            ],
+            **cambios,
+        }
+
+    def cuerpo_hito2(self, nota="5"):
+        return {
+            "proyecto": self.proyecto.pk, "subrubrica": self.hito2.pk,
+            "notas": [{"criterio": self.c3.pk, "nota": nota}],
+        }
+
+    def post(self, cuerpo):
+        return self.client.post(self.URL, cuerpo, format="json")
+
+    def put(self, evaluacion_id, cuerpo):
+        return self.client.put(f"{self.URL}{evaluacion_id}/", cuerpo, format="json")
+
+    def evaluar(self, clave, cuerpo):
+        self.como(clave)
+        res = self.post(cuerpo)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
+        return Evaluacion.objects.get(pk=res.data["id"])
+
+
+class CrearEvaluacionTests(EvaluacionBaseTests):
+    def test_evaluacion_valida_calcula_nota_final_con_escalas_distintas(self):
+        # 0.75 × 60 % + 0.80 × 40 % = 0.77, que en escala de 0 a 5 es 3.85
+        res = self.post(self.cuerpo())
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
+        self.assertEqual(res.data["nota_final"], "3.85")
+        self.assertEqual(res.data["evaluador"], self.usuarios["evaluador"].pk)
+        self.assertEqual(res.data["subrubrica_nombre"], "Hito 1")
+        self.assertEqual(
+            {n["criterio_nombre"]: n["nota"] for n in res.data["notas"]},
+            {"C1": "4.00", "C2": "8.00"},
+        )
+
+    def test_el_evaluador_del_body_se_ignora(self):
+        res = self.post(self.cuerpo(evaluador=self.usuarios["evaluador2"].pk))
+        self.assertEqual(res.data["evaluador"], self.usuarios["evaluador"].pk)
+
+    def test_notas_en_los_limites_de_la_escala_son_validas(self):
+        self.assertEqual(self.post(self.cuerpo(nota1="1", nota2="10")).status_code, status.HTTP_201_CREATED)
+
+    def test_nota_fuera_de_escala_da_400(self):
+        res = self.post(self.cuerpo(nota1="5.01"))
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("C1", str(res.data["notas"]))
+        self.assertEqual(self.post(self.cuerpo(nota1="0.99")).status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(Evaluacion.objects.exists())
+
+    def test_falta_un_criterio_da_400_con_el_detalle(self):
+        cuerpo = self.cuerpo()
+        cuerpo["notas"].pop()
+        res = self.post(cuerpo)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("C2", str(res.data["notas"]["faltantes"]))
+
+    def test_sobra_o_es_de_otro_hito_da_400_con_el_detalle(self):
+        cuerpo = self.cuerpo()
+        cuerpo["notas"].append({"criterio": self.c3.pk, "nota": "3"})
+        res = self.post(cuerpo)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("C3", str(res.data["notas"]["invalidos"]))
+
+        # Reemplaza un criterio del hito por uno de otro hito
+        cuerpo = self.cuerpo()
+        cuerpo["notas"][1] = {"criterio": self.c3.pk, "nota": "3"}
+        res = self.post(cuerpo)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("C3", str(res.data["notas"]["invalidos"]))
+        self.assertIn("C2", str(res.data["notas"]["faltantes"]))
+
+    def test_criterio_repetido_da_400(self):
+        cuerpo = self.cuerpo()
+        cuerpo["notas"].append({"criterio": self.c1.pk, "nota": "3"})
+        res = self.post(cuerpo)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("C1", str(res.data["notas"]["repetidos"]))
+
+    def test_criterio_inexistente_o_lista_vacia_da_400(self):
+        cuerpo = self.cuerpo()
+        cuerpo["notas"][0]["criterio"] = 999999
+        self.assertEqual(self.post(cuerpo).status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.post(self.cuerpo(notas=[])).status_code, status.HTTP_400_BAD_REQUEST)
+        cuerpo = self.cuerpo()
+        del cuerpo["notas"]
+        self.assertEqual(self.post(cuerpo).status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_hito_de_la_rubrica_del_otro_tipo_da_400(self):
+        otro = SubRubrica.objects.create(
+            rubrica=Rubrica.objects.get(tipo_iniciativa="innovacion"),
+            numero_hito=1, nombre="Otro", ponderacion="100",
+        )
+        res = self.post(self.cuerpo(subrubrica=otro.pk))
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("subrubrica", res.data)
+
+    def test_hito_sin_evidencias_da_400(self):
+        Evidencia.objects.filter(etapa=self.hito2).delete()
+        res = self.post(self.cuerpo_hito2())
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("evidencias", str(res.data["subrubrica"]))
+
+    def test_evidencia_de_otro_proyecto_no_cuenta(self):
+        otro = self.crear_proyecto("Otra iniciativa")
+        res = self.post(self.cuerpo(proyecto=otro.pk))
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_criterios_que_no_suman_100_da_400(self):
+        CriterioRubrica.objects.filter(pk=self.c2.pk).update(ponderacion="30")
+        res = self.post(self.cuerpo())
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("subrubrica", res.data)
+
+    def test_escala_mal_configurada_da_400_y_no_500(self):
+        CriterioRubrica.objects.filter(pk=self.c1.pk).update(escala_min=4, escala_max=4)
+        res = self.post(self.cuerpo(nota1="4"))
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("mal configurada", str(res.data["notas"]))
+
+    def test_segundo_post_da_400_e_indica_usar_put(self):
+        self.assertEqual(self.post(self.cuerpo()).status_code, status.HTTP_201_CREATED)
+        res = self.post(self.cuerpo())
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("PUT", str(res.data))
+        self.assertEqual(Evaluacion.objects.count(), 1)
+
+    def test_evaluador_no_asignado_da_403(self):
+        with patch("gestion_evaluacion.serializers.es_evaluador_asignado", return_value=False):
+            self.assertEqual(self.post(self.cuerpo()).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(Evaluacion.objects.exists())
+
+    def test_rol_sin_permiso_da_403_y_sin_token_401(self):
+        for clave in ("admin", "coordinador", "tutor", "estudiante"):
+            self.como(clave)
+            self.assertEqual(self.post(self.cuerpo()).status_code, status.HTTP_403_FORBIDDEN, clave)
+        self.client.credentials()
+        self.assertEqual(self.post(self.cuerpo()).status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(self.client.get(self.URL).status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertFalse(Evaluacion.objects.exists())
+
+
+class EditarEvaluacionTests(EvaluacionBaseTests):
+    def setUp(self):
+        super().setUp()
+        self.evaluacion_id = self.post(self.cuerpo()).data["id"]
+
+    def test_put_reemplaza_notas_y_comentario_y_recalcula(self):
+        res = self.put(self.evaluacion_id, {
+            "comentario": "Corregido",
+            "notas": [{"criterio": self.c1.pk, "nota": "5"}, {"criterio": self.c2.pk, "nota": "10"}],
+        })
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.assertEqual(res.data["nota_final"], "5.00")
+        self.assertEqual(res.data["comentario"], "Corregido")
+        self.assertEqual({n["nota"] for n in res.data["notas"]}, {"5.00", "10.00"})
+        self.assertEqual(NotaCriterio.objects.filter(evaluacion_id=self.evaluacion_id).count(), 2)
+
+    def test_put_con_notas_incompletas_da_400_y_no_cambia_nada(self):
+        res = self.put(self.evaluacion_id, {"notas": [{"criterio": self.c1.pk, "nota": "5"}]})
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        evaluacion = Evaluacion.objects.get(pk=self.evaluacion_id)
+        self.assertEqual(evaluacion.nota_final, Decimal("3.85"))
+        self.assertEqual(evaluacion.notas.count(), 2)
+
+    def test_put_no_puede_cambiar_proyecto_ni_hito(self):
+        res = self.put(self.evaluacion_id, self.cuerpo(subrubrica=self.hito2.pk))
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("subrubrica", res.data)
+
+        otro = self.crear_proyecto("Otra iniciativa")
+        res = self.put(self.evaluacion_id, self.cuerpo(proyecto=otro.pk))
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("proyecto", res.data)
+
+        # Si coinciden con los de la evaluación, se aceptan
+        self.assertEqual(self.put(self.evaluacion_id, self.cuerpo()).status_code, status.HTTP_200_OK)
+
+    def test_otro_evaluador_no_puede_hacer_put_403(self):
+        self.como("evaluador2")
+        res = self.put(self.evaluacion_id, self.cuerpo(nota1="1"))
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(Evaluacion.objects.get(pk=self.evaluacion_id).nota_final, Decimal("3.85"))
+
+    def test_put_de_evaluacion_inexistente_da_404(self):
+        self.assertEqual(self.put(999999, self.cuerpo()).status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_patch_y_delete_dan_405(self):
+        url = f"{self.URL}{self.evaluacion_id}/"
+        self.assertEqual(self.client.patch(url, {}, format="json").status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        self.assertEqual(self.client.delete(url).status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+
+class ConsultarEvaluacionesTests(EvaluacionBaseTests):
+    def setUp(self):
+        super().setUp()
+        self.propia = self.post(self.cuerpo()).data["id"]
+        self.como("evaluador2")
+        self.ajena = self.post(self.cuerpo()).data["id"]
+        self.post(self.cuerpo_hito2())
+
+    def test_evaluador_solo_ve_las_suyas(self):
+        self.como("evaluador")
+        res = self.client.get(self.URL)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual([e["id"] for e in res.data], [self.propia])
+        self.assertEqual(self.client.get(f"{self.URL}{self.ajena}/").status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_gestion_ve_todas_y_el_tutor_no_tiene_acceso(self):
+        for clave in ("admin", "coordinador"):
+            self.como(clave)
+            res = self.client.get(self.URL)
+            self.assertEqual(len(res.data), 3, clave)
+        self.assertEqual(self.client.get(f"{self.URL}{self.ajena}/").status_code, status.HTTP_200_OK)
+        self.como("tutor")
+        self.assertEqual(self.client.get(self.URL).status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_filtros_por_proyecto_y_subrubrica(self):
+        self.como("admin")
+        self.assertEqual(len(self.client.get(self.URL, {"subrubrica": self.hito2.pk}).data), 1)
+        self.assertEqual(len(self.client.get(self.URL, {"proyecto": self.proyecto.pk}).data), 3)
+        self.assertEqual(self.client.get(self.URL, {"proyecto": "abc"}).data, [])
+
+    def test_mis_proyectos_muestra_el_avance_del_evaluador(self):
+        pausado = self.crear_proyecto("Pausado")
+        pausado.estado = "pausado"
+        pausado.save(update_fields=["estado"])
+        otro = self.crear_proyecto("Sin evaluar")
+
+        res = self.client.get(f"{self.URL}mis-proyectos/")  # sesión de evaluador2
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        por_id = {p["id"]: p for p in res.data}
+        self.assertEqual(set(por_id), {self.proyecto.pk, otro.pk})
+        self.assertEqual(por_id[self.proyecto.pk], {
+            "id": self.proyecto.pk, "nombre_iniciativa": "Iniciativa evaluada",
+            "tipo": "emprendimiento", "hitos_evaluados": 2, "hitos_totales": 2,
+        })
+        self.assertEqual(por_id[otro.pk]["hitos_evaluados"], 0)
+
+        self.como("evaluador")
+        res = self.client.get(f"{self.URL}mis-proyectos/")
+        self.assertEqual({p["id"]: p["hitos_evaluados"] for p in res.data}[self.proyecto.pk], 1)
+
+    def test_mis_proyectos_filtra_por_asignacion_y_es_solo_para_evaluadores(self):
+        with patch("gestion_evaluacion.views.es_evaluador_asignado", return_value=False):
+            self.assertEqual(self.client.get(f"{self.URL}mis-proyectos/").data, [])
+        self.como("admin")
+        self.assertEqual(self.client.get(f"{self.URL}mis-proyectos/").status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_integracion_hu17_proyecto_con_evaluador_asignado_restringe_a_otros_evaluadores(self):
+        self.proyecto.evaluador = self.usuarios["evaluador"]
+        self.proyecto.save(update_fields=["evaluador"])
+
+        # El evaluador asignado ve el proyecto en su bandeja
+        self.como("evaluador")
+        res_asignado = self.client.get(f"{self.URL}mis-proyectos/")
+        self.assertEqual(res_asignado.status_code, status.HTTP_200_OK)
+        self.assertIn(self.proyecto.pk, [p["id"] for p in res_asignado.data])
+
+        # Otro evaluador no asignado no lo ve en su bandeja ni puede evaluarlo
+        self.como("evaluador2")
+        res_ajeno = self.client.get(f"{self.URL}mis-proyectos/")
+        self.assertEqual(res_ajeno.status_code, status.HTTP_200_OK)
+        self.assertNotIn(self.proyecto.pk, [p["id"] for p in res_ajeno.data])
+        self.assertEqual(self.post(self.cuerpo_hito2()).status_code, status.HTTP_403_FORBIDDEN)
+
+
+class CalculosTests(EvaluacionBaseTests):
+    def test_nota_hito_devuelve_escala_0_1_y_0_5_normalizando_cada_criterio(self):
+        resultado = nota_hito(self.evaluar("evaluador", self.cuerpo()))
+        self.assertEqual(resultado["resultado"], Decimal("0.77"))
+        self.assertEqual(resultado["nota_en_5"], Decimal("3.85"))
+
+    def test_nota_minima_de_todos_los_criterios_da_cero(self):
+        evaluacion = self.evaluar("evaluador", self.cuerpo(nota1="1", nota2="0"))
+        self.assertEqual(evaluacion.nota_final, Decimal("0.00"))
+
+    def test_nota_final_se_redondea_a_dos_decimales(self):
+        # (3 - 1) / 4 × 60 % + 3.33 / 10 × 40 % = 0.4332, que en escala de 0 a 5 es 2.166
+        evaluacion = self.evaluar("evaluador", self.cuerpo(nota1="3", nota2="3.33"))
+        self.assertEqual(evaluacion.nota_final, Decimal("2.17"))
+
+    def test_promedio_de_dos_evaluadores_ignora_notas_nulas(self):
+        self.assertIsNone(nota_hito_promedio(self.proyecto, self.hito1))
+        self.evaluar("evaluador", self.cuerpo())                         # 3.85
+        self.evaluar("evaluador2", self.cuerpo(nota1="5", nota2="10"))   # 5.00
+        self.assertEqual(nota_hito_promedio(self.proyecto, self.hito1), Decimal("4.425"))
+
+        Evaluacion.objects.filter(evaluador=self.usuarios["evaluador2"]).update(nota_final=None)
+        self.assertEqual(nota_hito_promedio(self.proyecto, self.hito1), Decimal("3.85"))
+
+    def test_nota_global_sin_evaluaciones(self):
+        resultado = nota_global(self.proyecto)
+        self.assertIsNone(resultado["nota_global"])
+        self.assertTrue(resultado["parcial"])
+        self.assertEqual((resultado["hitos_evaluados"], resultado["hitos_totales"]), (0, 2))
+
+    def test_nota_global_parcial_renormaliza_con_un_hito_evaluado(self):
+        self.evaluar("evaluador", self.cuerpo())
+        resultado = nota_global(self.proyecto)
+        self.assertTrue(resultado["parcial"])
+        self.assertEqual(resultado["nota_global"], Decimal("3.85"))  # 3.85 × 60 / 60
+        self.assertEqual((resultado["hitos_evaluados"], resultado["hitos_totales"]), (1, 2))
+        self.assertEqual(resultado["hitos"], [
+            {"numero_hito": 1, "nombre": "Hito 1", "ponderacion": Decimal("60.00"),
+             "nota": Decimal("3.85"), "evaluado": True},
+            {"numero_hito": 2, "nombre": "Hito 2", "ponderacion": Decimal("40.00"),
+             "nota": None, "evaluado": False},
+        ])
+
+    def test_nota_global_completa_con_todos_los_hitos(self):
+        self.evaluar("evaluador", self.cuerpo())
+        self.evaluar("evaluador", self.cuerpo_hito2())
+        resultado = nota_global(self.proyecto)
+        self.assertFalse(resultado["parcial"])
+        self.assertEqual(resultado["nota_global"], Decimal("4.31"))  # 3.85 × 60 % + 5 × 40 %
+
+    def test_nota_global_promedia_dos_evaluadores(self):
+        self.evaluar("evaluador", self.cuerpo())                         # 3.85
+        self.evaluar("evaluador2", self.cuerpo(nota1="5", nota2="10"))   # 5.00
+        self.evaluar("evaluador", self.cuerpo_hito2())                   # 5.00
+        resultado = nota_global(self.proyecto)
+        self.assertFalse(resultado["parcial"])
+        self.assertEqual(resultado["hitos"][0]["nota"], Decimal("4.43"))  # 4.425 redondeado
+        self.assertEqual(resultado["nota_global"], Decimal("4.66"))       # 4.425 × 60 % + 5 × 40 % = 4.655
+
+
+class ResultadosProyectoTests(EvaluacionBaseTests):
+    def url(self, proyecto_id=None):
+        return f"/api/proyectos/{proyecto_id or self.proyecto.pk}/resultados/"
+
+    def test_resultados_devuelve_la_nota_global_por_api(self):
+        self.evaluar("evaluador", self.cuerpo())
+        for clave in ("evaluador", "admin", "coordinador", "tutor"):
+            self.como(clave)
+            res = self.client.get(self.url())
+            self.assertEqual(res.status_code, status.HTTP_200_OK, clave)
+            self.assertEqual(res.data["nota_global"], Decimal("3.85"))
+            self.assertTrue(res.data["parcial"])
+
+    def test_proyecto_inexistente_da_404(self):
+        self.assertEqual(self.client.get(self.url(999999)).status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_otros_roles_dan_403_y_sin_token_401(self):
+        self.como("estudiante")
+        self.assertEqual(self.client.get(self.url()).status_code, status.HTTP_403_FORBIDDEN)
+        self.client.credentials()
+        self.assertEqual(self.client.get(self.url()).status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class RubricaConNotasRealesTests(EvaluacionBaseTests):
+    """El PUT de rúbricas protege los criterios que ya tienen notas, con 400 y no con 500."""
+
+    def setUp(self):
+        super().setUp()
+        self.assertEqual(self.post(self.cuerpo()).status_code, status.HTTP_201_CREATED)
+        self.rubrica = self.hito1.rubrica
+        self.url_rubrica = f"/api/rubricas/{self.rubrica.pk}/"
+        self.como("admin")
+
+    def cuerpo_rubrica(self):
+        datos = self.client.get(self.url_rubrica).data
+        return {"subrubricas": [
+            {
+                "id": h["id"], "numero_hito": h["numero_hito"], "nombre": h["nombre"],
+                "descripcion": h["descripcion"], "ponderacion": h["ponderacion"],
+                "criterios": [dict(c) for c in h["criterios"]],
+            }
+            for h in datos["subrubricas"]
+        ]}
+
+    def hito_1(self, cuerpo):
+        return next(h for h in cuerpo["subrubricas"] if h["id"] == self.hito1.pk)
+
+    def put_rubrica(self, cuerpo):
+        return self.client.put(self.url_rubrica, cuerpo, format="json")
+
+    def test_cambiar_peso_con_notas_da_400(self):
+        cuerpo = self.cuerpo_rubrica()
+        for criterio in self.hito_1(cuerpo)["criterios"]:
+            criterio["ponderacion"] = "50"
+        res = self.put_rubrica(cuerpo)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("ya tiene notas", str(res.data))
+        self.c1.refresh_from_db()
+        self.assertEqual(self.c1.ponderacion, Decimal("60"))
+
+    def test_cambiar_escala_con_notas_da_400(self):
+        for campo, valor in (("escala_max", 10), ("escala_min", 0)):
+            cuerpo = self.cuerpo_rubrica()
+            self.hito_1(cuerpo)["criterios"][0][campo] = valor
+            res = self.put_rubrica(cuerpo)
+            self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, campo)
+            self.assertIn("ya tiene notas", str(res.data))
+
+    def test_borrar_criterio_con_notas_da_400_y_no_cambia_nada(self):
+        cuerpo = self.cuerpo_rubrica()
+        hito = self.hito_1(cuerpo)
+        hito["criterios"] = [c for c in hito["criterios"] if c["id"] == self.c1.pk]
+        hito["criterios"][0]["ponderacion"] = "60"
+        hito["criterios"].append({"nombre": "Reemplazo", "ponderacion": "40"})
+        res = self.put_rubrica(cuerpo)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("C2", str(res.data))
+        self.assertTrue(CriterioRubrica.objects.filter(pk=self.c2.pk).exists())
+        self.assertFalse(CriterioRubrica.objects.filter(nombre="Reemplazo").exists())
+
+    def test_borrar_hito_con_evidencias_da_400_y_no_cambia_nada(self):
+        # Se omite el hito 2, que no tiene evaluaciones pero sí evidencias
+        cuerpo = self.cuerpo_rubrica()
+        cuerpo["subrubricas"] = [self.hito_1(cuerpo)]
+        cuerpo["subrubricas"][0]["ponderacion"] = "100"
+        res = self.put_rubrica(cuerpo)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.hito1.refresh_from_db()
+        self.assertEqual(self.hito1.ponderacion, Decimal("60"))
+
+        # Sin evidencias ni evaluaciones ya se puede borrar
+        Evidencia.objects.filter(etapa=self.hito2).delete()
+        self.assertEqual(self.put_rubrica(cuerpo).status_code, status.HTTP_200_OK)
+        self.assertFalse(SubRubrica.objects.filter(pk=self.hito2.pk).exists())
+
+    def test_borrar_hito_evaluado_da_400(self):
+        cuerpo = self.cuerpo_rubrica()
+        cuerpo["subrubricas"] = [h for h in cuerpo["subrubricas"] if h["id"] == self.hito2.pk]
+        cuerpo["subrubricas"][0].update(numero_hito=1, ponderacion="100")
+        res = self.put_rubrica(cuerpo)
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("evaluaciones", str(res.data))
+        self.assertTrue(SubRubrica.objects.filter(pk=self.hito1.pk).exists())
+
+    def test_cambiar_textos_con_notas_si_se_permite(self):
+        cuerpo = self.cuerpo_rubrica()
+        self.hito_1(cuerpo)["criterios"][0]["nombre"] = "C1 renombrado"
+        self.assertEqual(self.put_rubrica(cuerpo).status_code, status.HTTP_200_OK)
+        self.c1.refresh_from_db()
+        self.assertEqual(self.c1.nombre, "C1 renombrado")
