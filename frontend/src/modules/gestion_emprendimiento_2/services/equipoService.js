@@ -43,7 +43,8 @@ export async function obtenerMisIniciativasAprobadas() {
     return Array.isArray(data) ? data : data?.results || [];
   } catch (err) {
     try {
-      const data = await apiClient.get("/iniciativas/");
+      // Solo las del usuario de la sesión, aunque también tenga roles de gestión
+      const data = await apiClient.get("/iniciativas/mias/");
       const lista = Array.isArray(data) ? data : data?.results || [];
       const estadosAprobados = ["aprobada", "aprobado", "aceptada", "aceptado", "validada", "validado"];
       return lista.filter(
