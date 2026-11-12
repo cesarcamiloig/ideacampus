@@ -51,3 +51,17 @@ export function actualizarEvaluacion(idEvaluacion, datos) {
 export function getResultadosProyecto(idProyecto) {
     return apiClient.get(`/proyectos/${idProyecto}/resultados/`)
 }
+
+// Madurez tecnológica M0-M9 (HU-11). El nivel nunca se edita: cada cambio es un registro nuevo.
+// GET  /proyectos/:id/madurez/
+// { proyecto_id, nombre_proyecto, nivel_actual: "M0", niveles_disponibles: [{ codigo, nombre }],
+//   historial: [{ id, nivel, nivel_display, criterio_cumplido, evaluador, evidencias, evaluacion, fecha_registro }] }
+// POST /proyectos/:id/madurez/ { nivel, criterio_cumplido, evaluacion?, evidencias_ids? }
+// Solo el evaluador asignado al proyecto (o coordinación/dirección) puede registrar.
+export function getMadurezProyecto(idProyecto) {
+    return apiClient.get(`/proyectos/${idProyecto}/madurez/`)
+}
+
+export function registrarMadurez(idProyecto, datos) {
+    return apiClient.post(`/proyectos/${idProyecto}/madurez/`, datos)
+}
