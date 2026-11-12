@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowLeft,
   ArrowDownWideNarrow,
   ArrowUpWideNarrow,
   CircleDot,
@@ -14,8 +15,15 @@ import {
   ShieldOff,
   User,
 } from "lucide-react";
-import { BOTON_SECUNDARIO } from "../../gestion_evaluacion/components/estilos";
-import { Esqueleto, EstadoCompleto, PanelLateral } from "../../gestion_acompaniamiento/components/panelComun";
+import {
+  BOTON_SECUNDARIO,
+  DISTINTIVO_BASE,
+  EncabezadoPagina,
+  PanelLateral,
+  TONOS_DISTINTIVO,
+  Tarjeta,
+} from "../../../components/ui";
+import { Esqueleto, EstadoCompleto } from "../../gestion_acompaniamiento/components/panelComun";
 import { useManejarErrorSesion } from "../../gestion_acompaniamiento/components/panelUtilidades";
 import { getLineaTiempo } from "../services/lineaTiempoService";
 
@@ -29,11 +37,12 @@ const TIPOS_EVENTO = {
 };
 const ALIAS_TIPO = { iniciativa: "postulacion" };
 
+// Paleta UFPS: logrado = rojo, en curso = negro, alerta = contorno rojo, resto = gris
 const TONOS = {
-  exito: { punto: "bg-emerald-600 text-white", estado: "bg-emerald-50 text-emerald-800" },
-  proceso: { punto: "bg-amber-500 text-white", estado: "bg-amber-50 text-amber-800" },
-  alerta: { punto: "bg-ufps text-white", estado: "bg-ufps-suave text-ufps" },
-  neutro: { punto: "bg-slate-500 text-white", estado: "bg-slate-100 text-slate-700" },
+  exito: { punto: "bg-ufps text-white", estado: TONOS_DISTINTIVO.rojo },
+  proceso: { punto: "bg-slate-800 text-white", estado: TONOS_DISTINTIVO.oscuro },
+  alerta: { punto: "bg-white text-ufps ring-ufps", estado: TONOS_DISTINTIVO.alerta },
+  neutro: { punto: "bg-slate-400 text-white", estado: TONOS_DISTINTIVO.gris },
 };
 const ESTADOS_EXITO = ["completado", "aprobada", "aprobado", "aceptada", "aceptado", "validada", "activo", "finalizado", "tutor_asignado"];
 const ESTADOS_PROCESO = ["en_progreso", "en_evaluacion", "en_revision", "pendiente", "pausado", "radicada"];
@@ -135,7 +144,7 @@ function EventoLineaTiempo({ evento }) {
         </div>
         <p className="break-words text-sm font-semibold text-slate-900">{evento.nombre || "Etapa sin nombre"}</p>
         <div className="flex flex-wrap items-center gap-2">
-          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${tono.estado}`}>
+          <span className={`${DISTINTIVO_BASE} ${tono.estado}`}>
             {textoLegible(evento.estado) || "Sin estado"}
           </span>
           {evento.responsable && (
@@ -154,9 +163,19 @@ function EventoLineaTiempo({ evento }) {
   );
 }
 
-// Línea de tiempo evolutiva de una iniciativa o proyecto, en un panel lateral.
+// Línea de tiempo evolutiva de una iniciativa o proyecto.
 // Recibe idIniciativa (Banco de Iniciativas) o idProyecto (proyectos asignados al tutor).
-export default function LineaTiempoPanel({ idIniciativa, idProyecto, nombre, onClose }) {
+// modo="panel" la abre en un panel lateral; modo="pagina" la muestra como una vista completa
+// dentro del contenido, con un botón para volver (onClose).
+export default function LineaTiempoPanel({
+  idIniciativa,
+  idProyecto,
+  nombre,
+  onClose,
+  modo = "panel",
+  textoVolver = "Volver",
+  seccion = "Línea de tiempo",
+}) {
   const manejarErrorSesion = useManejarErrorSesion();
   const [orden, setOrden] = useState("asc");
   const [filtro, setFiltro] = useState("todos");
@@ -204,15 +223,9 @@ export default function LineaTiempoPanel({ idIniciativa, idProyecto, nombre, onC
       activo ? "bg-ufps text-white" : "bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
     }`;
 
-  return (
-    <PanelLateral
-      titulo="Línea de tiempo"
-      subtitulo={nombre || "Iniciativa"}
-      etiquetaCerrar="Cerrar línea de tiempo"
-      onClose={onClose}
-      anuncio={estado.fase === "listo" ? `${eventos.length} etapas registradas` : ""}
-    >
-      {estado.fase === "cargando" ? (
+  const anuncio = estado.fase === "listo" ? `${eventos.length} etapas registradas` : "";
+
+  const contenido = estado.fase === "cargando" ? (
         <Esqueleto texto="Cargando la línea de tiempo..." />
       ) : estado.fase === "sinPermiso" ? (
         <EstadoCompleto icono={ShieldOff} titulo="Sin acceso a la línea de tiempo">
@@ -292,7 +305,65 @@ export default function LineaTiempoPanel({ idIniciativa, idProyecto, nombre, onC
             ))}
           </div>
         </div>
-      )}
+      );
+
+  if (modo === "pagina") {
+    return <VistaPagina nombre={nombre} seccion={seccion} textoVolver={textoVolver} onVolver={onClose} anuncio={anuncio}>
+      {contenido}
+    </VistaPagina>;
+  }
+
+  return (
+    <PanelLateral
+      titulo="Línea de tiempo"
+      subtitulo={nombre || "Iniciativa"}
+      etiquetaCerrar="Cerrar línea de tiempo"
+      onClose={onClose}
+      anuncio={anuncio}
+    >
+      {contenido}
     </PanelLateral>
+  );
+}
+
+// Vista de página completa: sube al inicio, enfoca el título y permite volver con Escape
+function VistaPagina({ nombre, seccion, textoVolver, onVolver, anuncio, children }) {
+  const inicioRef = useRef(null);
+
+  useEffect(() => {
+    const anterior = document.activeElement;
+    inicioRef.current?.scrollIntoView({ block: "start" });
+    inicioRef.current?.querySelector("h1 [tabindex]")?.focus({ preventScroll: true });
+    return () => {
+      if (anterior && document.contains(anterior)) anterior.focus({ preventScroll: true });
+    };
+  }, []);
+
+  useEffect(() => {
+    const alPresionar = (e) => {
+      if (e.key === "Escape") onVolver?.();
+    };
+    document.addEventListener("keydown", alPresionar);
+    return () => document.removeEventListener("keydown", alPresionar);
+  }, [onVolver]);
+
+  return (
+    <div ref={inicioRef} className="w-full scroll-mt-6 space-y-6 animate-aparecer motion-reduce:animate-desvanecer">
+      <EncabezadoPagina
+        seccion={seccion}
+        titulo={<span tabIndex={-1} className="outline-none">{nombre || "Iniciativa"}</span>}
+        descripcion="Evolución cronológica del proyecto: postulación, creación, tutoría, hitos del plan de trabajo y evaluaciones."
+        acciones={
+          <button type="button" onClick={onVolver} className={BOTON_SECUNDARIO}>
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            {textoVolver}
+          </button>
+        }
+      />
+      <p className="sr-only" aria-live="polite">
+        {anuncio}
+      </p>
+      <Tarjeta>{children}</Tarjeta>
+    </div>
   );
 }

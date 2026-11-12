@@ -1,5 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Download, ExternalLink, FileText, Link2, Loader2, RefreshCw, Trash2, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Download, ExternalLink, FileText, Link2, Loader2, RefreshCw, Trash2 } from "lucide-react";
+import {
+  BOTON_ICONO_PELIGRO,
+  BOTON_PRIMARIO_SM,
+  BOTON_SECUNDARIO,
+  BOTON_SECUNDARIO_SM,
+  Cargando,
+  Distintivo,
+  ErrorGeneral,
+  FOCO,
+  MensajeError,
+  PanelLateral,
+  Pestanas,
+} from "../../../components/ui";
 import { descargarDocumentoEvidencia, eliminarEvidencia } from "../services/evidenciaService";
 
 const FILTROS = [
@@ -30,8 +43,7 @@ function formatFecha(valor) {
   return fecha.toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-const ADJUNTO_CLASS =
-  "flex w-full items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 text-left transition-colors hover:border-red-300 hover:bg-red-50/40 disabled:cursor-wait disabled:opacity-70";
+const ADJUNTO_CLASS = `flex w-full items-center gap-3 rounded-lg bg-white px-3 py-2.5 text-left ring-1 ring-slate-200 transition-colors hover:bg-slate-50 hover:ring-slate-300 disabled:cursor-wait disabled:opacity-70 ${FOCO}`;
 
 export function DocumentoAdjunto({ doc }) {
   const [descargando, setDescargando] = useState(false);
@@ -41,12 +53,13 @@ export function DocumentoAdjunto({ doc }) {
     return (
       <li>
         <a href={doc.enlace} target="_blank" rel="noopener noreferrer" className={ADJUNTO_CLASS}>
-          <Link2 className="h-4 w-4 shrink-0 text-slate-400" />
+          <Link2 className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-semibold text-slate-800">{doc.enlace}</p>
-            <p className="text-[11px] text-slate-500">Enlace</p>
+            <p className="truncate text-sm font-semibold text-slate-800">{doc.enlace}</p>
+            <p className="text-xs text-slate-500">Enlace</p>
           </div>
-          <ExternalLink className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+          <ExternalLink className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+          <span className="sr-only">(se abre en otra pestaña)</span>
         </a>
       </li>
     );
@@ -79,18 +92,18 @@ export function DocumentoAdjunto({ doc }) {
   return (
     <li className="space-y-1">
       <button type="button" onClick={descargar} disabled={descargando} className={ADJUNTO_CLASS}>
-        <FileText className="h-4 w-4 shrink-0 text-slate-400" />
+        <FileText className="h-4 w-4 shrink-0 text-ufps" aria-hidden="true" />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-semibold text-slate-800">{nombre}</p>
-          {detalle && <p className="text-[11px] text-slate-500">{detalle}</p>}
+          <p className="truncate text-sm font-semibold text-slate-800">{nombre}</p>
+          {detalle && <p className="text-xs text-slate-500">{detalle}</p>}
         </div>
         {descargando ? (
-          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-red-600" />
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-ufps" aria-hidden="true" />
         ) : (
-          <Download className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+          <Download className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
         )}
       </button>
-      {error && <p className="text-[11px] font-medium text-red-600" role="alert">{error}</p>}
+      <MensajeError>{error}</MensajeError>
     </li>
   );
 }
@@ -111,7 +124,6 @@ export default function EvidenciasCargadasPanel({
   mensajeVacio = "Aún no se han registrado evidencias en este proyecto.",
 }) {
   const [filtro, setFiltro] = useState("todas");
-  const botonCerrarRef = useRef(null);
   const [confirmandoId, setConfirmandoId] = useState(null);
   const [eliminandoId, setEliminandoId] = useState(null);
   const [errorEliminar, setErrorEliminar] = useState({});
@@ -130,16 +142,7 @@ export default function EvidenciasCargadasPanel({
     }
   }
 
-  useEffect(() => {
-    if (!open) return;
-    botonCerrarRef.current?.focus();
-    const cerrarConEscape = (e) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", cerrarConEscape);
-    return () => document.removeEventListener("keydown", cerrarConEscape);
-  }, [open, onClose]);
-
+  // El foco atrapado, Escape y el retorno del foco los maneja PanelLateral
   const conteo = useMemo(() => {
     const totales = { todas: evidencias.length };
     evidencias.forEach((ev) => {
@@ -156,90 +159,42 @@ export default function EvidenciasCargadasPanel({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-slate-900/40" onClick={onClose} aria-hidden="true" />
-      <aside
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="titulo-evidencias-cargadas"
-        className="relative flex h-full w-full max-w-lg flex-col bg-white shadow-2xl"
-      >
-        <div className="space-y-3 border-b border-slate-100 p-4 sm:p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h3 id="titulo-evidencias-cargadas" className="text-sm font-bold text-slate-900">{titulo}</h3>
-              <p className="text-xs text-slate-500">{subtitulo}</p>
-            </div>
-            <button
-              ref={botonCerrarRef}
-              type="button"
-              onClick={onClose}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-              aria-label="Cerrar evidencias cargadas"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar por tipo de evidencia">
-          {FILTROS.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              aria-pressed={filtro === f.id}
-              onClick={() => setFiltro(f.id)}
-              className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors ${filtro === f.id
-                ? "border-red-600 bg-red-50 text-red-700"
-                : "border-slate-200 bg-white text-slate-600 hover:border-red-300 hover:bg-slate-50"
-                }`}
-            >
-              {f.label} ({conteo[f.id] || 0})
-            </button>
-          ))}
-        </div>
-      </div>
+    <PanelLateral titulo={titulo} subtitulo={subtitulo} etiquetaCerrar="Cerrar evidencias cargadas" onClose={onClose} ancho="max-w-lg">
+      <div className="space-y-5">
+        <Pestanas
+          etiqueta="Filtrar por tipo de evidencia"
+          valor={filtro}
+          onChange={setFiltro}
+          opciones={FILTROS.map((f) => ({ id: f.id, label: f.label, count: conteo[f.id] || 0 }))}
+        />
 
-      <div className="flex-1 overflow-y-auto p-4 sm:p-5">
         {cargando ? (
-          <div className="flex items-center justify-center gap-2 py-10 text-xs text-slate-500">
-            <Loader2 className="h-4 w-4 animate-spin text-red-600" />
-            Cargando evidencias...
-          </div>
+          <Cargando texto="Cargando evidencias..." enTarjeta={false} />
         ) : error ? (
-          <div className="flex flex-col items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-xs text-red-700 sm:flex-row sm:items-center sm:justify-between">
-            <span className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              {error}
-            </span>
-            <button
-              type="button"
-              onClick={onReintentar}
-              className="inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-white px-3 py-1.5 font-semibold text-red-700 hover:bg-red-50"
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
+          <div className="space-y-3">
+            <ErrorGeneral mensaje={error} />
+            <button type="button" onClick={onReintentar} className={BOTON_SECUNDARIO}>
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
               Reintentar
             </button>
           </div>
         ) : visibles.length === 0 ? (
-          <p className="py-8 text-center text-xs text-slate-400">
-            {evidencias.length === 0
-              ? mensajeVacio
-              : "No hay evidencias de este tipo."}
+          <p className="py-8 text-center text-sm text-slate-500">
+            {evidencias.length === 0 ? mensajeVacio : "No hay evidencias de este tipo."}
           </p>
         ) : (
           <ul className="space-y-4">
             {visibles.map((ev) => (
-              <li key={ev.id} className="rounded-lg border border-slate-200 p-4">
+              <li key={ev.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <p className="break-words text-sm font-semibold text-slate-900">{ev.titulo}</p>
-                    <p className="mt-0.5 text-[11px] text-slate-500">
+                    <p className="mt-0.5 text-xs text-slate-500">
                       {[ev.etapa_nombre, ev.usuario_nombre, formatFecha(ev.creado)].filter(Boolean).join(" · ")}
                     </p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="w-fit rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold text-red-700">
-                      {ETIQUETA_TIPO[ev.tipo] || ev.tipo}
-                    </span>
+                  <div className="-my-1.5 flex shrink-0 items-center gap-1">
+                    <Distintivo tono="contorno">{ETIQUETA_TIPO[ev.tipo] || ev.tipo}</Distintivo>
                     {puedeEliminar && confirmandoId !== ev.id && (
                       <button
                         type="button"
@@ -247,18 +202,18 @@ export default function EvidenciasCargadasPanel({
                           setConfirmandoId(ev.id);
                           setErrorEliminar({});
                         }}
-                        className="rounded-md p-1 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                        className={BOTON_ICONO_PELIGRO}
                         title="Eliminar evidencia"
                         aria-label={`Eliminar la evidencia ${ev.titulo}`}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
                       </button>
                     )}
                   </div>
                 </div>
                 {confirmandoId === ev.id && (
-                  <div className="mt-3 flex flex-col gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-xs font-medium text-red-800">
+                  <div className="mt-3 flex flex-col gap-2 rounded-xl border border-ufps bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-xs font-medium text-ufps">
                       ¿Eliminar esta evidencia y todos sus adjuntos? No se puede deshacer.
                     </p>
                     <div className="flex shrink-0 gap-2">
@@ -266,7 +221,7 @@ export default function EvidenciasCargadasPanel({
                         type="button"
                         onClick={() => setConfirmandoId(null)}
                         disabled={eliminandoId === ev.id}
-                        className="rounded-md border border-slate-300 bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                        className={BOTON_SECUNDARIO_SM}
                       >
                         Cancelar
                       </button>
@@ -274,19 +229,21 @@ export default function EvidenciasCargadasPanel({
                         type="button"
                         onClick={() => confirmarEliminar(ev.id)}
                         disabled={eliminandoId === ev.id}
-                        className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-red-700 disabled:cursor-wait disabled:opacity-60"
+                        className={BOTON_PRIMARIO_SM}
                       >
-                        {eliminandoId === ev.id && <Loader2 className="h-3 w-3 animate-spin" />}
+                        {eliminandoId === ev.id && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
                         {eliminandoId === ev.id ? "Eliminando..." : "Eliminar"}
                       </button>
                     </div>
                   </div>
                 )}
                 {errorEliminar[ev.id] && (
-                  <p className="mt-2 text-[11px] font-medium text-red-600" role="alert">{errorEliminar[ev.id]}</p>
+                  <div className="mt-2">
+                    <MensajeError>{errorEliminar[ev.id]}</MensajeError>
+                  </div>
                 )}
                 {ev.descripcion && (
-                  <p className="mt-2 whitespace-pre-line text-xs leading-relaxed text-slate-600">{ev.descripcion}</p>
+                  <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-600">{ev.descripcion}</p>
                 )}
                 {ev.documentos?.length > 0 && (
                   <ul className="mt-3 space-y-2">
@@ -300,7 +257,6 @@ export default function EvidenciasCargadasPanel({
           </ul>
         )}
       </div>
-      </aside>
-    </div>
+    </PanelLateral>
   );
 }

@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from "react";
+import { Calendar, Clock, FileText, CheckCircle2, ArrowRight, Layers, ChevronDown, ChevronUp, Tag } from "lucide-react";
 import {
-  Calendar,
-  Clock,
-  FileText,
-  Search,
-  CheckCircle2,
-  AlertCircle,
-  ArrowRight,
-  Layers,
-  ChevronDown,
-  ChevronUp,
-  Tag,
-  BookOpen,
-} from "lucide-react";
+  BOTON_FANTASMA,
+  BOTON_PRIMARIO,
+  BOTON_SECUNDARIO,
+  Buscador,
+  Cargando,
+  Distintivo,
+  EncabezadoPagina,
+  ErrorGeneral,
+  EstadoVacio,
+  Pestanas,
+  Rotulo,
+  TARJETA,
+} from "../../../components/ui";
 import { getConvocatoriasAbiertas } from "../services/postulacionService";
 
 export default function ConvocatoriasAbiertasView({ onSelectConvocatoria, onVerMisPostulaciones }) {
@@ -86,230 +87,161 @@ export default function ConvocatoriasAbiertasView({ onSelectConvocatoria, onVerM
 
   return (
     <div className="space-y-6">
-      {/* HEADER INSTITUCIONAL */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 border border-red-200">
-              <BookOpen className="h-3.5 w-3.5" />
-              Postulación de Iniciativas
-            </span>
-            <span className="text-xs text-slate-500 font-medium">
-              Periodo Académico 2026-1
-            </span>
-          </div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900">
-            Convocatorias Abiertas de Emprendimiento e Innovación
-          </h2>
-          <p className="text-sm text-slate-600 mt-1 max-w-2xl">
-            Explora los ciclos de postulación activos publicados por el Programa de Ingeniería de Sistemas y radica tu proyecto declarando su origen académico.
-          </p>
-        </div>
-
-        {onVerMisPostulaciones && (
-          <button
-            type="button"
-            onClick={onVerMisPostulaciones}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-100 hover:bg-slate-200 px-4 py-2.5 text-xs font-semibold text-slate-700 transition-colors shrink-0"
-          >
-            <Layers className="h-4 w-4 text-slate-500" />
-            Ver Mis Iniciativas Radicadas
-          </button>
-        )}
-      </div>
-
-      {/* FILTROS Y BÚSQUEDA */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar por nombre, tecnología o área..."
-            className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl border border-slate-200 bg-white placeholder-slate-400 text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all shadow-sm"
-          />
-        </div>
-
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
-          {categorias.map((cat) => (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => setCategoriaFiltro(cat)}
-              className={`px-3 py-2 text-xs font-semibold rounded-xl border transition-all whitespace-nowrap capitalize ${
-                categoriaFiltro === cat
-                  ? "bg-red-600 border-red-600 text-white shadow-sm"
-                  : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
-              }`}
-            >
-              {cat === "todas" ? "Todas las Áreas" : cat}
+      <EncabezadoPagina
+        seccion="Postulación de iniciativas · Periodo Académico 2026-1"
+        titulo="Convocatorias Abiertas de Emprendimiento e Innovación"
+        descripcion="Explora los ciclos de postulación activos publicados por el Programa de Ingeniería de Sistemas y radica tu proyecto declarando su origen académico."
+        acciones={
+          onVerMisPostulaciones && (
+            <button type="button" onClick={onVerMisPostulaciones} className={BOTON_SECUNDARIO}>
+              <Layers className="h-4 w-4" aria-hidden="true" />
+              Ver Mis Iniciativas Radicadas
             </button>
-          ))}
-        </div>
+          )
+        }
+      />
+
+      {/* Filtros y búsqueda */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+        <Buscador
+          className="flex-1"
+          valor={searchTerm}
+          onChange={setSearchTerm}
+          placeholder="Buscar por nombre, tecnología o área…"
+        />
+        <Pestanas
+          etiqueta="Área temática"
+          valor={categoriaFiltro}
+          onChange={setCategoriaFiltro}
+          className="capitalize"
+          opciones={categorias.map((cat) => ({ id: cat, label: cat === "todas" ? "Todas las Áreas" : cat }))}
+        />
       </div>
 
-      {/* LISTADO DE CONVOCATORIAS */}
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl border border-slate-200">
-          <div className="animate-spin rounded-full h-8 w-8 border-2 border-red-600 border-t-transparent" />
-          <span className="mt-3 text-xs font-medium text-slate-500">
-            Consultando convocatorias vigentes en el servidor...
-          </span>
-        </div>
+        <Cargando texto="Consultando convocatorias vigentes en el servidor…" />
       ) : error ? (
-        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-3">
-          <AlertCircle className="h-5 w-5 shrink-0" />
-          <span>{error}</span>
-        </div>
+        <ErrorGeneral mensaje={error} />
       ) : convocatorias.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 p-8">
-          <FileText className="mx-auto h-12 w-12 text-slate-300" />
-          <h3 className="mt-3 text-base font-bold text-slate-800">
-            No hay convocatorias abiertas en este momento
-          </h3>
-          <p className="mt-1 text-xs text-slate-500 max-w-sm mx-auto">
-            Actualmente no hay ciclos de postulación activos publicados en la plataforma.
-          </p>
-        </div>
+        <EstadoVacio icono={FileText} titulo="No hay convocatorias abiertas en este momento">
+          Actualmente no hay ciclos de postulación activos publicados en la plataforma.
+        </EstadoVacio>
       ) : convocatoriasFiltradas.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 p-8">
-          <FileText className="mx-auto h-12 w-12 text-slate-300" />
-          <h3 className="mt-3 text-base font-bold text-slate-800">
-            No se encontraron convocatorias con estos criterios
-          </h3>
-          <p className="mt-1 text-xs text-slate-500 max-w-sm mx-auto">
-            Prueba ajustando el término de búsqueda o seleccionando otra área temática.
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              setSearchTerm("");
-              setCategoriaFiltro("todas");
-            }}
-            className="mt-4 inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
-          >
-            Restablecer filtros
-          </button>
-        </div>
+        <EstadoVacio
+          icono={FileText}
+          titulo="No se encontraron convocatorias con estos criterios"
+          accion={
+            <button
+              type="button"
+              onClick={() => {
+                setSearchTerm("");
+                setCategoriaFiltro("todas");
+              }}
+              className={BOTON_SECUNDARIO}
+            >
+              Restablecer filtros
+            </button>
+          }
+        >
+          Prueba ajustando el término de búsqueda o seleccionando otra área temática.
+        </EstadoVacio>
       ) : (
         <div className="grid grid-cols-1 gap-5">
           {convocatoriasFiltradas.map((conv) => {
             const diasRestantes = calcularDiasRestantes(conv.fecha_cierre);
             const isExpanded = expandedCard === conv.id_convocatoria;
+            const idDetalle = `requisitos-${conv.id_convocatoria}`;
 
             return (
-              <div
-                key={conv.id_convocatoria}
-                className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:border-slate-300 transition-all"
-              >
-                <div className="p-6">
-                  <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
-                    <div className="space-y-2 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                          <CheckCircle2 className="h-3 w-3" />
-                          Convocatoria Abierta
-                        </span>
-
-                        {conv.categoria && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                            <Tag className="h-3 w-3 text-slate-400" />
-                            {conv.categoria}
-                          </span>
-                        )}
-
-                        {conv.periodo_nombre && (
-                          <span className="text-[11px] text-slate-500 font-medium">
-                            • {conv.periodo_nombre}
-                          </span>
-                        )}
-                      </div>
-
-                      <h3 className="text-xl font-bold text-slate-900 leading-snug">
-                        {conv.nombre}
-                      </h3>
-
-                      <p className="text-xs text-slate-600 leading-relaxed max-w-3xl">
-                        {conv.descripcion || "Sin descripción proporcionada."}
-                      </p>
-
-                      {/* FECHAS Y CRONOGRAMA */}
-                      <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-2">
-                        <div className="flex items-center gap-1.5">
-                          <Calendar className="h-4 w-4 text-slate-400" />
-                          <span>Apertura: <strong>{formatearFecha(conv.fecha_apertura)}</strong></span>
-                        </div>
-                        <span>•</span>
-                        <div className="flex items-center gap-1.5">
-                          <Calendar className="h-4 w-4 text-red-500" />
-                          <span>Límite de entrega: <strong className="text-slate-800">{formatearFecha(conv.fecha_cierre)}</strong></span>
-                        </div>
-                        {diasRestantes !== null && (
-                          <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 text-amber-800 font-semibold border border-amber-200 text-[11px]">
-                            <Clock className="h-3 w-3 text-amber-600" />
-                            <span>{diasRestantes === 0 ? "Cierra hoy" : `Quedan ${diasRestantes} días`}</span>
-                          </div>
-                        )}
-                      </div>
+              <article key={conv.id_convocatoria} className={`${TARJETA} p-5 sm:p-6`}>
+                <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+                  <div className="flex-1 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Distintivo tono="rojo" icono={CheckCircle2}>
+                        Convocatoria Abierta
+                      </Distintivo>
+                      {conv.categoria && (
+                        <Distintivo tono="contorno" icono={Tag}>
+                          {conv.categoria}
+                        </Distintivo>
+                      )}
+                      {conv.periodo_nombre && <span className="text-xs font-medium text-slate-500">{conv.periodo_nombre}</span>}
                     </div>
 
-                    {/* BOTÓN DE ACCIÓN PRINCIPAL: POSTULARSE */}
-                    <div className="flex flex-col sm:flex-row lg:flex-col items-stretch lg:items-end justify-between gap-3 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => onSelectConvocatoria(conv)}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 px-5 py-2.5 text-xs font-semibold text-white shadow-sm hover:shadow transition-all group"
-                      >
-                        <span>Postular Mi Iniciativa</span>
-                        <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                      </button>
+                    <h3 className="text-lg font-semibold leading-snug tracking-tight text-slate-900">{conv.nombre}</h3>
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setExpandedCard(isExpanded ? null : conv.id_convocatoria)
-                        }
-                        className="inline-flex items-center justify-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-800 py-1"
-                      >
-                        <span>{isExpanded ? "Ocultar requisitos y rúbrica" : "Ver requisitos y rúbrica"}</span>
-                        {isExpanded ? (
-                          <ChevronUp className="h-3.5 w-3.5" />
-                        ) : (
-                          <ChevronDown className="h-3.5 w-3.5" />
-                        )}
-                      </button>
+                    <p className="max-w-3xl text-sm leading-relaxed text-slate-600">
+                      {conv.descripcion || "Sin descripción proporcionada."}
+                    </p>
+
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-2 text-xs text-slate-600">
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                        Apertura: <strong className="text-slate-800">{formatearFecha(conv.fecha_apertura)}</strong>
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="h-4 w-4 text-ufps" aria-hidden="true" />
+                        Límite de entrega: <strong className="text-slate-800">{formatearFecha(conv.fecha_cierre)}</strong>
+                      </span>
+                      {diasRestantes !== null && (
+                        <span className="flex items-center gap-1 font-semibold text-slate-900">
+                          <Clock className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                          {diasRestantes === 0 ? "Cierra hoy" : `Quedan ${diasRestantes} días`}
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  {/* SECCIÓN EXPANDIBLE: REQUISITOS Y CRITERIOS */}
-                  {isExpanded && (
-                    <div className="mt-5 pt-5 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in duration-200">
-                      <div className="rounded-xl bg-slate-50/80 p-4 border border-slate-100">
-                        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
-                          <FileText className="h-3.5 w-3.5 text-red-600" />
-                          <span>Requisitos Documentales Obligatorios</span>
-                        </div>
-                        <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed">
-                          {conv.requisitos_documentacion ||
-                            "1. Formato de propuesta técnica.\n2. Aval de origen académico firmado por el docente o tutor.\n3. Enlace a repositorio o prototipo funcional."}
-                        </p>
-                      </div>
-
-                      <div className="rounded-xl bg-slate-50/80 p-4 border border-slate-100">
-                        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
-                          <Layers className="h-3.5 w-3.5 text-red-600" />
-                          <span>Criterios de Evaluación y Ponderación</span>
-                        </div>
-                        <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed">
-                          {conv.criterios_evaluacion ||
-                            "Rigor técnico e innovación de la propuesta (40%), Trazabilidad y validación de origen académico (30%), Nivel de madurez tecnológica inicial TRL (30%)."}
-                        </p>
-                      </div>
-                    </div>
-                  )}
+                  <div className="flex shrink-0 flex-col items-stretch justify-between gap-2 border-t border-slate-100 pt-3 sm:flex-row lg:flex-col lg:items-end lg:border-t-0 lg:pt-0">
+                    <button type="button" onClick={() => onSelectConvocatoria(conv)} className={BOTON_PRIMARIO}>
+                      Postular Mi Iniciativa
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedCard(isExpanded ? null : conv.id_convocatoria)}
+                      aria-expanded={isExpanded}
+                      aria-controls={idDetalle}
+                      className={BOTON_FANTASMA}
+                    >
+                      {isExpanded ? "Ocultar requisitos y rúbrica" : "Ver requisitos y rúbrica"}
+                      {isExpanded ? (
+                        <ChevronUp className="h-4 w-4" aria-hidden="true" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                      )}
+                    </button>
+                  </div>
                 </div>
-              </div>
+
+                {isExpanded && (
+                  <div
+                    id={idDetalle}
+                    className="mt-5 grid grid-cols-1 gap-4 border-t border-slate-100 pt-5 animate-aparecer motion-reduce:animate-desvanecer md:grid-cols-2"
+                  >
+                    <div className="rounded-xl bg-slate-50 p-4">
+                      <Rotulo as="h4" className="mb-2 flex items-center gap-1.5">
+                        <FileText className="h-3.5 w-3.5 text-ufps" aria-hidden="true" />
+                        Requisitos Documentales Obligatorios
+                      </Rotulo>
+                      <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600">
+                        {conv.requisitos_documentacion ||
+                          "1. Formato de propuesta técnica.\n2. Aval de origen académico firmado por el docente o tutor.\n3. Enlace a repositorio o prototipo funcional."}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 p-4">
+                      <Rotulo as="h4" className="mb-2 flex items-center gap-1.5">
+                        <Layers className="h-3.5 w-3.5 text-ufps" aria-hidden="true" />
+                        Criterios de Evaluación y Ponderación
+                      </Rotulo>
+                      <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600">
+                        {conv.criterios_evaluacion ||
+                          "Rigor técnico e innovación de la propuesta (40%), Trazabilidad y validación de origen académico (30%), Nivel de madurez tecnológica inicial TRL (30%)."}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </article>
             );
           })}
         </div>

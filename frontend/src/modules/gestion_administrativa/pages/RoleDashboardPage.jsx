@@ -9,7 +9,6 @@ import {
   Layers,
   Award,
   BookOpen,
-  Loader2,
 } from "lucide-react";
 import { obtenerMiEquipo, obtenerMisIniciativasAprobadas } from "../../gestion_emprendimiento_2/services/equipoService";
 import MainLayout from "../components/layout/MainLayout";
@@ -27,13 +26,13 @@ import AlertasPage from "../../gestion_convocatorias/pages/AlertasPage";
 import RubricasTab from "../../gestion_evaluacion/components/RubricasTab";
 import EvaluacionHitosPage from "../../gestion_evaluacion/pages/EvaluacionHitosPage";
 import HistorialEvaluacionesPage from "../../gestion_evaluacion/pages/HistorialEvaluacionesPage";
+import { BOTON_PRIMARIO, CabeceraTarjeta, Cargando, Tarjeta } from "../../../components/ui";
 
 export const ROLE_CONFIG = {
   estudiante: {
     roleName: "Estudiante Emprendedor",
     defaultModule: "equipo",
     icon: GraduationCap,
-    badgeColor: "bg-blue-100 text-blue-800 border-blue-200",
     subtitle:
       "Plataforma de postulación, seguimiento y madurez tecnológica de tus iniciativas de innovación.",
     description:
@@ -89,7 +88,6 @@ export const ROLE_CONFIG = {
     roleName: "Coordinador de Emprendimiento",
     defaultModule: "iniciativas",
     icon: Layers,
-    badgeColor: "bg-emerald-100 text-emerald-800 border-emerald-200",
     subtitle:
       "Seguimiento de los proyectos de emprendimiento y métricas de impacto.",
     description:
@@ -114,7 +112,6 @@ export const ROLE_CONFIG = {
     roleName: "Tutor Académico",
     defaultModule: "tutorias",
     icon: BookOpen,
-    badgeColor: "bg-purple-100 text-purple-800 border-purple-200",
     subtitle:
       "Acompañamiento docente, orientación técnica y registro de sesiones de tutoría.",
     description:
@@ -154,7 +151,6 @@ export const ROLE_CONFIG = {
     roleName: "Mentor Especializado",
     defaultModule: "mentorias",
     icon: Award,
-    badgeColor: "bg-amber-100 text-amber-800 border-amber-200",
     subtitle:
       "Mentoría experta en validación de mercado, modelo de negocio y vinculación externa.",
     description:
@@ -187,7 +183,6 @@ export const ROLE_CONFIG = {
     roleName: "Evaluador de Iniciativas",
     defaultModule: "evaluaciones",
     icon: CheckCircle2,
-    badgeColor: "bg-teal-100 text-teal-800 border-teal-200",
     subtitle:
       "Evaluación multicriterio, rúbricas dinámicas y calificación de proyectos de innovación.",
     description:
@@ -213,7 +208,6 @@ export const ROLE_CONFIG = {
     roleName: "Dirección de Programa",
     defaultModule: "dashboard",
     icon: Sparkles,
-    badgeColor: "bg-rose-100 text-rose-800 border-rose-200",
     subtitle:
       "Supervisión estratégica de resultados, trazabilidad longitudinal e indicadores de alta calidad.",
     description:
@@ -254,7 +248,6 @@ export const ROLE_CONFIG = {
     roleName: "Administrador del Sistema",
     defaultModule: "parametros",
     icon: ShieldCheck,
-    badgeColor: "bg-red-100 text-red-800 border-red-200",
     subtitle:
       "Supervisión integral de parámetros institucionales, convocatorias, iniciativas y usuarios.",
     description:
@@ -381,7 +374,7 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule, mos
       {mostrarPerfil ? (
         <TutorProfileForm onCancel={() => cambiarModulo(roleConfig.defaultModule)} />
       ) : (
-        <div className="mx-auto w-full max-w-5xl space-y-6">
+        <div className="mx-auto w-full max-w-6xl space-y-6">
           {/* BANNER DE BIENVENIDA: solo en la primera pantalla tras iniciar sesión */}
           {mostrarBienvenida && <BienvenidaBanner roleConfig={roleConfig} usuario={usuario} />}
 
@@ -400,18 +393,16 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule, mos
             /* En el menú del evaluador, "rubricas" es su Historial de Calificaciones */
             <HistorialEvaluacionesPage key="historial-evaluaciones" />
           ) : activeModule === "rubricas" ? (
-            <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+            <Tarjeta>
               <RubricasTab key="rubricas" />
-            </section>
-) : normalizedRole === "tutor" && activeModule === "avance" ? (
+            </Tarjeta>
+          ) : normalizedRole === "tutor" && activeModule === "avance" ? (
             <AvanceProyectoPage key="avance" rol="tutor" />
           ) : normalizedRole === "tutor" && activeModule === "tutorias" ? (
             <ProyectosTutorPage key="tutorias" />
           ) : normalizedRole === "estudiante" ? (
             moduloBloqueado || (accesoProyecto.cargando && ["equipo", "plan-trabajo", "evidencias", "avance"].includes(activeModule)) ? (
-              <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white p-16 shadow-sm">
-                <Loader2 className="h-8 w-8 animate-spin text-red-600" />
-              </div>
+              <Cargando texto="Cargando tu proyecto…" />
             ) : activeModule === "equipo" ? (
               <EquipoPage key="equipo" onEstadoEquipoCambiado={cargarAccesoProyecto} />
             ) : activeModule === "plan-trabajo" ? (
@@ -439,67 +430,47 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule, mos
             />
           ) : (
             /* DETALLE DEL MÓDULO SELECCIONADO (PARA OTROS ROLES) */
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-red-600">
-                      Módulo Seleccionado
-                    </span>
-                    {currentModuleData.tag && (
-                      <>
-                        <span className="text-slate-300">•</span>
-                        <span className="text-xs text-slate-500 font-medium">
-                          {currentModuleData.tag}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                  <h3 className="text-xl font-bold text-slate-900">
-                    {currentModuleData.title}
-                  </h3>
-                </div>
+            <Tarjeta
+              cabecera={
+                <CabeceraTarjeta
+                  seccion={currentModuleData.tag ? `Módulo seleccionado · ${currentModuleData.tag}` : "Módulo seleccionado"}
+                  titulo={currentModuleData.title}
+                  acciones={
+                    esAcompanante && (
+                      <button type="button" onClick={() => cambiarModulo("perfil")} className={BOTON_PRIMARIO}>
+                        <User className="h-4 w-4" aria-hidden="true" />
+                        Actualizar Mi Perfil
+                      </button>
+                    )
+                  }
+                />
+              }
+            >
+              <div className="space-y-4">
+                <p className="text-sm leading-relaxed text-slate-700">{currentModuleData.details}</p>
 
-                {esAcompanante && (
-                  <button
-                    type="button"
-                    onClick={() => cambiarModulo("perfil")}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700 transition-colors"
-                  >
-                    <User className="h-4 w-4" />
-                    Actualizar Mi Perfil
-                  </button>
-                )}
-              </div>
-
-              <div className="mt-5 space-y-4">
-                <p className="text-sm text-slate-700 leading-relaxed">
-                  {currentModuleData.details}
-                </p>
-
-                <div className="rounded-xl bg-amber-50/70 border border-amber-200/70 p-4 text-xs text-amber-900 flex items-start gap-3">
-                  <Clock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
+                  <Clock className="mt-0.5 h-4 w-4 shrink-0 text-ufps" aria-hidden="true" />
                   <div>
-                    <p className="font-semibold">Módulo en etapa de integración continua</p>
-                    <p className="mt-0.5 text-amber-800">
+                    <p className="font-semibold text-slate-900">Módulo en etapa de integración continua</p>
+                    <p className="mt-0.5 text-slate-600">
                       La estructura institucional, la navegación y la sesión para el rol de{" "}
-                      <strong>{roleConfig.roleName}</strong> se encuentran 100% operativas.
-                      Los componentes específicos de este módulo se cargarán automáticamente
-                      conforme avancen las historias de usuario del equipo.
+                      <strong className="text-slate-800">{roleConfig.roleName}</strong> se encuentran 100% operativas. Los
+                      componentes específicos de este módulo se cargarán automáticamente conforme avancen las historias de
+                      usuario del equipo.
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4 text-xs text-slate-500 pt-2">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-2 text-xs text-slate-500">
                   <span className="flex items-center gap-1.5">
-                    <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                    <ShieldCheck className="h-4 w-4 text-slate-400" aria-hidden="true" />
                     Validado con Google Workspace UFPS
                   </span>
-                  <span>•</span>
                   <span>Base de Datos MySQL Railway conectada</span>
                 </div>
               </div>
-            </section>
+            </Tarjeta>
           )}
         </div>
       )}

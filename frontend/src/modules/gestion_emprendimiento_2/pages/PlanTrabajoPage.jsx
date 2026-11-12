@@ -1,10 +1,8 @@
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  AlertCircle,
   CalendarDays,
   ClipboardList,
   FolderOpen,
-  Loader2,
   Package,
   Pencil,
   Plus,
@@ -26,23 +24,40 @@ import {
   getPlanesTrabajo,
 } from "../services/planTrabajoService";
 import { getHitosDeTipo } from "../../gestion_evaluacion/services/rubricaService";
-import { AvisoPanel, PanelLateral, SelectorPersona } from "../../gestion_acompaniamiento/components/panelComun";
 import {
-  AYUDA,
+  AvisoPanel,
+  BLOQUE,
   BOTON_FANTASMA,
   BOTON_ICONO,
   BOTON_PELIGRO,
   BOTON_PRIMARIO,
   BOTON_SECUNDARIO,
+  BotonesFormulario,
   CAMPO,
-  ERROR,
-  ETIQUETA,
-} from "../../gestion_evaluacion/components/estilos";
+  CONTADOR,
+  CabeceraTarjeta,
+  Campo,
+  Cargando,
+  Dato,
+  Distintivo,
+  EncabezadoPagina,
+  ErrorCarga,
+  ErrorGeneral,
+  Estadistica,
+  Estadisticas,
+  EstadoVacio,
+  MensajeError,
+  PanelLateral,
+  ROTULO,
+  Rotulo,
+  SelectorPersona,
+  Tarjeta,
+} from "../../../components/ui";
 
 const ESTADOS_PLAN = [
-  { id: "pendiente", label: "Pendiente", clase: "bg-slate-200 text-slate-800" },
-  { id: "en_curso", label: "En curso", clase: "bg-slate-800 text-white" },
-  { id: "finalizado", label: "Finalizado", clase: "bg-ufps text-white" },
+  { id: "pendiente", label: "Pendiente", tono: "gris" },
+  { id: "en_curso", label: "En curso", tono: "oscuro" },
+  { id: "finalizado", label: "Finalizado", tono: "rojo" },
 ];
 
 const MAX_NOMBRE = 200;
@@ -129,53 +144,6 @@ function validarFechas(inicio, fin, errores) {
   if (inicio && fin && fin < inicio) {
     errores.fecha_fin = "No puede ser anterior a la fecha de inicio.";
   }
-}
-
-// ---------------------------------------------------------------------------
-// Piezas de formulario
-// ---------------------------------------------------------------------------
-
-function Campo({ etiqueta, requerido, error, ayuda, children }) {
-  const id = useId();
-  return (
-    <div className="space-y-1.5">
-      <label htmlFor={id} className={ETIQUETA}>
-        {etiqueta} {requerido && <span className="text-ufps">*</span>}
-      </label>
-      {children({ id, "aria-invalid": Boolean(error), "aria-describedby": error ? `${id}-error` : undefined })}
-      {ayuda && !error && <p className={AYUDA}>{ayuda}</p>}
-      {error && (
-        <p id={`${id}-error`} className={ERROR} role="alert">
-          <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          {error}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function ErrorGeneral({ mensaje }) {
-  if (!mensaje) return null;
-  return (
-    <div role="alert" className="flex items-start gap-2 rounded-xl border border-ufps bg-white p-3 text-sm text-ufps">
-      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-      <p>{mensaje}</p>
-    </div>
-  );
-}
-
-function BotonesFormulario({ guardando, textoGuardar, onCancelar }) {
-  return (
-    <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
-      <button type="button" onClick={onCancelar} className={BOTON_SECUNDARIO} disabled={guardando}>
-        Cancelar
-      </button>
-      <button type="submit" className={BOTON_PRIMARIO} disabled={guardando}>
-        {guardando && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-        {textoGuardar}
-      </button>
-    </div>
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -400,12 +368,7 @@ function FormularioActividad({ plan, actividad, miembros, onGuardado, onCancelar
             texto: m.es_lider ? `${m.nombre} (líder)` : m.nombre,
           }))}
         />
-        {errores.responsable && (
-          <p className={ERROR} role="alert">
-            <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            {errores.responsable}
-          </p>
-        )}
+        <MensajeError>{errores.responsable}</MensajeError>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Campo etiqueta="Fecha de inicio" error={errores.fecha_inicio}>
@@ -452,7 +415,7 @@ const ESTILO_ACTIVIDAD = {
     barra: "bg-ufps",
     numero: "bg-ufps text-white",
     titulo: "text-ufps",
-    distintivo: "bg-ufps text-white",
+    tono: "rojo",
     etiqueta: "Realizada",
   },
   noCompletada: {
@@ -460,22 +423,10 @@ const ESTILO_ACTIVIDAD = {
     barra: "bg-slate-400",
     numero: "bg-slate-200 text-slate-800",
     titulo: "text-slate-900",
-    distintivo: "bg-slate-800 text-white",
+    tono: "oscuro",
     etiqueta: "Pendiente",
   },
 };
-
-function DatoActividad({ etiqueta, icono: Icono, children }) {
-  return (
-    <div className="min-w-0 space-y-0.5">
-      <dt className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{etiqueta}</dt>
-      <dd className="flex items-start gap-1.5 text-xs text-slate-700">
-        <Icono className="mt-px h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
-        <span className="min-w-0 break-words">{children}</span>
-      </dd>
-    </div>
-  );
-}
 
 function FilaActividad({ actividad, numero, esLider, onEditar, onEliminar }) {
   const completada = actividad.estado === "completada";
@@ -498,30 +449,28 @@ function FilaActividad({ actividad, numero, esLider, onEditar, onEliminar }) {
             <h5 className={`text-base font-bold leading-snug ${estilo.titulo}`}>{actividad.nombre}</h5>
             {actividad.descripcion && (
               <div className="pt-1">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Descripción</p>
+                <p className={ROTULO}>Descripción</p>
                 <p className="mt-0.5 text-sm font-normal leading-relaxed text-slate-600">{actividad.descripcion}</p>
               </div>
             )}
           </div>
 
           <dl className="grid grid-cols-1 gap-3 rounded-lg border border-slate-100 bg-superficie-alta p-3 sm:grid-cols-3">
-            <DatoActividad etiqueta="Responsable" icono={User}>
+            <Dato etiqueta="Responsable" icono={User}>
               {actividad.responsable_nombre}
-            </DatoActividad>
-            <DatoActividad etiqueta="Fechas" icono={CalendarDays}>
+            </Dato>
+            <Dato etiqueta="Fechas" icono={CalendarDays}>
               {rangoFechas(actividad.fecha_inicio, actividad.fecha_fin)}
-            </DatoActividad>
-            <DatoActividad etiqueta="Entregable" icono={Package}>
+            </Dato>
+            <Dato etiqueta="Entregable" icono={Package}>
               {actividad.entregable || <span className="text-slate-400">Sin definir</span>}
-            </DatoActividad>
+            </Dato>
           </dl>
 
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {/* Mismo formato que el estado del plan de trabajo */}
-          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${estilo.distintivo}`}>
-            {estilo.etiqueta}
-          </span>
+          <Distintivo tono={estilo.tono}>{estilo.etiqueta}</Distintivo>
           {esLider && (
             <div className="-my-1.5 flex gap-1">
               <button
@@ -554,19 +503,11 @@ function SeccionHito({ hito, plan, actividades, totalEvidencias, esLider, onAcci
   const restante = plan && plan.estado !== "finalizado" ? tiempoRestante(plan.fecha_fin) : null;
 
   return (
-    <section
+    // 1. Hito: franja propia, solo con el número y el nombre del hito
+    <Tarjeta
       aria-labelledby={`hito-${hito.id}`}
-      className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+      cabecera={<CabeceraTarjeta id={`hito-${hito.id}`} seccion={`Hito ${hito.numero_hito}`} titulo={hito.nombre} />}
     >
-      {/* 1. Hito: franja propia, solo con el número y el nombre del hito */}
-      <header className="border-b border-slate-200 bg-superficie-alta px-5 py-4 sm:px-6">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-ufps">Hito {hito.numero_hito}</p>
-        <h3 id={`hito-${hito.id}`} className="mt-1 text-lg font-semibold tracking-tight text-slate-900">
-          {hito.nombre}
-        </h3>
-      </header>
-
-      <div className="p-5 sm:p-6">
         {!plan ? (
           <div className="flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-slate-600">
@@ -584,15 +525,15 @@ function SeccionHito({ hito, plan, actividades, totalEvidencias, esLider, onAcci
         ) : (
           <>
             {/* 2. Plan de trabajo: bloque aparte con su título, fechas, estado y descripción */}
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className={BLOQUE}>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 space-y-1">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Plan de trabajo</p>
+                  <p className={ROTULO}>Plan de trabajo</p>
                   <h4 className="text-base font-semibold text-slate-900">{plan.titulo}</h4>
                 </div>
-                <span className={`inline-flex shrink-0 self-start rounded-full px-3 py-1 text-xs font-semibold ${estadoPlan.clase}`}>
+                <Distintivo tono={estadoPlan.tono} className="self-start">
                   {estadoPlan.label}
-                </span>
+                </Distintivo>
               </div>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs">
                 <p className="flex items-center gap-1.5 text-slate-600">
@@ -613,9 +554,9 @@ function SeccionHito({ hito, plan, actividades, totalEvidencias, esLider, onAcci
             </div>
 
             {/* 3. Actividades del plan */}
-            <h4 className="mt-6 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            <Rotulo as="h4" className="mt-6">
               Actividades ({actividades.length})
-            </h4>
+            </Rotulo>
 
             {actividades.length === 0 ? (
               <p className="mt-3 text-sm text-slate-600">Todavía no hay actividades en este plan.</p>
@@ -661,16 +602,13 @@ function SeccionHito({ hito, plan, actividades, totalEvidencias, esLider, onAcci
                 <FolderOpen className="h-4 w-4" aria-hidden="true" />
                 Evidencias del hito
                 {totalEvidencias !== null && (
-                  <span className="rounded-full bg-ufps px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
-                    {totalEvidencias}
-                  </span>
+                  <span className={CONTADOR}>{totalEvidencias}</span>
                 )}
               </button>
             </div>
           </>
         )}
-      </div>
-    </section>
+    </Tarjeta>
   );
 }
 
@@ -838,37 +776,18 @@ export default function PlanTrabajoPage() {
   }
 
   if (cargando) {
-    return (
-      <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white p-16 shadow-sm">
-        <Loader2 className="h-8 w-8 animate-spin text-ufps" aria-label="Cargando plan de trabajo" />
-      </div>
-    );
+    return <Cargando texto="Cargando plan de trabajo…" />;
   }
 
   if (errorCarga) {
-    return (
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <ErrorGeneral mensaje={errorCarga} />
-        <button type="button" onClick={cargar} className={`${BOTON_SECUNDARIO} mt-4`}>
-          Reintentar
-        </button>
-      </section>
-    );
+    return <ErrorCarga mensaje={errorCarga} onReintentar={cargar} />;
   }
 
   if (!proyecto) {
     return (
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex items-start gap-3">
-          <ClipboardList className="mt-0.5 h-5 w-5 shrink-0 text-slate-400" aria-hidden="true" />
-          <div>
-            <p className="font-semibold text-slate-900">Tu equipo aún no tiene un proyecto activo</p>
-            <p className="mt-1 text-sm text-slate-600">
-              El plan de trabajo se habilita cuando la iniciativa de tu equipo es aprobada y pasa a ser un proyecto.
-            </p>
-          </div>
-        </div>
-      </section>
+      <EstadoVacio icono={ClipboardList} titulo="Tu equipo aún no tiene un proyecto activo">
+        El plan de trabajo se habilita cuando la iniciativa de tu equipo es aprobada y pasa a ser un proyecto.
+      </EstadoVacio>
     );
   }
 
@@ -878,41 +797,31 @@ export default function PlanTrabajoPage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-ufps">Plan de trabajo</p>
-        <h2 className="mt-1 text-xl font-bold tracking-tight text-slate-900">{proyecto.nombre}</h2>
-        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-600">
-          {esLider
+      <EncabezadoPagina
+        seccion="Plan de trabajo"
+        titulo={proyecto.nombre}
+        descripcion={
+          esLider
             ? "Define por cada hito las actividades, sus responsables, fechas y entregables. Cada actividad se completa cuando su responsable sube la evidencia."
-            : "Consulta las actividades del equipo. Las que tienes asignadas se completan al subir su evidencia en Evidencias de Avance."}
-        </p>
-        <dl className="mt-5 grid grid-cols-1 gap-4 border-t border-slate-100 pt-5 sm:grid-cols-3">
-          <div className="rounded-xl bg-slate-50 p-3.5">
-            <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Planes definidos</dt>
-            <dd className="mt-1 text-lg font-bold text-slate-900">
-              {planes.length} de {hitos.length} hitos
-            </dd>
-          </div>
-          <div className="rounded-xl bg-slate-50 p-3.5">
-            <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Actividades completadas</dt>
-            <dd className="mt-1 text-lg font-bold text-slate-900">
-              {totalCompletadas} de {actividades.length}
-            </dd>
-          </div>
-          <div className="rounded-xl bg-slate-50 p-3.5">
-            <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Mis pendientes</dt>
-            <dd className="mt-1 text-lg font-bold text-slate-900">{misPendientes}</dd>
-          </div>
-        </dl>
-      </section>
+            : "Consulta las actividades del equipo. Las que tienes asignadas se completan al subir su evidencia en Evidencias de Avance."
+        }
+      >
+        <Estadisticas>
+          <Estadistica etiqueta="Planes definidos" valor={`${planes.length} de ${hitos.length} hitos`} />
+          <Estadistica etiqueta="Actividades completadas" valor={`${totalCompletadas} de ${actividades.length}`} />
+          <Estadistica etiqueta="Mis pendientes" valor={misPendientes} />
+        </Estadisticas>
+      </EncabezadoPagina>
 
       <AvisoPanel aviso={aviso} onCerrar={() => setAviso(null)} />
 
       {hitos.length === 0 ? (
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
-          La rúbrica de tu tipo de iniciativa aún no tiene hitos definidos. Cuando la Dirección del Programa los
-          configure podrás armar el plan de trabajo.
-        </section>
+        <Tarjeta>
+          <p className="text-sm text-slate-600">
+            La rúbrica de tu tipo de iniciativa aún no tiene hitos definidos. Cuando la Dirección del Programa los
+            configure podrás armar el plan de trabajo.
+          </p>
+        </Tarjeta>
       ) : (
         hitos.map((hito) => {
           const plan = planes.find((p) => p.hito === hito.id);

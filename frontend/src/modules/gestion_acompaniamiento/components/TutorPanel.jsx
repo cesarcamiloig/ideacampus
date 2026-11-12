@@ -5,7 +5,7 @@ import {
   BOTON_PELIGRO,
   BOTON_PRIMARIO,
   BOTON_SECUNDARIO,
-} from "../../gestion_evaluacion/components/estilos";
+} from "../../../components/ui/estilos";
 import { asignarTutor, getTutorDeIniciativa, getTutoresDisponibles } from "../services/tutorAsignacionService";
 import {
   AvisoPanel,
@@ -269,7 +269,7 @@ export default function TutorPanel({ iniciativa, onClose, onTutorCambiado }) {
               />
 
               {confirmandoQuitar && (
-                <div className="mt-3 space-y-3 rounded-2xl bg-ufps-suave p-3.5 animate-aparecer motion-reduce:animate-desvanecer">
+                <div className="mt-3 space-y-3 rounded-2xl border border-ufps bg-white p-3.5 animate-aparecer motion-reduce:animate-desvanecer">
                   <p className="text-sm text-slate-800">
                     ¿Quitar a <strong className="font-semibold">{tutor.nombre}</strong> de la tutoría de {nombreProyecto}?
                     El proyecto quedará sin seguimiento académico hasta que asignes otro tutor.

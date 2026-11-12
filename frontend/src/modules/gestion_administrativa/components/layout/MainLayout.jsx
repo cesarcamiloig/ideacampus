@@ -301,18 +301,20 @@ export default function MainLayout({
         return (
             <div key={item.id} className="relative flex items-center">
                 {isActive && (
-                    <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-red-600 rounded-r" />
+                    <div className="absolute bottom-0 left-0 top-0 w-1 rounded-r bg-ufps" />
                 )}
                 <button
                     type="button"
                     onClick={() => navegarA(item.id)}
-                    className={`flex w-full items-center gap-3 py-3.5 text-left text-sm transition-colors ${esHijo ? "pl-12 pr-6" : "px-6"} ${isActive
-                        ? "bg-red-50/40 font-semibold text-slate-900"
-                        : "font-medium text-slate-600 hover:bg-slate-50"
+                    aria-current={isActive ? "page" : undefined}
+                    className={`flex w-full items-center gap-3 py-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-ufps/15 ${esHijo ? "pl-12 pr-6" : "px-6"} ${isActive
+                        ? "bg-slate-50 font-semibold text-slate-900"
+                        : "font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                         }`}
                 >
                     <Icon
-                        className={`h-5 w-5 ${isActive ? "text-red-600" : "text-slate-400"
+                        aria-hidden="true"
+                        className={`h-5 w-5 ${isActive ? "text-ufps" : "text-slate-400"
                             }`}
                     />
                     <span className="leading-tight">{item.label}</span>
@@ -334,10 +336,10 @@ export default function MainLayout({
                     onClick={() => setGruposAbiertos((prev) => ({ ...prev, [grupo.id]: !prev[grupo.id] }))}
                     aria-expanded={abierto}
                     aria-controls={idSubmenu}
-                    className={`flex w-full items-center gap-3 px-6 py-3.5 text-left text-sm transition-colors hover:bg-slate-50 ${contieneActivo ? "font-semibold text-slate-900" : "font-medium text-slate-600"
+                    className={`flex w-full items-center gap-3 px-6 py-3 text-left text-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-ufps/15 ${contieneActivo ? "font-semibold text-slate-900" : "font-medium text-slate-600"
                         }`}
                 >
-                    <Icon className={`h-5 w-5 ${contieneActivo ? "text-red-600" : "text-slate-400"}`} />
+                    <Icon aria-hidden="true" className={`h-5 w-5 ${contieneActivo ? "text-ufps" : "text-slate-400"}`} />
                     <span className="flex-1 leading-tight">{grupo.label}</span>
                     <ChevronDown
                         className={`h-4 w-4 text-slate-400 transition-transform motion-reduce:transition-none ${abierto ? "rotate-180" : ""}`}
@@ -353,7 +355,7 @@ export default function MainLayout({
     }
 
     return (
-        <div className="flex h-screen w-full bg-[#f4f5f7] font-sans text-slate-800 antialiased supports-[height:100dvh]:h-dvh">
+        <div className="flex h-screen w-full bg-superficie font-sans text-slate-800 antialiased supports-[height:100dvh]:h-dvh">
             {/* Fondo que cierra el menú en pantallas pequeñas */}
             {menuMovilAbierto && (
                 <div
@@ -366,9 +368,14 @@ export default function MainLayout({
             {/* 1. SIDEBAR IZQUIERDO INSTITUCIONAL */}
             <aside
                 id="menu-lateral"
-                className={`fixed inset-y-0 left-0 z-40 flex w-64 max-w-[85vw] shrink-0 flex-col justify-between overflow-y-auto border-r border-slate-200 bg-white shadow-xl transition-transform duration-200 ease-out motion-reduce:transition-none lg:static lg:z-auto lg:max-w-none lg:translate-x-0 lg:shadow-sm ${menuMovilAbierto ? "translate-x-0" : "-translate-x-full"
-                    } ${menuEscritorioOculto ? "lg:hidden" : "lg:flex"}`}
+                className={`fixed inset-y-0 left-0 z-40 w-64 max-w-[85vw] shrink-0 overflow-x-hidden overflow-y-auto border-r border-slate-200 bg-white shadow-xl transition-[transform,width,visibility] duration-300 ease-panel motion-reduce:transition-none lg:static lg:z-auto lg:max-w-none lg:translate-x-0 lg:shadow-sm ${menuMovilAbierto ? "translate-x-0" : "-translate-x-full"
+                    } ${menuEscritorioOculto ? "lg:invisible lg:w-0 lg:border-r-0" : "lg:visible lg:w-64"}`}
             >
+                {/* Ancho fijo: al plegarse en escritorio el contenido no se reacomoda, solo se desliza */}
+                <div
+                    className={`flex min-h-full w-64 max-w-[85vw] flex-col justify-between transition-transform duration-300 ease-panel motion-reduce:transition-none lg:max-w-none ${menuEscritorioOculto ? "lg:-translate-x-full" : "lg:translate-x-0"
+                        }`}
+                >
                 <div>
                     {/* Logo UFPS y Marca GENNOVA */}
                     <div className="flex items-center gap-3 px-6 py-6">
@@ -377,13 +384,13 @@ export default function MainLayout({
                             alt="Logo UFPS"
                             className="h-10 w-10 object-contain"
                         />
-                        <span className="text-2xl font-semibold tracking-tight text-black">
+                        <span className="font-marca text-2xl font-bold tracking-[0.04em] text-slate-900">
                             GENNOVA
                         </span>
                         <button
                             type="button"
                             onClick={() => setMenuMovilAbierto(false)}
-                            className="ml-auto flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-800 lg:hidden"
+                            className="ml-auto flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ufps/15 lg:hidden"
                             aria-label="Cerrar menú"
                         >
                             <X className="h-5 w-5" />
@@ -413,19 +420,20 @@ export default function MainLayout({
                         </p>
                     </div>
                 </div>
+                </div>
             </aside>
 
             {/* 2. ÁREA DE CONTENIDO */}
             <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
                 {/* Navbar superior */}
                 <header className="relative flex h-16 w-full shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-3 sm:px-6 lg:px-8">
-                    <div className="absolute top-0 left-0 right-0 h-1 bg-red-600" />
+                    <div className="absolute left-0 right-0 top-0 h-1 bg-ufps" />
 
                     <div className="flex min-w-0 items-center gap-2 sm:gap-3">
                         <button
                             type="button"
                             onClick={alternarMenu}
-                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ufps/15"
                             aria-label="Mostrar u ocultar el menú"
                             aria-controls="menu-lateral"
                             aria-expanded={menuMovilAbierto}
@@ -445,13 +453,13 @@ export default function MainLayout({
                         <button
                             type="button"
                             onClick={() => setNotificacionesOpen(true)}
-                            className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-red-300 hover:bg-red-50/50 hover:text-red-600 transition-all focus:outline-none shadow-sm"
+                            className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-600 shadow-sm ring-1 ring-slate-200 transition-colors hover:bg-slate-50 hover:text-ufps focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ufps/15"
                             title="Notificaciones institucionales"
                             aria-label="Notificaciones institucionales"
                         >
                             <Bell className="h-4 w-4" />
                             {unreadNotifCount > 0 && (
-                                <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white shadow-sm animate-pulse">
+                                <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-ufps px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-white">
                                     {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
                                 </span>
                             )}
@@ -462,9 +470,11 @@ export default function MainLayout({
                             <button
                                 type="button"
                                 onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-                                className="flex min-h-10 items-center gap-2 rounded-xl p-1.5 hover:bg-slate-50 transition-colors select-none focus:outline-none sm:gap-3"
+                                aria-expanded={profileMenuOpen}
+                                aria-haspopup="menu"
+                                className="flex min-h-10 select-none items-center gap-2 rounded-xl p-1.5 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ufps/15 sm:gap-3"
                             >
-                                <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-slate-200 text-xs font-bold text-slate-600">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">
                                     {initials}
                                 </div>
                                 <div className="hidden max-w-[12rem] text-left sm:block">
@@ -480,13 +490,13 @@ export default function MainLayout({
 
                             {/* Dropdown contextual */}
                             {profileMenuOpen && (
-                                <div className="absolute right-0 mt-2 w-64 max-w-[calc(100vw-1.5rem)] rounded-xl border border-slate-200 bg-white shadow-lg py-2 z-50 animate-in fade-in zoom-in-95 duration-100">
+                                <div className="absolute right-0 z-50 mt-2 w-64 max-w-[calc(100vw-1.5rem)] rounded-2xl border border-slate-200 bg-white py-2 shadow-lg animate-aparecer motion-reduce:animate-desvanecer">
                                     <div className="px-4 py-2 border-b border-slate-100">
                                         <p className="text-xs font-bold text-slate-900 truncate">{userName}</p>
                                         <p className="text-[11px] text-slate-500 truncate">{userEmail}</p>
                                     </div>
 
-                                    <div className="px-4 pt-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                    <div className="px-4 pb-1 pt-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                                         Cambiar Vista de Rol
                                     </div>
 
@@ -500,12 +510,12 @@ export default function MainLayout({
                                                     onClick={() => handleRoleSwitch(role.id)}
                                                     className={`w-full flex items-center justify-between px-4 py-2 text-xs text-left transition-colors ${
                                                         isSelected
-                                                            ? "bg-red-50 text-red-700 font-semibold"
+                                                            ? "bg-slate-50 font-semibold text-slate-900"
                                                             : "text-slate-700 hover:bg-slate-50"
                                                     }`}
                                                 >
                                                     <span>{role.label}</span>
-                                                    {isSelected && <Check className="h-3.5 w-3.5 text-red-600 shrink-0" />}
+                                                    {isSelected && <Check className="h-3.5 w-3.5 shrink-0 text-ufps" aria-hidden="true" />}
                                                 </button>
                                             )
                                         })}
@@ -521,7 +531,7 @@ export default function MainLayout({
                                                 logout()
                                             }
                                         }}
-                                        className="w-full flex items-center gap-2.5 px-4 py-2 text-xs text-left text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors"
+                                        className="flex w-full items-center gap-2.5 px-4 py-2 text-left text-xs text-slate-600 transition-colors hover:bg-slate-50 hover:text-ufps"
                                     >
                                         <LogOut className="h-4 w-4" />
                                         <span>Cerrar Sesión</span>

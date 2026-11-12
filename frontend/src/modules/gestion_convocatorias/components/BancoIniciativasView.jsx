@@ -1,22 +1,35 @@
 import React, { useState, useEffect } from "react";
 import {
   Lightbulb,
-  Search,
-  Filter,
   CheckCircle2,
   XCircle,
   Clock,
   Eye,
-  FileText,
   Loader2,
   RefreshCw,
-  AlertCircle,
-  ExternalLink,
   Users,
   GraduationCap,
   ClipboardCheck,
   History,
+  SlidersHorizontal,
 } from "lucide-react";
+import {
+  AvisoPanel,
+  BLOQUE_SUAVE,
+  BOTON_SECUNDARIO,
+  Buscador,
+  Cargando,
+  DialogoConfirmacion,
+  Distintivo,
+  EncabezadoPagina,
+  EstadoVacio,
+  MenuAcciones,
+  Selector,
+  TABLA_FILA,
+  TABLA_TD,
+  TARJETA,
+  Tabla,
+} from "../../../components/ui";
 import { useAuth } from "../../../context/AuthContext";
 import {
   getTodasLasIniciativas,
@@ -38,43 +51,9 @@ function esAprobada(item) {
   return ESTADOS_APROBADOS.includes((item.estado || "").toLowerCase());
 }
 
-const ROL_SINGULAR = { mentores: "mentor", tutor: "tutor", evaluador: "evaluador" };
-
-// Botón de un rol del proyecto (mentores, tutor, evaluador). Todos miden lo mismo; si al
-// proyecto le falta ese rol, lleva un punto ámbar y lo dice en el título y al lector de pantalla.
-function BotonRol({ etiqueta, Icono, falta, onClick, proximamente = false }) {
-  const rol = etiqueta.toLowerCase();
-  const titulo = [
-    falta ? `Falta asignar ${ROL_SINGULAR[rol] || rol}` : null,
-    proximamente ? "Disponible próximamente" : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
-  return (
-    <button
-      type="button"
-      onClick={proximamente ? undefined : onClick}
-      aria-haspopup={proximamente ? undefined : "dialog"}
-      aria-disabled={proximamente ? "true" : undefined}
-      title={titulo || `Ver ${rol} del proyecto`}
-      className={`relative inline-flex w-28 items-center justify-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg border bg-white text-slate-700 hover:bg-slate-50 transition-colors ${
-        falta ? "border-amber-300" : "border-slate-200"
-      }`}
-    >
-      <Icono className="h-3.5 w-3.5 text-slate-500" />
-      <span>{etiqueta}</span>
-      {falta && (
-        <>
-          <span
-            className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-amber-500 ring-2 ring-white"
-            aria-hidden="true"
-          />
-          <span className="sr-only"> (falta asignar)</span>
-        </>
-      )}
-    </button>
-  );
+// Etiqueta de estado de un rol del proyecto dentro del menú de acciones
+function estadoRol(falta, singular) {
+  return falta ? `Falta asignar ${singular}` : "Asignado";
 }
 
 // titulo: el coordinador ve esta vista como "Proyectos"
@@ -209,315 +188,244 @@ export default function BancoIniciativasView({ titulo = "Banco de Iniciativas y 
   const getBadgeEstado = (estado) => {
     const e = (estado || "").toLowerCase();
     if (["aprobada", "aprobado", "aceptada", "aceptado"].includes(e)) {
-      return {
-        label: "Aprobada",
-        cls: "bg-emerald-50 text-emerald-800 border-emerald-200",
-        icon: CheckCircle2,
-      };
+      return { label: "Aprobada", tono: "rojo", icon: CheckCircle2 };
     }
     if (["rechazada", "rechazado"].includes(e)) {
-      return {
-        label: "Rechazada",
-        cls: "bg-red-50 text-red-800 border-red-200",
-        icon: XCircle,
-      };
+      return { label: "Rechazada", tono: "alerta", icon: XCircle };
     }
     if (e === "en_revision") {
-      return {
-        label: "En Revisión",
-        cls: "bg-amber-50 text-amber-800 border-amber-200",
-        icon: Clock,
-      };
+      return { label: "En Revisión", tono: "oscuro", icon: Clock };
     }
-    return {
-      label: "Pendiente",
-      cls: "bg-blue-50 text-blue-800 border-blue-200",
-      icon: Clock,
-    };
+    return { label: "Pendiente", tono: "gris", icon: Clock };
   };
 
   const botonActualizar = (
-    <button
-      type="button"
-      onClick={cargarIniciativas}
-      disabled={cargando}
-      className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors shadow-sm self-start sm:self-center"
-    >
-      <RefreshCw className={`h-3.5 w-3.5 ${cargando ? "animate-spin text-red-600" : ""}`} />
-      <span>Actualizar</span>
+    <button type="button" onClick={cargarIniciativas} disabled={cargando} className={BOTON_SECUNDARIO}>
+      <RefreshCw className={`h-4 w-4 ${cargando ? "animate-spin text-ufps" : ""}`} aria-hidden="true" />
+      Actualizar
     </button>
   );
 
+  const aprobando = accionConfirmacion?.accion === "aprobada";
+
+  if (iniciativaLineaTiempo) {
+    return (
+      <LineaTiempoPanel
+        key={iniciativaLineaTiempo.id_iniciativa}
+        modo="pagina"
+        idIniciativa={iniciativaLineaTiempo.id_iniciativa}
+        nombre={iniciativaLineaTiempo.iniciativa?.titulo || iniciativaLineaTiempo.nombre}
+        seccion={`Línea de tiempo${iniciativaLineaTiempo.radicado ? ` · ${iniciativaLineaTiempo.radicado}` : ""}`}
+        textoVolver={esCoordinador ? "Volver a proyectos" : "Volver al banco de iniciativas"}
+        onClose={() => setIniciativaLineaTiempo(null)}
+      />
+    );
+  }
+
   return (
     <div className="w-full space-y-6">
-      {/* HEADER INSTITUCIONAL (sin él, Actualizar pasa a la barra de filtros) */}
+      {/* ENCABEZADO (sin él, Actualizar pasa a la barra de filtros) */}
       {encabezado && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="flex items-center gap-3.5">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600 border border-red-100">
-              <Lightbulb className="h-6 w-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-red-600">
-                  Coordinación de Emprendimiento
-                </span>
-              </div>
-              <h2 className="text-xl font-bold text-slate-900">{titulo}</h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Revisión, validación de origen académico y habilitación para conformación de equipos emprendedores.
-              </p>
-            </div>
-          </div>
-
-          {botonActualizar}
-        </div>
+        <EncabezadoPagina
+          seccion="Coordinación de Emprendimiento"
+          titulo={titulo}
+          descripcion="Revisión, validación de origen académico y habilitación para conformación de equipos emprendedores."
+          acciones={botonActualizar}
+        />
       )}
 
-      {/* MENSAJES DE ESTADO */}
-      {mensajeExito && (
-        <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-800">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-            <span>{mensajeExito}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setMensajeExito("")}
-            className="text-emerald-700 hover:text-emerald-900 font-bold"
-          >
-            ✕
-          </button>
-        </div>
-      )}
+      <AvisoPanel aviso={mensajeExito ? { tipo: "exito", titulo: mensajeExito } : null} onCerrar={() => setMensajeExito("")} />
+      <AvisoPanel aviso={mensajeError ? { tipo: "error", titulo: mensajeError } : null} onCerrar={() => setMensajeError("")} />
 
-      {mensajeError && (
-        <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
-            <span>{mensajeError}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setMensajeError("")}
-            className="text-red-700 hover:text-red-900 font-bold"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
-      {/* BARRA DE BÚSQUEDA Y FILTRO */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por título, estudiante o correo..."
-            className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all"
+      {/* BÚSQUEDA Y FILTRO */}
+      <div className={`${TARJETA} flex flex-col gap-3 p-4 sm:flex-row sm:items-center`}>
+        <Buscador
+          className="flex-1"
+          valor={busqueda}
+          onChange={setBusqueda}
+          placeholder="Buscar por título, estudiante o correo…"
+        />
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Selector
+            className="sm:w-60"
+            valor={filtroEstado}
+            onChange={setFiltroEstado}
+            aria-label="Filtrar por estado"
+            opciones={[
+              { valor: "todos", texto: "Todos los Estados" },
+              { valor: "pendiente", texto: "Pendientes de Evaluación" },
+              { valor: "aprobada", texto: "Aprobadas" },
+              { valor: "rechazada", texto: "Rechazadas" },
+            ]}
           />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-slate-400" />
-          <select
-            value={filtroEstado}
-            onChange={(e) => setFiltroEstado(e.target.value)}
-            className="text-xs px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-500/20"
-          >
-            <option value="todos">Todos los Estados</option>
-            <option value="pendiente">Pendientes de Evaluación</option>
-            <option value="aprobada">Aprobadas</option>
-            <option value="rechazada">Rechazadas</option>
-          </select>
           {!encabezado && botonActualizar}
         </div>
       </div>
 
-      {/* LISTA / TABLA DE INICIATIVAS */}
+      {/* TABLA DE INICIATIVAS */}
       {cargando ? (
-        <div className="flex flex-col items-center justify-center p-16 bg-white rounded-2xl border border-slate-200 shadow-sm">
-          <Loader2 className="h-8 w-8 animate-spin text-red-600 mb-3" />
-          <span className="text-xs text-slate-500">Cargando banco de iniciativas...</span>
-        </div>
+        <Cargando texto="Cargando banco de iniciativas…" />
       ) : iniciativasFiltradas.length === 0 ? (
-        <div className="flex flex-col items-center justify-center p-16 bg-white rounded-2xl border border-slate-200 text-center shadow-sm">
-          <Lightbulb className="h-10 w-10 text-slate-300 mb-3" />
-          <h4 className="text-sm font-bold text-slate-700">No se encontraron iniciativas</h4>
-          <p className="text-xs text-slate-500 mt-1 max-w-sm">
-            {busqueda || filtroEstado !== "todos"
-              ? "Prueba cambiando los términos de búsqueda o los filtros."
-              : "Aún no se han recibido iniciativas de estudiantes en las convocatorias abiertas."}
-          </p>
-        </div>
+        <EstadoVacio icono={Lightbulb} titulo="No se encontraron iniciativas">
+          {busqueda || filtroEstado !== "todos"
+            ? "Prueba cambiando los términos de búsqueda o los filtros."
+            : "Aún no se han recibido iniciativas de estudiantes en las convocatorias abiertas."}
+        </EstadoVacio>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200">
-                <tr>
-                  <th className="px-5 py-3.5">Iniciativa / Categoría</th>
-                  <th className="px-5 py-3.5">Estudiante Postulante</th>
-                  <th className="px-5 py-3.5">Origen Académico</th>
-                  <th className="px-5 py-3.5">Estado</th>
-                  <th className="px-5 py-3.5 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {iniciativasFiltradas.map((item) => {
-                  const badge = getBadgeEstado(item.estado);
-                  const Icon = badge.icon;
-                  const doc = item.documentacion?.archivos?.[0];
+        <Tabla
+          etiqueta="Iniciativas"
+          columnas={[
+            { id: "iniciativa", label: "Iniciativa / Categoría" },
+            { id: "estudiante", label: "Estudiante Postulante" },
+            { id: "origen", label: "Origen Académico" },
+            { id: "estado", label: "Estado" },
+            { id: "acciones", label: "Acciones", className: "text-right" },
+          ]}
+        >
+          {iniciativasFiltradas.map((item) => {
+            const badge = getBadgeEstado(item.estado);
+            const aprobada = esAprobada(item);
+            const faltaMentores = aprobada && (!item.proyecto || !item.proyecto.mentores_asignados);
+            const faltaTutor = aprobada && !item.proyecto?.tiene_tutor;
+            const faltaEvaluador = aprobada && !item.proyecto?.tiene_evaluador;
+            const faltaRol = faltaMentores || faltaTutor || faltaEvaluador;
 
-                  return (
-                    <tr key={item.id || item.id_iniciativa} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="px-5 py-4 align-top max-w-xs">
-                        <div className="font-bold text-slate-900 leading-snug">
-                          {item.iniciativa?.titulo || item.nombre}
-                        </div>
-                        <div className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
-                          {item.iniciativa?.resumen_ejecutivo || item.descripcion}
-                        </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
-                            {item.iniciativa?.categoria || "Software"}
-                          </span>
-                          <span className="text-[10px] font-bold text-red-600">
-                            TRL: {item.iniciativa?.trl_inicial || "M1"}
-                          </span>
-                        </div>
-                      </td>
+            return (
+              <tr key={item.id || item.id_iniciativa} className={TABLA_FILA}>
+                <td className={`${TABLA_TD} max-w-xs align-top`}>
+                  <p className="font-semibold leading-snug text-slate-900">{item.iniciativa?.titulo || item.nombre}</p>
+                  <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">
+                    {item.iniciativa?.resumen_ejecutivo || item.descripcion}
+                  </p>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                      {item.iniciativa?.categoria || "Software"}
+                    </span>
+                    <span className="text-[11px] font-bold text-ufps">TRL: {item.iniciativa?.trl_inicial || "M1"}</span>
+                  </div>
+                </td>
 
-                      <td className="px-5 py-4 align-top">
-                        <div className="font-bold text-slate-800">
-                          {item.equipo?.lider?.nombre || item.usuario_nombre || "Estudiante"}
-                        </div>
-                        <div className="text-[11px] text-slate-500 font-mono">
-                          {item.equipo?.lider?.correo || item.usuario_correo}
-                        </div>
-                      </td>
+                <td className={`${TABLA_TD} align-top`}>
+                  <p className="font-semibold text-slate-900">
+                    {item.equipo?.lider?.nombre || item.usuario_nombre || "Estudiante"}
+                  </p>
+                  <p className="font-mono text-xs text-slate-500">{item.equipo?.lider?.correo || item.usuario_correo}</p>
+                </td>
 
-                      <td className="px-5 py-4 align-top">
-                        <span className="capitalize font-semibold text-slate-700 block">
-                          {(item.origen_academico?.tipo || "").replace(/_/g, " ")}
-                        </span>
-                        <span className="text-[11px] text-slate-500 block truncate max-w-[180px]">
-                          {item.origen_academico?.asignatura_nombre ||
-                            item.origen_academico?.descripcion_origen ||
-                            item.detalle_origen ||
-                            "—"}
-                        </span>
-                      </td>
+                <td className={`${TABLA_TD} align-top`}>
+                  <p className="font-semibold capitalize text-slate-800">
+                    {(item.origen_academico?.tipo || "").replace(/_/g, " ")}
+                  </p>
+                  <p className="max-w-[180px] truncate text-xs text-slate-500">
+                    {item.origen_academico?.asignatura_nombre ||
+                      item.origen_academico?.descripcion_origen ||
+                      item.detalle_origen ||
+                      "—"}
+                  </p>
+                </td>
 
-                      <td className="px-5 py-4 align-top">
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${badge.cls}`}
-                        >
-                          <Icon className="h-3 w-3" />
-                          <span>{badge.label}</span>
-                        </span>
-                        {item.tiene_equipo && (
-                          <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded block mt-1 w-fit">
-                            Equipo Registrado
-                          </span>
-                        )}
-                      </td>
+                <td className={`${TABLA_TD} align-top`}>
+                  <Distintivo tono={badge.tono} icono={badge.icon}>
+                    {badge.label}
+                  </Distintivo>
+                  {item.tiene_equipo && (
+                    <span className="mt-1.5 block w-fit text-[11px] font-semibold text-slate-600">Equipo Registrado</span>
+                  )}
+                </td>
 
-                      <td className="px-5 py-4 align-top">
-                        <div className="flex flex-col items-end gap-2.5">
-                          <div className="flex flex-wrap items-center justify-end gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => setExpedienteSeleccionado(item)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
-                              title="Ver Expediente Digital"
-                            >
-                              <Eye className="h-3.5 w-3.5 text-slate-500" />
-                              <span>Expediente</span>
-                            </button>
-
-                            {veLineaTiempo && (
-                              <button
-                                type="button"
-                                onClick={() => setIniciativaLineaTiempo(item)}
-                                aria-haspopup="dialog"
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
-                                title="Ver la evolución cronológica de la iniciativa"
-                              >
-                                <History className="h-3.5 w-3.5 text-slate-500" />
-                                <span>Línea de tiempo</span>
-                              </button>
-                            )}
-
-                            {/* Botón de Aprobación */}
-                            {!esAprobada(item) && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setAccionConfirmacion({ iniciativa: item, accion: "aprobada" })
-                                }
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-sm"
-                                title="Aprobar iniciativa para que el estudiante conforme equipo"
-                              >
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                                <span>Aprobar</span>
-                              </button>
-                            )}
-
-                            {/* Botón de Rechazo (el coordinador no puede rechazar iniciativas) */}
-                            {!esCoordinador && (item.estado || "").toLowerCase() !== "rechazada" && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setAccionConfirmacion({ iniciativa: item, accion: "rechazada" })
-                                }
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
-                                title="Rechazar postulación"
-                              >
-                                <XCircle className="h-3.5 w-3.5" />
-                                <span>Rechazar</span>
-                              </button>
-                            )}
-
-                            {/* Mentores del proyecto (solo iniciativas aprobadas) */}
-                            {esAprobada(item) && (
-                              <BotonRol
-                                etiqueta="Mentores"
-                                Icono={Users}
-                                falta={!item.proyecto || !item.proyecto.mentores_asignados}
-                                onClick={() => setIniciativaMentores(item)}
-                              />
-                            )}
-                          </div>
-
-                          {/* Tutor y Evaluador */}
-                          {esAprobada(item) && (
-                            <div className="flex items-center justify-end gap-1.5">
-                              <BotonRol
-                                etiqueta="Tutor"
-                                Icono={GraduationCap}
-                                falta={!item.proyecto?.tiene_tutor}
-                                onClick={() => setIniciativaTutor(item)}
-                              />
-                              <BotonRol
-                                etiqueta="Evaluador"
-                                Icono={ClipboardCheck}
-                                falta={!item.proyecto?.tiene_evaluador}
-                                onClick={() => setIniciativaEvaluador(item)}
-                              />
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                <td className={`${TABLA_TD} align-top text-right`}>
+                  <MenuAcciones
+                    etiqueta="Gestionar"
+                    icono={SlidersHorizontal}
+                    etiquetaAccesible={`Acciones de la iniciativa ${item.iniciativa?.titulo || item.nombre}`}
+                    alerta={faltaRol}
+                    textoAlerta="falta asignar roles al proyecto"
+                    grupos={[
+                      {
+                        titulo: "Consultar",
+                        items: [
+                          {
+                            id: "expediente",
+                            label: "Ver expediente",
+                            detalle: "Documentos y datos de la postulación",
+                            icono: Eye,
+                            haspopup: "dialog",
+                            onClick: () => setExpedienteSeleccionado(item),
+                          },
+                          veLineaTiempo && {
+                            id: "linea",
+                            label: "Línea de tiempo",
+                            detalle: "Evolución cronológica de la iniciativa",
+                            icono: History,
+                            onClick: () => setIniciativaLineaTiempo(item),
+                          },
+                        ],
+                      },
+                      {
+                        titulo: "Decisión",
+                        items: [
+                          !aprobada && {
+                            id: "aprobar",
+                            label: "Aprobar iniciativa",
+                            detalle: "El estudiante podrá conformar su equipo",
+                            icono: CheckCircle2,
+                            haspopup: "dialog",
+                            onClick: () => setAccionConfirmacion({ iniciativa: item, accion: "aprobada" }),
+                          },
+                          // El coordinador no puede rechazar iniciativas
+                          !esCoordinador &&
+                            (item.estado || "").toLowerCase() !== "rechazada" && {
+                              id: "rechazar",
+                              label: "Rechazar postulación",
+                              detalle: aprobada ? "Se eliminará su proyecto" : "Se notificará al estudiante",
+                              icono: XCircle,
+                              peligro: true,
+                              haspopup: "dialog",
+                              onClick: () => setAccionConfirmacion({ iniciativa: item, accion: "rechazada" }),
+                            },
+                        ],
+                      },
+                      {
+                        titulo: "Acompañamiento del proyecto",
+                        items: aprobada
+                          ? [
+                              {
+                                id: "mentores",
+                                label: "Mentores",
+                                detalle: estadoRol(faltaMentores, "mentor"),
+                                alerta: faltaMentores,
+                                icono: Users,
+                                haspopup: "dialog",
+                                onClick: () => setIniciativaMentores(item),
+                              },
+                              {
+                                id: "tutor",
+                                label: "Tutor",
+                                detalle: estadoRol(faltaTutor, "tutor"),
+                                alerta: faltaTutor,
+                                icono: GraduationCap,
+                                haspopup: "dialog",
+                                onClick: () => setIniciativaTutor(item),
+                              },
+                              {
+                                id: "evaluador",
+                                label: "Evaluador",
+                                detalle: estadoRol(faltaEvaluador, "evaluador"),
+                                alerta: faltaEvaluador,
+                                icono: ClipboardCheck,
+                                haspopup: "dialog",
+                                onClick: () => setIniciativaEvaluador(item),
+                              },
+                            ]
+                          : [],
+                      },
+                    ]}
+                  />
+                </td>
+              </tr>
+            );
+          })}
+        </Tabla>
       )}
 
       {/* MODAL DE DETALLE DE EXPEDIENTE */}
@@ -550,14 +458,6 @@ export default function BancoIniciativasView({ titulo = "Banco de Iniciativas y 
         />
       )}
 
-      {iniciativaLineaTiempo && (
-        <LineaTiempoPanel
-          key={iniciativaLineaTiempo.id_iniciativa}
-          idIniciativa={iniciativaLineaTiempo.id_iniciativa}
-          nombre={iniciativaLineaTiempo.iniciativa?.titulo || iniciativaLineaTiempo.nombre}
-          onClose={() => setIniciativaLineaTiempo(null)}
-        />
-      )}
 
       {iniciativaEvaluador && (
         <EvaluadorPanel
@@ -571,134 +471,73 @@ export default function BancoIniciativasView({ titulo = "Banco de Iniciativas y 
       )}
 
       {/* MODAL DE CONFIRMACIÓN DE ACCIÓN (APROBAR / RECHAZAR) */}
-      {accionConfirmacion && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-100 space-y-4">
-            <div className="flex items-center gap-3">
-              <div
-                className={`p-2.5 rounded-xl ${
-                  accionConfirmacion.accion === "aprobada"
-                    ? "bg-emerald-50 text-emerald-600"
-                    : "bg-red-50 text-red-600"
-                }`}
-              >
-                {accionConfirmacion.accion === "aprobada" ? (
-                  <CheckCircle2 className="h-6 w-6" />
-                ) : (
-                  <XCircle className="h-6 w-6" />
-                )}
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-slate-900">
-                  {accionConfirmacion.accion === "aprobada"
-                    ? "¿Aprobar Iniciativa Institucional?"
-                    : "¿Marcar Iniciativa como Rechazada?"}
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Radicado:{" "}
-                  <strong className="font-mono text-slate-700">
-                    {accionConfirmacion.iniciativa.radicado}
-                  </strong>
-                </p>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">
-              {accionConfirmacion.accion === "aprobada" ? (
+      <DialogoConfirmacion
+        open={Boolean(accionConfirmacion)}
+        titulo={aprobando ? "¿Aprobar Iniciativa Institucional?" : "¿Marcar Iniciativa como Rechazada?"}
+        textoConfirmar={`Confirmar ${aprobando ? "Aprobación" : "Rechazo"}`}
+        peligro={!aprobando}
+        procesando={procesandoAccion}
+        deshabilitado={aprobando && !coordinadorSeleccionado}
+        onConfirmar={() => handleCambiarEstado(accionConfirmacion.iniciativa, accionConfirmacion.accion)}
+        onCancelar={() => setAccionConfirmacion(null)}
+      >
+        {accionConfirmacion && (
+          <div className="space-y-4">
+            <p className="text-xs text-slate-500">
+              Radicado: <strong className="font-mono text-slate-700">{accionConfirmacion.iniciativa.radicado}</strong>
+            </p>
+            <p className={`${BLOQUE_SUAVE} text-sm leading-relaxed text-slate-700`}>
+              {aprobando ? (
                 <>
                   Al <strong>aprobar</strong> la iniciativa{" "}
-                  <em>"{accionConfirmacion.iniciativa.iniciativa?.titulo || accionConfirmacion.iniciativa.nombre}"</em>,
-                  el estudiante líder recibirá una notificación institucional y quedará <strong>autorizado para conformar su Equipo Emprendedor</strong>.
+                  <em>"{accionConfirmacion.iniciativa.iniciativa?.titulo || accionConfirmacion.iniciativa.nombre}"</em>, el
+                  estudiante líder recibirá una notificación institucional y quedará{" "}
+                  <strong>autorizado para conformar su Equipo Emprendedor</strong>.
                 </>
               ) : (
                 <>
-                  Al marcar como <strong>rechazada</strong>, el estudiante no podrá conformar un equipo para esta postulación y será notificado del resultado.
+                  Al marcar como <strong>rechazada</strong>, el estudiante no podrá conformar un equipo para esta
+                  postulación y será notificado del resultado.
                   {["aprobada", "aprobado", "aceptada", "aceptado"].includes(
                     (accionConfirmacion.iniciativa.estado || "").toLowerCase()
                   ) && (
                     <>
-                      {" "}Como la iniciativa ya estaba aprobada,{" "}
-                      <strong>se eliminará su proyecto</strong> y sus asignaciones de
-                      coordinador, tutor y mentores.
+                      {" "}Como la iniciativa ya estaba aprobada, <strong>se eliminará su proyecto</strong> y sus
+                      asignaciones de coordinador, tutor y mentores.
                     </>
                   )}
                 </>
               )}
             </p>
 
-            {accionConfirmacion.accion === "aprobada" && (
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="coordinador-proyecto"
-                  className="block text-xs font-semibold text-slate-700"
-                >
-                  Coordinador a cargo del proyecto <span className="text-red-600">*</span>
-                </label>
-                {cargandoCoordinadores ? (
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Cargando coordinadores...
-                  </div>
-                ) : coordinadores.length === 0 ? (
-                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-2.5">
-                    No hay coordinadores activos registrados. Asigna el rol de coordinador a un
-                    usuario para poder aprobar la iniciativa.
-                  </p>
-                ) : (
-                  <select
-                    id="coordinador-proyecto"
-                    value={coordinadorSeleccionado}
-                    onChange={(e) => setCoordinadorSeleccionado(e.target.value)}
-                    disabled={procesandoAccion}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                  >
-                    <option value="">Selecciona un coordinador...</option>
-                    {coordinadores.map((c) => (
-                      <option key={c.id_usuario} value={c.id_usuario}>
-                        {c.nombre} — {c.correo}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-            )}
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setAccionConfirmacion(null)}
-                disabled={procesandoAccion}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  handleCambiarEstado(
-                    accionConfirmacion.iniciativa,
-                    accionConfirmacion.accion
-                  )
-                }
-                disabled={
-                  procesandoAccion ||
-                  (accionConfirmacion.accion === "aprobada" && !coordinadorSeleccionado)
-                }
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                  accionConfirmacion.accion === "aprobada"
-                    ? "bg-emerald-600 hover:bg-emerald-700"
-                    : "bg-red-600 hover:bg-red-700"
-                }`}
-              >
-                {procesandoAccion && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                <span>
-                  Confirmar {accionConfirmacion.accion === "aprobada" ? "Aprobación" : "Rechazo"}
-                </span>
-              </button>
-            </div>
+            {aprobando &&
+              (cargandoCoordinadores ? (
+                <p className="flex items-center gap-2 text-sm text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  Cargando coordinadores...
+                </p>
+              ) : coordinadores.length === 0 ? (
+                <p className="rounded-xl border border-ufps bg-white p-3 text-sm text-ufps">
+                  No hay coordinadores activos registrados. Asigna el rol de coordinador a un usuario para poder aprobar la
+                  iniciativa.
+                </p>
+              ) : (
+                <Selector
+                  etiqueta={
+                    <>
+                      Coordinador a cargo del proyecto <span className="text-ufps">*</span>
+                    </>
+                  }
+                  valor={coordinadorSeleccionado}
+                  onChange={setCoordinadorSeleccionado}
+                  disabled={procesandoAccion}
+                  placeholder="Selecciona un coordinador..."
+                  opciones={coordinadores.map((c) => ({ valor: c.id_usuario, texto: `${c.nombre} — ${c.correo}` }))}
+                />
+              ))}
           </div>
-        </div>
-      )}
+        )}
+      </DialogoConfirmacion>
     </div>
   );
 }

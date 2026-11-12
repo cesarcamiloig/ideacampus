@@ -11,28 +11,11 @@ export const NIVELES_ACADEMICOS = {
   doctorado: "Doctorado",
 };
 
-// Duraciones alineadas con las clases de transición
-export const SALIDA_PANEL_MS = 200;
-export const SALIDA_FILA_MS = 160;
-
-export function prefiereMenosMovimiento() {
-  return typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-}
+// Duraciones de transición e iniciales: compartidas con todo el sistema visual
+export { SALIDA_PANEL_MS, SALIDA_FILA_MS, prefiereMenosMovimiento, iniciales } from "../../../components/ui/utilidades";
 
 export function porNombre(a, b) {
   return (a.nombre || "").localeCompare(b.nombre || "", "es");
-}
-
-export function iniciales(nombre = "") {
-  return (
-    nombre
-      .split(" ")
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((p) => p[0])
-      .join("")
-      .toUpperCase() || "?"
-  );
 }
 
 export function textoExperiencia(anios) {

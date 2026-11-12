@@ -12,7 +12,7 @@ import {
     notaHitoPrevia,
     redondearNota,
 } from "../utils/evaluacionUtils"
-import { AYUDA, BOTON_PRIMARIO, BOTON_SECUNDARIO, CAMPO, ERROR, ETIQUETA } from "./estilos"
+import { AYUDA, BOTON_PRIMARIO, BOTON_SECUNDARIO, CAMPO, ERROR, ETIQUETA } from "../../../components/ui/estilos"
 
 function notasIniciales(evaluacion) {
     const notas = {}

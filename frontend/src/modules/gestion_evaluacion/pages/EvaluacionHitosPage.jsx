@@ -22,7 +22,7 @@ import { useRefrescoPeriodico } from "../hooks/useRefrescoPeriodico"
 import EvidenciasCargadasPanel from "../../gestion_emprendimiento_2/components/EvidenciasCargadasPanel"
 import { AvisoPanel } from "../../gestion_acompaniamiento/components/panelComun"
 import VistaEvaluacionHito from "../components/VistaEvaluacionHito"
-import { BOTON_FANTASMA, BOTON_PRIMARIO, BOTON_SECUNDARIO } from "../components/estilos"
+import { BOTON_FANTASMA, BOTON_PRIMARIO, BOTON_SECUNDARIO } from "../../../components/ui/estilos"
 import {
     NOTA_MAXIMA,
     TIPOS_INICIATIVA,

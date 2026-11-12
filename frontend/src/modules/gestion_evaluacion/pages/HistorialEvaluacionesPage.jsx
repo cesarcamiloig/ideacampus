@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { AlertCircle, Award, ChevronDown, Loader2 } from "lucide-react"
 import { useAuth } from "../../../context/AuthContext"
 import { getEvaluaciones, getMisProyectosPorEvaluar } from "../services/evaluacionService"
-import { BOTON_SECUNDARIO } from "../components/estilos"
+import { BOTON_SECUNDARIO } from "../../../components/ui/estilos"
 import { NOTA_MAXIMA, TIPOS_INICIATIVA, formatoFecha, formatoNota } from "../utils/evaluacionUtils"
 
 function promedio(valores) {

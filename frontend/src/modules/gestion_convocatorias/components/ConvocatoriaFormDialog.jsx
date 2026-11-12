@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { X, AlertCircle, Loader2, Clock, CheckCircle2 } from "lucide-react";
+import { Loader2, Clock, CheckCircle2 } from "lucide-react";
+import {
+  BLOQUE,
+  BOTON_PRIMARIO,
+  BOTON_SECUNDARIO,
+  CAMPO,
+  Campo,
+  ErrorGeneral,
+  Modal,
+  Rotulo,
+} from "../../../components/ui";
 
 export function ConvocatoriaFormDialog({
   open,
@@ -158,93 +168,80 @@ export function ConvocatoriaFormDialog({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl">
-        {/* Línea roja decorativa UFPS */}
-        <div className="absolute top-0 left-0 right-0 h-1.5 rounded-t-2xl bg-gradient-to-r from-red-600 via-rose-600 to-red-500" />
-
-        {/* Encabezado del modal */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
-          <div>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-red-600">
-              {initialData ? "Modificar Convocatoria" : "Nueva Convocatoria Institucional"}
-            </span>
-            <h2 className="text-lg font-bold text-slate-900 mt-0.5">
-              {initialData ? initialData.nombre : "Registrar Convocatoria de Emprendimiento"}
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={() => onOpenChange(false)}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
-          >
-            <X className="h-5 w-5" />
+    <Modal
+      open
+      onClose={() => onOpenChange(false)}
+      ancho="2xl"
+      seccion={initialData ? "Modificar Convocatoria" : "Nueva Convocatoria Institucional"}
+      titulo={initialData ? initialData.nombre : "Registrar Convocatoria de Emprendimiento"}
+      etiquetaCerrar="Cerrar formulario de convocatoria"
+      cerrarConFondo={!isSubmitting}
+      pie={
+        <>
+          <button type="button" onClick={() => onOpenChange(false)} disabled={isSubmitting} className={BOTON_SECUNDARIO}>
+            Cancelar
           </button>
-        </div>
+          <button type="button" onClick={handleSubmit} disabled={isSubmitting} className={BOTON_PRIMARIO}>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                Guardando…
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                {initialData ? "Actualizar Convocatoria" : "Crear Convocatoria"}
+              </>
+            )}
+          </button>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} noValidate className="space-y-5">
+        <ErrorGeneral mensaje={errors.general} />
 
-        {/* Contenido scrolleable del formulario */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-          {errors.general && (
-            <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50/80 p-3.5 text-xs text-red-700">
-              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-600" />
-              <span>{errors.general}</span>
-            </div>
-          )}
-
-          {/* Nombre de la Convocatoria */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Nombre de la Convocatoria <span className="text-red-500">*</span>
-            </label>
+        <Campo etiqueta="Nombre de la Convocatoria" requerido error={errors.nombre}>
+          {(props) => (
             <input
+              {...props}
               type="text"
               name="nombre"
               value={formData.nombre}
               onChange={handleChange}
               placeholder="Ej: Convocatoria Semillero de Ideas 2026-I"
-              className={`w-full rounded-xl border px-3.5 py-2.5 text-sm text-slate-800 transition-colors focus:outline-none focus:ring-2 ${
-                errors.nombre
-                  ? "border-red-300 bg-red-50/30 focus:border-red-500 focus:ring-red-500/20"
-                  : "border-slate-200 bg-white focus:border-red-500 focus:ring-red-500/20"
-              }`}
+              className={CAMPO}
             />
-            {errors.nombre && <p className="mt-1 text-xs text-red-600 font-medium">{errors.nombre}</p>}
-          </div>
+          )}
+        </Campo>
 
-          {/* Categoría y Periodo Académico */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Categoría Temática
-              </label>
-              <input
-                list="categorias-list"
-                name="categoria"
-                value={formData.categoria}
-                onChange={handleChange}
-                placeholder="Selecciona o escribe una categoría"
-                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 transition-colors focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
-              />
-              <datalist id="categorias-list">
-                {defaultCategories.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-                {categories.map((c) => (
-                  <option key={c.id || c.name} value={c.name} />
-                ))}
-              </datalist>
-            </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Campo etiqueta="Categoría Temática">
+            {(props) => (
+              <>
+                <input
+                  {...props}
+                  list="categorias-list"
+                  name="categoria"
+                  value={formData.categoria}
+                  onChange={handleChange}
+                  placeholder="Selecciona o escribe una categoría"
+                  className={CAMPO}
+                />
+                <datalist id="categorias-list">
+                  {defaultCategories.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                  {categories.map((c) => (
+                    <option key={c.id || c.name} value={c.name} />
+                  ))}
+                </datalist>
+              </>
+            )}
+          </Campo>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Ciclo / Periodo Académico
-              </label>
-              <select
-                name="periodo"
-                value={formData.periodo}
-                onChange={handleChange}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 transition-colors focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
-              >
+          <Campo etiqueta="Ciclo / Periodo Académico">
+            {(props) => (
+              <select {...props} name="periodo" value={formData.periodo} onChange={handleChange} className={CAMPO}>
                 <option value="">(Sin periodo asociado)</option>
                 {periodos.map((p) => {
                   const id = p.id || p.id_periodo;
@@ -256,154 +253,86 @@ export function ConvocatoriaFormDialog({
                   );
                 })}
               </select>
-            </div>
-          </div>
+            )}
+          </Campo>
+        </div>
 
-          {/* Fechas de Apertura y Cierre (GENNOVA-50) */}
-          <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4 space-y-3">
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
-              <Clock className="h-4 w-4 text-red-600" />
-              <span>Cronograma y Ventana de Postulación (GENNOVA-50)</span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Fecha y Hora de Apertura <span className="text-red-500">*</span>
-                </label>
+        {/* Fechas de apertura y cierre (GENNOVA-50) */}
+        <fieldset className={`${BLOQUE} space-y-3`}>
+          <legend className="sr-only">Cronograma y ventana de postulación</legend>
+          <Rotulo as="p" className="flex items-center gap-1.5">
+            <Clock className="h-3.5 w-3.5 text-ufps" aria-hidden="true" />
+            Cronograma y ventana de postulación
+          </Rotulo>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Campo etiqueta="Fecha y Hora de Apertura" requerido error={errors.fecha_apertura}>
+              {(props) => (
                 <input
+                  {...props}
                   type="datetime-local"
                   name="fecha_apertura"
                   value={formData.fecha_apertura}
                   onChange={handleChange}
-                  className={`w-full rounded-xl border px-3 py-2 text-xs text-slate-800 transition-colors focus:outline-none focus:ring-2 ${
-                    errors.fecha_apertura
-                      ? "border-red-300 bg-red-50/30 focus:border-red-500 focus:ring-red-500/20"
-                      : "border-slate-200 bg-white focus:border-red-500 focus:ring-red-500/20"
-                  }`}
+                  className={CAMPO}
                 />
-                {errors.fecha_apertura && (
-                  <p className="mt-1 text-[11px] text-red-600 font-medium">{errors.fecha_apertura}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Fecha y Hora de Cierre <span className="text-red-500">*</span>
-                </label>
+              )}
+            </Campo>
+            <Campo etiqueta="Fecha y Hora de Cierre" requerido error={errors.fecha_cierre}>
+              {(props) => (
                 <input
+                  {...props}
                   type="datetime-local"
                   name="fecha_cierre"
                   value={formData.fecha_cierre}
                   onChange={handleChange}
-                  className={`w-full rounded-xl border px-3 py-2 text-xs text-slate-800 transition-colors focus:outline-none focus:ring-2 ${
-                    errors.fecha_cierre
-                      ? "border-red-300 bg-red-50/30 focus:border-red-500 focus:ring-red-500/20"
-                      : "border-slate-200 bg-white focus:border-red-500 focus:ring-red-500/20"
-                  }`}
+                  className={CAMPO}
                 />
-                {errors.fecha_cierre && (
-                  <p className="mt-1 text-[11px] text-red-600 font-medium">{errors.fecha_cierre}</p>
-                )}
-              </div>
-            </div>
+              )}
+            </Campo>
           </div>
+        </fieldset>
 
-          {/* Estado inicial */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Estado de la Convocatoria
-            </label>
-            <select
-              name="estado"
-              value={formData.estado}
-              onChange={handleChange}
-              className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 transition-colors focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
-            >
+        <Campo etiqueta="Estado de la Convocatoria">
+          {(props) => (
+            <select {...props} name="estado" value={formData.estado} onChange={handleChange} className={CAMPO}>
               <option value="borrador">Borrador (Solo visible para coordinadores y administradores)</option>
               <option value="publicada">Publicada (Visible públicamente, abre según fecha programada)</option>
               <option value="abierta">Abierta (Recepción de iniciativas activa inmediatamente)</option>
               {initialData && <option value="cerrada">Cerrada</option>}
               {initialData && <option value="cancelada">Cancelada</option>}
             </select>
-          </div>
+          )}
+        </Campo>
 
-          {/* Descripción */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Descripción del Objetivo y Alcance
-            </label>
+        <Campo etiqueta="Descripción del Objetivo y Alcance">
+          {(props) => (
             <textarea
+              {...props}
               name="descripcion"
               rows={3}
               value={formData.descripcion}
               onChange={handleChange}
               placeholder="Detalla el propósito de la convocatoria, público objetivo y beneficios para los emprendedores..."
-              className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 transition-colors focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+              className={`${CAMPO} resize-y`}
             />
-          </div>
+          )}
+        </Campo>
 
-          {/* Requisitos de documentación */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Requisitos y Documentación Solicitada
-            </label>
+        <Campo etiqueta="Requisitos y Documentación Solicitada">
+          {(props) => (
             <textarea
+              {...props}
               name="requisitos_documentacion"
               rows={2}
               value={formData.requisitos_documentacion}
               onChange={handleChange}
               placeholder="Ej: Documento de identidad, propuesta de valor Canvas, pitch deck en formato PDF..."
-              className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 transition-colors focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+              className={`${CAMPO} resize-y`}
             />
-          </div>
-
-          {/* Criterios de Evaluación */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Criterios de Evaluación y Calificación
-            </label>
-            <textarea
-              name="criterios_evaluacion"
-              rows={2}
-              value={formData.criterios_evaluacion}
-              onChange={handleChange}
-              placeholder="Ej: Grado de innovación (30%), Viabilidad técnica (30%), Impacto social/económico (40%)..."
-              className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 transition-colors focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
-            />
-          </div>
-        </form>
-
-        {/* Footer del modal */}
-        <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4 bg-slate-50/50 rounded-b-2xl">
-          <button
-            type="button"
-            onClick={() => onOpenChange(false)}
-            disabled={isSubmitting}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-            className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-50 transition-colors"
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Guardando...</span>
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="h-4 w-4" />
-                <span>{initialData ? "Actualizar Convocatoria" : "Crear Convocatoria"}</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
+          )}
+        </Campo>
+        {/* Los criterios de evaluación ya no se piden aquí: se envía el valor que tuviera la convocatoria (o vacío) */}
+      </form>
+    </Modal>
   );
 }

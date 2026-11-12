@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { AlertCircle, ArrowLeft, CalendarDays, ClipboardList, FolderOpen, Loader2, Package, RefreshCw, User } from "lucide-react"
 import EvidenciasCargadasPanel from "../../gestion_emprendimiento_2/components/EvidenciasCargadasPanel"
 import FormularioEvaluacion from "./FormularioEvaluacion"
-import { BOTON_FANTASMA, BOTON_SECUNDARIO } from "./estilos"
+import { BOTON_FANTASMA, BOTON_SECUNDARIO } from "../../../components/ui/estilos"
 import { ESTADOS_PLAN, TIPOS_INICIATIVA, formatoPeso, rangoFechas } from "../utils/evaluacionUtils"
 
 function Contador({ valor }) {

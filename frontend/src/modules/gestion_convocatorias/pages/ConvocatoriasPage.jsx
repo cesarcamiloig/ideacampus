@@ -1,12 +1,9 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Plus,
-  Search,
   Calendar,
   Clock,
   Building,
-  CheckCircle2,
-  AlertCircle,
   FileText,
   Edit2,
   Trash2,
@@ -14,10 +11,32 @@ import {
   Lock,
   Globe,
   Bell,
-  Loader2,
   RefreshCw,
   ArrowRight,
 } from "lucide-react";
+import {
+  BOTON_ICONO,
+  BOTON_ICONO_PELIGRO,
+  BOTON_OSCURO,
+  BOTON_PRIMARIO,
+  BOTON_SECUNDARIO,
+  Buscador,
+  Cargando,
+  Contador,
+  DialogoConfirmacion,
+  Distintivo,
+  EncabezadoPagina,
+  ENLACE,
+  ErrorGeneral,
+  EstadoVacio,
+  Pagina,
+  Pestanas,
+  Selector,
+  SECCION,
+  TARJETA,
+  Toast,
+} from "../../../components/ui";
+import { estadoConvocatoria } from "../components/estadoConvocatoria";
 import MainLayout from "../../gestion_administrativa/components/layout/MainLayout";
 import { useAuth } from "../../../context/AuthContext";
 import {
@@ -312,44 +331,17 @@ export default function ConvocatoriasPage({ onNavigate }) {
   };
 
   const getStatusBadge = (estado) => {
-    const config = {
-      abierta: {
-        bg: "bg-emerald-50 text-emerald-700 border-emerald-200",
-        label: "Abierta",
-        dot: "bg-emerald-500 animate-pulse",
-      },
-      publicada: {
-        bg: "bg-blue-50 text-blue-700 border-blue-200",
-        label: "Publicada",
-        dot: "bg-blue-500",
-      },
-      borrador: {
-        bg: "bg-slate-100 text-slate-700 border-slate-200",
-        label: "Borrador",
-        dot: "bg-slate-400",
-      },
-      cerrada: {
-        bg: "bg-amber-50 text-amber-700 border-amber-200",
-        label: "Cerrada",
-        dot: "bg-amber-500",
-      },
-      cancelada: {
-        bg: "bg-red-50 text-red-700 border-red-200",
-        label: "Cancelada",
-        dot: "bg-red-500",
-      },
-    };
-
-    const c = config[estado] || config.borrador;
-    return (
-      <span
-        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${c.bg}`}
-      >
-        <span className={`h-1.5 w-1.5 rounded-full ${c.dot}`} />
-        {c.label}
-      </span>
-    );
+    const c = estadoConvocatoria(estado);
+    return <Distintivo tono={c.tono}>{c.label}</Distintivo>;
   };
+
+  const pestanas = [
+    { id: "todas", label: "Todas", count: countsByStatus.todas },
+    { id: "abierta", label: "Abiertas", count: countsByStatus.abierta },
+    { id: "publicada", label: "Publicadas", count: countsByStatus.publicada },
+    ...(isGestor ? [{ id: "borrador", label: "Borradores", count: countsByStatus.borrador }] : []),
+    { id: "cerrada", label: "Cerradas", count: countsByStatus.cerrada },
+  ];
 
   return (
     <MainLayout
@@ -359,338 +351,207 @@ export default function ConvocatoriasPage({ onNavigate }) {
         if (onNavigate) onNavigate(null);
       }}
     >
-      <div className="mx-auto w-full max-w-6xl space-y-6">
-        {/* Toast Notificación */}
-        {toastMessage && (
-          <div
-            className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl border px-5 py-3.5 shadow-xl backdrop-blur-md animate-in slide-in-from-bottom-5 duration-200 ${
-              toastMessage.type === "error"
-                ? "border-red-200 bg-red-50/95 text-red-800"
-                : "border-emerald-200 bg-emerald-50/95 text-emerald-800"
-            }`}
-          >
-            {toastMessage.type === "error" ? (
-              <AlertCircle className="h-5 w-5 text-red-600 shrink-0" />
-            ) : (
-              <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
-            )}
-            <p className="text-xs font-semibold">{toastMessage.message}</p>
-          </div>
-        )}
+      <Pagina>
+        <Toast
+          mensaje={toastMessage?.message}
+          tipo={toastMessage?.type === "error" ? "error" : "exito"}
+          onCerrar={() => setToastMessage(null)}
+        />
 
-        {/* 1. HEADER DE LA PÁGINA */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/80 pb-5">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="inline-block rounded-md bg-red-100 px-2.5 py-0.5 text-[11px] font-bold text-red-700">
-                GENNOVA Institucional
-              </span>
-              <span className="text-xs text-slate-400">•</span>
-              <span className="text-xs text-slate-500 font-medium">
-                Convocatorias de Emprendimiento
-              </span>
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-              {isGestor ? "Gestión de Convocatorias Institucionales" : "Convocatorias Institucionales"}
-            </h1>
-            <p className="text-xs text-slate-500 max-w-2xl leading-relaxed">
-              Consulta, postulación y administración del ciclo de vida de convocatorias para proyectos y semilleros de innovación.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2.5 shrink-0">
-            {/* Botón Centro de Notificaciones */}
-            <button
-              type="button"
-              onClick={() => setIsNotifOpen(true)}
-              className="relative inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
-              title="Notificaciones de Convocatorias"
-            >
-              <Bell className="h-4 w-4 text-slate-500" />
-              <span className="hidden sm:inline">Notificaciones</span>
-              {unreadNotifCount > 0 && (
-                <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-600 px-1.5 text-[10px] font-bold text-white">
-                  {unreadNotifCount}
-                </span>
-              )}
-            </button>
-
-            {/* Botón Refrescar */}
-            <button
-              type="button"
-              onClick={loadData}
-              disabled={isLoading}
-              className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm"
-              title="Recargar convocatorias"
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin text-red-600" : ""}`} />
-            </button>
-
-            {/* Botón Nueva Convocatoria (Solo Gestores) */}
-            {isGestor && (
+        {/* 1. ENCABEZADO DE LA PÁGINA */}
+        <EncabezadoPagina
+          seccion="Convocatorias de emprendimiento"
+          titulo={isGestor ? "Gestión de Convocatorias Institucionales" : "Convocatorias Institucionales"}
+          descripcion="Consulta, postulación y administración del ciclo de vida de convocatorias para proyectos y semilleros de innovación."
+          acciones={
+            <>
               <button
                 type="button"
-                onClick={handleOpenCreate}
-                className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700 transition-colors"
+                onClick={() => setIsNotifOpen(true)}
+                className={BOTON_SECUNDARIO}
+                title="Notificaciones de Convocatorias"
               >
-                <Plus className="h-4 w-4" />
-                <span>Nueva Convocatoria</span>
+                <Bell className="h-4 w-4" aria-hidden="true" />
+                <span className="hidden sm:inline">Notificaciones</span>
+                {unreadNotifCount > 0 && <Contador>{unreadNotifCount}</Contador>}
               </button>
-            )}
-          </div>
-        </div>
-
-        {/* 3. BARRA DE CONTROL, PESTAÑAS Y BÚSQUEDA */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-4">
-          {/* Pestañas tipo carpeta por estado */}
-          <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 pb-3">
-            {[
-              { id: "todas", label: "Todas", count: countsByStatus.todas },
-              { id: "abierta", label: "Abiertas", count: countsByStatus.abierta },
-              { id: "publicada", label: "Publicadas", count: countsByStatus.publicada },
-              ...(isGestor ? [{ id: "borrador", label: "Borradores", count: countsByStatus.borrador }] : []),
-              { id: "cerrada", label: "Cerradas", count: countsByStatus.cerrada },
-            ].map((tab) => {
-              const isSelected = statusFilter === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setStatusFilter(tab.id)}
-                  className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all ${
-                    isSelected
-                      ? "bg-red-50 text-red-700 border border-red-200 shadow-xs"
-                      : "text-slate-600 hover:bg-slate-50 border border-transparent"
-                  }`}
-                >
-                  <span>{tab.label}</span>
-                  <span
-                    className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
-                      isSelected ? "bg-red-200 text-red-800" : "bg-slate-100 text-slate-500"
-                    }`}
-                  >
-                    {tab.count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Filtros secundarios: Búsqueda, Categoría, Periodo */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-            <div className="md:col-span-6 relative">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar por nombre, categoría o descripción..."
-                className="w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 transition-colors focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
-              />
-              {searchTerm && (
-                <button
-                  type="button"
-                  onClick={() => setSearchTerm("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
-                >
-                  Limpiar
-                </button>
-              )}
-            </div>
-
-            <div className="md:col-span-3">
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 transition-colors focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
-              >
-                <option value="todas">Todas las categorías</option>
-                {availableCategories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="md:col-span-3">
-              <select
-                value={periodoFilter}
-                onChange={(e) => setPeriodoFilter(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 transition-colors focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
-              >
-                <option value="todos">Todos los periodos</option>
-                {periodos.map((p) => {
-                  const id = p.id || p.id_periodo;
-                  const label = p.name || p.nombre_periodo || `Ciclo ${p.year || p.anio}-${p.semester || p.semestre}`;
-                  return (
-                    <option key={id} value={id}>
-                      {label}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* 4. LISTADO DE CONVOCATORIAS */}
-        {errorMessage && (
-          <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50/80 p-4 text-xs text-red-700">
-            <AlertCircle className="h-5 w-5 shrink-0 text-red-600 mt-0.5" />
-            <div>
-              <p className="font-semibold">Ocurrió un error al cargar las convocatorias</p>
-              <p className="mt-0.5">{errorMessage}</p>
               <button
                 type="button"
                 onClick={loadData}
-                className="mt-2 font-bold text-red-800 underline hover:no-underline"
+                disabled={isLoading}
+                className={`${BOTON_ICONO} ring-1 ring-slate-200`}
+                title="Recargar convocatorias"
+                aria-label="Recargar convocatorias"
               >
-                Reintentar carga
+                <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin text-ufps" : ""}`} aria-hidden="true" />
               </button>
-            </div>
+              {isGestor && (
+                <button type="button" onClick={handleOpenCreate} className={BOTON_PRIMARIO}>
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  Nueva Convocatoria
+                </button>
+              )}
+            </>
+          }
+        />
+
+        {/* 2. PESTAÑAS Y FILTROS */}
+        <section className={`${TARJETA} space-y-4 p-4`}>
+          <Pestanas
+            opciones={pestanas}
+            valor={statusFilter}
+            onChange={setStatusFilter}
+            etiqueta="Estado de la convocatoria"
+            className="border-b border-slate-100 pb-3"
+          />
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
+            <Buscador
+              className="md:col-span-6"
+              valor={searchTerm}
+              onChange={setSearchTerm}
+              placeholder="Buscar por nombre, categoría o descripción…"
+            />
+            <Selector
+              className="md:col-span-3"
+              valor={categoryFilter}
+              onChange={setCategoryFilter}
+              aria-label="Filtrar por categoría"
+              opciones={[
+                { valor: "todas", texto: "Todas las categorías" },
+                ...availableCategories.map((cat) => ({ valor: cat, texto: cat })),
+              ]}
+            />
+            <Selector
+              className="md:col-span-3"
+              valor={periodoFilter}
+              onChange={setPeriodoFilter}
+              aria-label="Filtrar por periodo"
+              opciones={[
+                { valor: "todos", texto: "Todos los periodos" },
+                ...periodos.map((p) => ({
+                  valor: p.id || p.id_periodo,
+                  texto: p.name || p.nombre_periodo || `Ciclo ${p.year || p.anio}-${p.semester || p.semestre}`,
+                })),
+              ]}
+            />
           </div>
+        </section>
+
+        {/* 3. LISTADO DE CONVOCATORIAS */}
+        {errorMessage && (
+          <ErrorGeneral titulo="Ocurrió un error al cargar las convocatorias" mensaje={errorMessage}>
+            <button type="button" onClick={loadData} className="mt-1 font-semibold underline underline-offset-2 hover:no-underline">
+              Reintentar carga
+            </button>
+          </ErrorGeneral>
         )}
 
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-3">
-            <Loader2 className="h-8 w-8 animate-spin text-red-600" />
-            <p className="text-xs font-semibold text-slate-700">Cargando convocatorias institucionales...</p>
-            <p className="text-[11px] text-slate-400">Verificando consistencia temporal y estados (GENNOVA-50)...</p>
-          </div>
+          <Cargando texto="Cargando convocatorias institucionales…" />
         ) : filteredConvocatorias.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl border border-slate-200 shadow-sm text-center p-6 space-y-3">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600">
-              <FileText className="h-7 w-7 stroke-1" />
-            </div>
-            <h3 className="text-base font-bold text-slate-900">
-              No se encontraron convocatorias
-            </h3>
-            <p className="text-xs text-slate-500 max-w-md leading-relaxed">
-              {searchTerm || categoryFilter !== "todas" || statusFilter !== "todas"
-                ? "No hay resultados que coincidan con los filtros seleccionados. Intenta restablecer los filtros."
-                : isGestor
+          <EstadoVacio
+            icono={FileText}
+            titulo="No se encontraron convocatorias"
+            accion={
+              isGestor && (
+                <button type="button" onClick={handleOpenCreate} className={BOTON_PRIMARIO}>
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  Crear Primera Convocatoria
+                </button>
+              )
+            }
+          >
+            {searchTerm || categoryFilter !== "todas" || statusFilter !== "todas"
+              ? "No hay resultados que coincidan con los filtros seleccionados. Intenta restablecer los filtros."
+              : isGestor
                 ? "Aún no se han registrado convocatorias en el sistema. Puedes crear la primera haciendo clic en 'Nueva Convocatoria'."
                 : "No hay convocatorias activas disponibles para postulación en este momento."}
-            </p>
-            {isGestor && (
-              <button
-                type="button"
-                onClick={handleOpenCreate}
-                className="mt-2 inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-red-700 transition-colors"
-              >
-                <Plus className="h-4 w-4" />
-                <span>Crear Primera Convocatoria</span>
-              </button>
-            )}
-          </div>
+          </EstadoVacio>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
             {filteredConvocatorias.map((conv) => {
               const estaAbierta = conv.estado === "abierta";
               const estaPublicada = conv.estado === "publicada";
               const estaBorrador = conv.estado === "borrador";
 
               return (
-                <div
+                <article
                   key={conv.id_convocatoria}
-                  className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:border-slate-300 hover:shadow-md transition-all group"
+                  className={`${TARJETA} flex flex-col justify-between p-5 transition-shadow hover:shadow-md`}
                 >
                   <div className="space-y-3">
-                    {/* Top: Badges */}
                     <div className="flex items-center justify-between gap-2">
                       {getStatusBadge(conv.estado)}
                       {conv.periodo_nombre && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
-                          <Building className="h-2.5 w-2.5 text-slate-400" />
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500">
+                          <Building className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
                           {conv.periodo_nombre}
                         </span>
                       )}
                     </div>
 
-                    {/* Título y Categoría */}
                     <div>
-                      {conv.categoria && (
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-red-600 block mb-1">
-                          {conv.categoria}
-                        </span>
-                      )}
-                      <h3 className="text-base font-bold text-slate-900 group-hover:text-red-600 transition-colors leading-snug line-clamp-2">
-                        {conv.nombre}
-                      </h3>
+                      {conv.categoria && <p className={`${SECCION} mb-1`}>{conv.categoria}</p>}
+                      <h3 className="line-clamp-2 text-base font-semibold leading-snug text-slate-900">{conv.nombre}</h3>
                     </div>
 
-                    {/* Fechas / Cronograma */}
-                    <div className="rounded-xl bg-slate-50 p-3 text-[11px] text-slate-600 space-y-1.5 border border-slate-100">
+                    <dl className="space-y-1.5 rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
                       <div className="flex items-center justify-between">
-                        <span className="text-slate-400 flex items-center gap-1">
-                          <Calendar className="h-3 w-3" /> Apertura:
-                        </span>
-                        <span className="font-semibold text-slate-700">
-                          {formatDateShort(conv.fecha_apertura)}
-                        </span>
+                        <dt className="flex items-center gap-1.5 text-slate-500">
+                          <Calendar className="h-3.5 w-3.5" aria-hidden="true" /> Apertura
+                        </dt>
+                        <dd className="font-semibold text-slate-800">{formatDateShort(conv.fecha_apertura)}</dd>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-slate-400 flex items-center gap-1">
-                          <Clock className="h-3 w-3" /> Cierre:
-                        </span>
-                        <span className="font-semibold text-slate-700">
-                          {formatDateShort(conv.fecha_cierre)}
-                        </span>
+                        <dt className="flex items-center gap-1.5 text-slate-500">
+                          <Clock className="h-3.5 w-3.5" aria-hidden="true" /> Cierre
+                        </dt>
+                        <dd className="font-semibold text-slate-800">{formatDateShort(conv.fecha_cierre)}</dd>
                       </div>
-                    </div>
+                    </dl>
 
-                    {/* Descripción truncada */}
-                    <p className="text-xs text-slate-500 line-clamp-3 leading-relaxed">
+                    <p className="line-clamp-3 text-sm leading-relaxed text-slate-600">
                       {conv.descripcion || "Sin descripción registrada."}
                     </p>
                   </div>
 
-                  {/* Acciones del card */}
-                  <div className="mt-5 border-t border-slate-100 pt-3 space-y-2">
+                  <div className="mt-5 space-y-3 border-t border-slate-100 pt-3">
                     <div className="flex items-center justify-between gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenDetail(conv)}
-                        className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-red-600 transition-colors"
-                      >
-                        <span>Ver detalles</span>
-                        <ArrowRight className="h-3.5 w-3.5" />
+                      <button type="button" onClick={() => handleOpenDetail(conv)} className={ENLACE}>
+                        Ver detalles
+                        <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
                       </button>
 
                       {isGestor && (
-                        <div className="flex items-center gap-1">
+                        <div className="-my-1.5 -mr-2 flex items-center">
                           <button
                             type="button"
                             onClick={() => handleOpenEdit(conv)}
-                            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                            className={BOTON_ICONO}
                             title="Editar convocatoria"
+                            aria-label={`Editar la convocatoria ${conv.nombre}`}
                           >
-                            <Edit2 className="h-3.5 w-3.5" />
+                            <Edit2 className="h-4 w-4" aria-hidden="true" />
                           </button>
                           <button
                             type="button"
                             onClick={() => handleDeleteAction(conv)}
-                            className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                            className={BOTON_ICONO_PELIGRO}
                             title="Eliminar convocatoria"
+                            aria-label={`Eliminar la convocatoria ${conv.nombre}`}
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <Trash2 className="h-4 w-4" aria-hidden="true" />
                           </button>
                         </div>
                       )}
                     </div>
 
-                    {/* Acciones de gestión rápida para coordinadores */}
-                    {isGestor && (
-                      <div className="flex items-center gap-1.5 pt-1">
+                    {isGestor && (estaBorrador || estaPublicada || estaAbierta) && (
+                      <div className="flex items-center gap-2">
                         {estaBorrador && (
-                          <button
-                            type="button"
-                            onClick={() => handlePublish(conv)}
-                            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-1.5 text-[11px] font-semibold text-white shadow-xs hover:bg-emerald-700 transition-colors"
-                          >
-                            <Globe className="h-3 w-3" />
-                            <span>Publicar</span>
+                          <button type="button" onClick={() => handlePublish(conv)} className={`${BOTON_OSCURO} flex-1`}>
+                            <Globe className="h-4 w-4" aria-hidden="true" />
+                            Publicar
                           </button>
                         )}
 
@@ -699,34 +560,33 @@ export default function ConvocatoriasPage({ onNavigate }) {
                             <button
                               type="button"
                               onClick={() => handleNotifyAction(conv)}
-                              className="flex-1 inline-flex items-center justify-center gap-1 rounded-xl bg-blue-50 py-1.5 text-[11px] font-semibold text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
+                              className={`${BOTON_OSCURO} flex-1`}
                               title="Difundir a la comunidad"
                             >
-                              <Send className="h-3 w-3" />
-                              <span>Difundir</span>
+                              <Send className="h-4 w-4" aria-hidden="true" />
+                              Difundir
                             </button>
-
                             <button
                               type="button"
                               onClick={() => handleCloseConvocatoriaAction(conv)}
-                              className="inline-flex items-center justify-center gap-1 rounded-xl bg-amber-50 px-2.5 py-1.5 text-[11px] font-semibold text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
+                              className={BOTON_SECUNDARIO}
                               title="Cerrar convocatoria"
                             >
-                              <Lock className="h-3 w-3" />
-                              <span>Cerrar</span>
+                              <Lock className="h-4 w-4" aria-hidden="true" />
+                              Cerrar
                             </button>
                           </>
                         )}
                       </div>
                     )}
                   </div>
-                </div>
+                </article>
               );
             })}
           </div>
         )}
 
-        {/* 5. MODALES Y DIÁLOGOS */}
+        {/* 4. MODALES Y DIÁLOGOS */}
         <ConvocatoriaFormDialog
           open={isFormOpen}
           onOpenChange={setIsFormOpen}
@@ -748,56 +608,18 @@ export default function ConvocatoriasPage({ onNavigate }) {
           onDelete={handleDeleteAction}
         />
 
-        <NotificacionesModal
-          open={isNotifOpen}
-          onOpenChange={setIsNotifOpen}
-          onNotificationRead={loadNotificationCount}
+        <NotificacionesModal open={isNotifOpen} onOpenChange={setIsNotifOpen} onNotificationRead={loadNotificationCount} />
+
+        <DialogoConfirmacion
+          open={Boolean(confirmDialog)}
+          titulo={confirmDialog?.title}
+          mensaje={confirmDialog?.message}
+          textoConfirmar={confirmDialog?.confirmText}
+          peligro={confirmDialog?.isDanger}
+          onConfirmar={confirmDialog?.onConfirm}
+          onCancelar={() => setConfirmDialog(null)}
         />
-
-        {/* Modal de confirmación genérico */}
-        {confirmDialog && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-in fade-in duration-100">
-            <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl space-y-4">
-              <div className="flex items-start gap-3">
-                <div
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                    confirmDialog.isDanger ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-600"
-                  }`}
-                >
-                  <AlertCircle className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">{confirmDialog.title}</h3>
-                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                    {confirmDialog.message}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2.5 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setConfirmDialog(null)}
-                  className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmDialog.onConfirm}
-                  className={`rounded-xl px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors ${
-                    confirmDialog.isDanger
-                      ? "bg-red-600 hover:bg-red-700"
-                      : "bg-blue-600 hover:bg-blue-700"
-                  }`}
-                >
-                  {confirmDialog.confirmText}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+      </Pagina>
     </MainLayout>
   );
 }

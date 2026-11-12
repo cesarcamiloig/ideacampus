@@ -5,7 +5,7 @@ import {
   BOTON_PELIGRO,
   BOTON_PRIMARIO,
   BOTON_SECUNDARIO,
-} from "../../gestion_evaluacion/components/estilos";
+} from "../../../components/ui/estilos";
 import {
   asignarEvaluador,
   getEvaluadorDeProyecto,
@@ -252,7 +252,7 @@ export default function EvaluadorPanel({ iniciativa, onClose, onEvaluadorCambiad
               />
 
               {confirmandoQuitar && (
-                <div className="mt-3 space-y-3 rounded-2xl bg-ufps-suave p-3.5 animate-aparecer motion-reduce:animate-desvanecer">
+                <div className="mt-3 space-y-3 rounded-2xl border border-ufps bg-white p-3.5 animate-aparecer motion-reduce:animate-desvanecer">
                   <p className="text-sm text-slate-800">
                     ¿Quitar a <strong className="font-semibold">{evaluador.nombre}</strong> como evaluador de{" "}
                     {nombreProyecto}? El proyecto quedará sin evaluador hasta que asignes otro.

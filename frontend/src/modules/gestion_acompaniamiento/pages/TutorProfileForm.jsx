@@ -1,11 +1,25 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, ChevronDown, Save } from "lucide-react";
+import { ChevronDown, Loader2, Save } from "lucide-react";
 import { useAuth } from "../../../context/AuthContext";
 import {
   getCachedTutorProfile,
   getTutorProfile,
   registerTutorProfile,
 } from "../services/tutorService";
+import {
+  AYUDA,
+  AvisoPanel,
+  BOTON_PRIMARIO,
+  BOTON_SECUNDARIO,
+  CAMPO,
+  EncabezadoPagina,
+  ETIQUETA,
+  ErrorGeneral,
+  Pagina,
+  ROTULO,
+  SECCION,
+  TARJETA,
+} from "../../../components/ui";
 
 const NIVELES_ACADEMICOS = ["Pregrado", "Especializacion", "Maestria", "Doctorado"];
 
@@ -24,15 +38,13 @@ const initialState = {
   disponibilidad: "",
 };
 
-const INPUT_CLASS =
-  "w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-red-600 focus:outline-none focus:ring-1 focus:ring-red-600 aria-[invalid=true]:border-red-500";
-const READONLY_CLASS =
-  "w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500";
-const LABEL_CLASS = "text-xs font-semibold text-slate-700";
-const HINT_CLASS = "text-[11px] text-slate-500";
-const ERROR_CLASS = "text-xs font-medium text-red-600";
-const SECTION_CLASS =
-  "mb-4 border-b border-slate-100 pb-2 text-[11px] font-bold uppercase tracking-wider text-red-600";
+// Clases del sistema visual compartido (components/ui)
+const INPUT_CLASS = CAMPO;
+const READONLY_CLASS = CAMPO;
+const LABEL_CLASS = ETIQUETA;
+const HINT_CLASS = AYUDA;
+const ERROR_CLASS = "text-xs font-medium text-ufps";
+const SECTION_CLASS = `mb-4 border-b border-slate-100 pb-2 ${ROTULO}`;
 
 function mapProfileToForm(perfil, esMentor) {
   if (!perfil) return initialState;
@@ -53,6 +65,55 @@ function mapProfileToForm(perfil, esMentor) {
   };
 }
 
+const MAX_ANIOS = 60;
+const MENSAJE_ENLACE = "Escribe un enlace completo que empiece por http:// o https://, por ejemplo https://linkedin.com/in/tu-perfil.";
+
+function esEnlaceValido(valor) {
+  try {
+    const url = new URL(valor);
+    return (url.protocol === "http:" || url.protocol === "https:") && url.hostname.includes(".");
+  } catch {
+    return false;
+  }
+}
+
+// Campo del backend → campo del formulario, para mostrar cada error junto a su campo
+const CAMPOS_BACKEND = {
+  area_conocimiento: "areaEspecializacion",
+  area_especializacion: "areaEspecializacion",
+  nivel_academico: "nivelAcademico",
+  anios_experiencia: "aniosExperiencia",
+  biografia: "biografia",
+  enlace_perfil: "enlacePerfil",
+  disponibilidad: "disponibilidad",
+};
+
+function aTexto(valor) {
+  return Array.isArray(valor) ? valor.join(" ") : String(valor);
+}
+
+// Traduce el error del servidor: los 400 van a su campo; el mensaje general solo para fallas reales
+function erroresDelServidor(err) {
+  if (err?.status === 400 && err.data && typeof err.data === "object") {
+    const campos = {};
+    const generales = [];
+    Object.entries(err.data).forEach(([campo, valor]) => {
+      const destino = CAMPOS_BACKEND[campo];
+      if (destino === "enlacePerfil") campos.enlacePerfil = MENSAJE_ENLACE;
+      else if (destino) campos[destino] = aTexto(valor);
+      else generales.push(aTexto(valor));
+    });
+    return { campos, general: generales.join(" ") };
+  }
+  if (!err?.status) {
+    return { campos: {}, general: "No pudimos conectarnos con el servidor. Revisa tu conexión e inténtalo de nuevo." };
+  }
+  if (err.status >= 500) {
+    return { campos: {}, general: "El servidor tuvo un problema al guardar tu perfil. Inténtalo de nuevo en unos minutos." };
+  }
+  return { campos: {}, general: err.message || "No se pudo guardar tu perfil." };
+}
+
 function validate(form, esMentor) {
   const errors = {};
   if (!form.areaEspecializacion.trim()) {
@@ -63,6 +124,11 @@ function validate(form, esMentor) {
   }
   if (form.aniosExperiencia === "" || Number(form.aniosExperiencia) < 0) {
     errors.aniosExperiencia = "Ingresa un número válido de años de experiencia.";
+  } else if (Number(form.aniosExperiencia) > MAX_ANIOS) {
+    errors.aniosExperiencia = `Los años de experiencia no pueden ser más de ${MAX_ANIOS}.`;
+  }
+  if (form.enlacePerfil.trim() && !esEnlaceValido(form.enlacePerfil.trim())) {
+    errors.enlacePerfil = MENSAJE_ENLACE;
   }
   if (esMentor && !form.disponibilidad.trim()) {
     errors.disponibilidad = "Indica tu disponibilidad.";
@@ -71,7 +137,7 @@ function validate(form, esMentor) {
 }
 
 function Required() {
-  return <span className="text-red-600">*</span>;
+  return <span className="text-ufps">*</span>;
 }
 
 function TutorProfileForm() {
@@ -119,6 +185,7 @@ function TutorProfileForm() {
     const { name, value } = e.target;
     hasEditedForm.current = true;
     setForm((prev) => ({ ...prev, [name]: value }));
+    setErrors((prev) => (prev[name] ? { ...prev, [name]: undefined } : prev));
     setStatus("idle");
   }
 
@@ -151,35 +218,38 @@ function TutorProfileForm() {
         nivel_academico: form.nivelAcademico.toLowerCase(),
         anios_experiencia: Number(form.aniosExperiencia),
         biografia: form.biografia,
-        enlace_perfil: form.enlacePerfil,
+        enlace_perfil: form.enlacePerfil.trim(),
         ...(esMentor && { disponibilidad: form.disponibilidad }),
       }, rolActivo, usuario?.id_usuario);
       hasEditedForm.current = false;
       setStatus("success");
     } catch (err) {
-      setStatus("error");
-      setServerError(err.message);
+      const { campos, general } = erroresDelServidor(err);
+      setErrors(campos);
+      setServerError(general);
+      setStatus(general ? "error" : "idle");
     }
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
-      <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-        {esMentor ? "Mi Perfil Profesional" : "Mi Perfil Académico"}
-      </h1>
-      <p className="mt-1 mb-6 text-sm text-slate-600">
-        Esta información se usa para asignarte a iniciativas acordes a tu área y
-        experiencia. Puedes actualizarla cuando quieras.
-      </p>
+    <Pagina>
+      <EncabezadoPagina
+        seccion={esMentor ? "Mentoría" : "Tutoría académica"}
+        titulo={esMentor ? "Mi Perfil Profesional" : "Mi Perfil Académico"}
+        descripcion="Esta información se usa para asignarte a iniciativas acordes a tu área y experiencia. Puedes actualizarla cuando quieras."
+      />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Guía del formulario */}
-        <aside className="h-fit space-y-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-900">¿Qué debes completar?</h3>
+        <aside className={`${TARJETA} h-fit space-y-5 p-5 sm:p-6`}>
+          <div>
+            <p className={SECCION}>Guía</p>
+            <h3 className="mt-1 text-base font-semibold text-slate-900">¿Qué debes completar?</h3>
+          </div>
           <ol className="space-y-4">
             {STEPS.map((step) => (
               <li key={step.number} className="flex gap-3">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-50 text-xs font-bold text-red-600 ring-1 ring-red-200">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ufps text-xs font-semibold text-white">
                   {step.number}
                 </span>
                 <div>
@@ -189,14 +259,14 @@ function TutorProfileForm() {
               </li>
             ))}
           </ol>
-          <p className="rounded-lg border border-slate-100 bg-[#f4f5f7] p-3 text-xs leading-relaxed text-slate-600">
+          <p className="rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
             Los campos marcados con <Required /> son obligatorios para poder
             asignarte a una iniciativa.
           </p>
         </aside>
 
         {/* Formulario */}
-        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
+        <section className={`${TARJETA} p-5 sm:p-6 lg:col-span-2`}>
           <form onSubmit={handleSubmit} noValidate className="space-y-8">
             <div>
               <h2 className={SECTION_CLASS}>Cuenta institucional</h2>
@@ -217,12 +287,7 @@ function TutorProfileForm() {
                 {esMentor ? "Perfil profesional" : "Perfil académico"}
               </h2>
 
-              {profileLoadError && (
-                <p className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700" role="alert">
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                  {profileLoadError}
-                </p>
-              )}
+              <ErrorGeneral mensaje={profileLoadError} />
 
               <div className="space-y-1">
                 <label htmlFor="areaEspecializacion" className={LABEL_CLASS}>
@@ -256,14 +321,14 @@ function TutorProfileForm() {
                       value={form.nivelAcademico}
                       onChange={handleChange}
                       aria-invalid={Boolean(errors.nivelAcademico)}
-                      className={`${INPUT_CLASS} appearance-none pr-9`}
+                      className={`${INPUT_CLASS} appearance-none pr-10`}
                     >
                       <option value="">Selecciona una opción</option>
                       {NIVELES_ACADEMICOS.map((nivel) => (
                         <option key={nivel} value={nivel}>{nivel}</option>
                       ))}
                     </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
                   </div>
                   {errors.nivelAcademico && (
                     <p className={ERROR_CLASS} role="alert">{errors.nivelAcademico}</p>
@@ -278,7 +343,7 @@ function TutorProfileForm() {
                     name="aniosExperiencia"
                     type="number"
                     min="0"
-                    max="50"
+                    max={MAX_ANIOS}
                     placeholder="0"
                     value={form.aniosExperiencia}
                     onChange={handleChange}
@@ -322,9 +387,13 @@ function TutorProfileForm() {
                   placeholder="Cuéntanos brevemente tu trayectoria como mentor o tutor..."
                   value={form.biografia}
                   onChange={handleChange}
+                  aria-invalid={Boolean(errors.biografia)}
                   className={`${INPUT_CLASS} resize-none`}
                 />
                 <p className={HINT_CLASS}>Opcional · visible para quien revise tu asignación.</p>
+                {errors.biografia && (
+                  <p className={ERROR_CLASS} role="alert">{errors.biografia}</p>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -333,49 +402,41 @@ function TutorProfileForm() {
                   id="enlacePerfil"
                   name="enlacePerfil"
                   type="url"
-                  placeholder="https://"
+                  placeholder="https://linkedin.com/in/tu-perfil"
                   value={form.enlacePerfil}
                   onChange={handleChange}
+                  aria-invalid={Boolean(errors.enlacePerfil)}
+                  aria-describedby={errors.enlacePerfil ? "enlacePerfil-error" : undefined}
                   className={INPUT_CLASS}
                 />
-                <p className={HINT_CLASS}>Opcional.</p>
+                {errors.enlacePerfil ? (
+                  <p id="enlacePerfil-error" className={ERROR_CLASS} role="alert">{errors.enlacePerfil}</p>
+                ) : (
+                  <p className={HINT_CLASS}>Opcional. Puedes dejarlo vacío.</p>
+                )}
               </div>
             </div>
 
-            {status === "success" && (
-              <p className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
-                <CheckCircle2 className="h-4 w-4 shrink-0" />
-                Tu perfil se guardó correctamente.
-              </p>
-            )}
-            {status === "error" && (
-              <p className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700" role="alert">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                {serverError}
-              </p>
-            )}
+            <AvisoPanel aviso={status === "success" ? { tipo: "exito", titulo: "Tu perfil se guardó correctamente." } : null} />
+            <AvisoPanel aviso={status === "error" ? { tipo: "error", titulo: serverError } : null} />
 
-            <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
-              <button
-                type="button"
-                onClick={handleCancel}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
-              >
+            <div className="flex flex-col-reverse gap-2 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end">
+              <button type="button" onClick={handleCancel} className={BOTON_SECUNDARIO}>
                 Cancelar
               </button>
-              <button
-                type="submit"
-                disabled={status === "loading"}
-                className="inline-flex items-center gap-2 rounded-lg bg-[#c81e1e] px-4 py-2 text-xs font-semibold text-white shadow transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <Save className="h-4 w-4" />
+              <button type="submit" disabled={status === "loading"} className={BOTON_PRIMARIO}>
+                {status === "loading" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Save className="h-4 w-4" aria-hidden="true" />
+                )}
                 {status === "loading" ? "Guardando..." : "Guardar perfil"}
               </button>
             </div>
           </form>
         </section>
       </div>
-    </div>
+    </Pagina>
   );
 }
 
