@@ -993,6 +993,23 @@ class ConsultarEvaluacionesTests(EvaluacionBaseTests):
         self.como("admin")
         self.assertEqual(self.client.get(f"{self.URL}mis-proyectos/").status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_integracion_hu17_proyecto_con_evaluador_asignado_restringe_a_otros_evaluadores(self):
+        self.proyecto.evaluador = self.usuarios["evaluador"]
+        self.proyecto.save(update_fields=["evaluador"])
+
+        # El evaluador asignado ve el proyecto en su bandeja
+        self.como("evaluador")
+        res_asignado = self.client.get(f"{self.URL}mis-proyectos/")
+        self.assertEqual(res_asignado.status_code, status.HTTP_200_OK)
+        self.assertIn(self.proyecto.pk, [p["id"] for p in res_asignado.data])
+
+        # Otro evaluador no asignado no lo ve en su bandeja ni puede evaluarlo
+        self.como("evaluador2")
+        res_ajeno = self.client.get(f"{self.URL}mis-proyectos/")
+        self.assertEqual(res_ajeno.status_code, status.HTTP_200_OK)
+        self.assertNotIn(self.proyecto.pk, [p["id"] for p in res_ajeno.data])
+        self.assertEqual(self.post(self.cuerpo_hito2()).status_code, status.HTTP_403_FORBIDDEN)
+
 
 class CalculosTests(EvaluacionBaseTests):
     def test_nota_hito_devuelve_escala_0_1_y_0_5_normalizando_cada_criterio(self):
