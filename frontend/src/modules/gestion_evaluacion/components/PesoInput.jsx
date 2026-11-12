@@ -38,7 +38,7 @@ export default function PesoInput({
 
     return (
         <div
-            className={`group relative flex shrink-0 items-baseline rounded-xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 transition-[box-shadow,background-color] duration-150 ease-out-suave focus-within:ring-2 focus-within:ring-ufps motion-reduce:transition-none ${invalid ? "bg-ufps-suave ring-ufps" : "ring-slate-200 hover:ring-slate-300"
+            className={`group relative flex shrink-0 items-baseline rounded-xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 transition-[box-shadow,background-color] duration-150 ease-out-suave focus-within:ring-2 focus-within:ring-ufps motion-reduce:transition-none ${invalid ? "ring-ufps" : "ring-slate-200 hover:ring-slate-300"
                 } ${TAMANOS[tamano]}`}
         >
             <input

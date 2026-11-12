@@ -1,10 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, ChevronDown, FolderOpen, Link2, Save, Upload, X } from "lucide-react";
+import { ChevronDown, FolderOpen, Link2, Loader2, Save, Upload, X } from "lucide-react";
 import { useAuth } from "../../../context/AuthContext";
 import { getEvidencias, registerEvidencia } from "../services/evidenciaService";
 import { obtenerMiEquipo } from "../services/equipoService";
 import { getActividades } from "../services/planTrabajoService";
 import EvidenciasCargadasPanel from "../components/EvidenciasCargadasPanel";
+import {
+  AYUDA,
+  AvisoPanel,
+  BOTON_ICONO_PELIGRO,
+  BOTON_PRIMARIO,
+  BOTON_SECUNDARIO,
+  CAMPO,
+  CONTADOR,
+  EncabezadoPagina,
+  ETIQUETA,
+  ErrorGeneral,
+  ROTULO,
+  SECCION,
+  TARJETA,
+  claseOpcion,
+} from "../../../components/ui";
 
 const TIPOS = [
   { id: "documento", label: "Documento" },
@@ -27,18 +43,14 @@ const STEPS = [
   { number: 3, title: "Confirmación", subtitle: "Revisa lo adjuntado y guarda." },
 ];
 
-// text-base en móvil: Safari de iPhone hace zoom automático en inputs con fuente menor a 16px
-const INPUT_CLASS =
-  "w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-base sm:text-sm text-slate-900 placeholder-slate-400 focus:border-red-600 focus:outline-none focus:ring-1 focus:ring-red-600 aria-[invalid=true]:border-red-500";
-const READONLY_CLASS =
-  "w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500";
-const LABEL_CLASS = "text-xs font-semibold text-slate-700";
-const HINT_CLASS = "text-[11px] text-slate-500";
-const ERROR_CLASS = "text-xs font-medium text-red-600";
-const SECTION_CLASS =
-  "mb-4 border-b border-slate-100 pb-2 text-[11px] font-bold uppercase tracking-wider text-red-600";
-const OUTLINE_BUTTON_CLASS =
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-red-600 bg-white px-4 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50";
+// Clases del sistema visual compartido (components/ui)
+const INPUT_CLASS = CAMPO;
+const READONLY_CLASS = CAMPO;
+const LABEL_CLASS = ETIQUETA;
+const HINT_CLASS = AYUDA;
+const ERROR_CLASS = "text-xs font-medium text-ufps";
+const SECTION_CLASS = `border-b border-slate-100 pb-2 ${ROTULO}`;
+const OUTLINE_BUTTON_CLASS = `${BOTON_SECUNDARIO} shrink-0`;
 
 function formatSize(bytes) {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -80,7 +92,7 @@ function erroresDelServidor(data) {
 }
 
 function Required() {
-  return <span className="text-red-600">*</span>;
+  return <span className="text-ufps">*</span>;
 }
 
 function EvidenciaForm() {
@@ -345,43 +357,30 @@ function EvidenciaForm() {
 
   return (
     <div className="w-full space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-red-600">
-            Evidencias de avance
-          </span>
-          <h2 className="mt-0.5 text-xl font-bold text-slate-900">
-            Registra la evidencia de tu avance
-          </h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Adjunta documentos, enlaces, prototipos y presentaciones que respalden
-            la trayectoria y madurez de tu iniciativa al finalizar una etapa.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setPanelAbierto(true)}
-          aria-haspopup="dialog"
-          className={`${OUTLINE_BUTTON_CLASS} self-start sm:self-auto`}
-        >
-          <FolderOpen className="h-4 w-4" />
-          Evidencias cargadas
-          {!cargandoRegistradas && !registradasError && (
-            <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
-              {registradas.length}
-            </span>
-          )}
-        </button>
-      </div>
+      <EncabezadoPagina
+        seccion="Evidencias de avance"
+        titulo="Registra la evidencia de tu avance"
+        descripcion="Adjunta documentos, enlaces, prototipos y presentaciones que respalden la trayectoria y madurez de tu iniciativa al finalizar una etapa."
+        acciones={
+          <button type="button" onClick={() => setPanelAbierto(true)} aria-haspopup="dialog" className={OUTLINE_BUTTON_CLASS}>
+            <FolderOpen className="h-4 w-4" aria-hidden="true" />
+            Evidencias cargadas
+            {!cargandoRegistradas && !registradasError && <span className={CONTADOR}>{registradas.length}</span>}
+          </button>
+        }
+      />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Guía del formulario */}
-        <aside className="h-fit space-y-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-900">¿Cómo registrar tu avance?</h3>
+        <aside className={`${TARJETA} h-fit space-y-5 p-5 sm:p-6`}>
+          <div>
+            <p className={SECCION}>Guía</p>
+            <h3 className="mt-1 text-base font-semibold text-slate-900">¿Cómo registrar tu avance?</h3>
+          </div>
           <ol className="space-y-4">
             {STEPS.map((step) => (
               <li key={step.number} className="flex gap-3">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-50 text-xs font-bold text-red-600 ring-1 ring-red-200">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ufps text-xs font-semibold text-white">
                   {step.number}
                 </span>
                 <div>
@@ -391,14 +390,14 @@ function EvidenciaForm() {
               </li>
             ))}
           </ol>
-          <p className="rounded-lg border border-slate-100 bg-[#f4f5f7] p-3 text-xs leading-relaxed text-slate-600">
+          <p className="rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
             Formatos: PDF, DOCX, PPTX, PNG, JPG. Máximo{" "}
             <strong className="text-slate-800">{MAX_MB} MB</strong> por archivo.
           </p>
         </aside>
 
         {/* Formulario */}
-        <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm lg:col-span-2">
+        <section className={`${TARJETA} p-5 sm:p-6 lg:col-span-2`}>
           <form onSubmit={handleSubmit} noValidate className="space-y-8">
             <div className="space-y-4">
               <h3 className={SECTION_CLASS}>Datos de la evidencia</h3>
@@ -431,7 +430,7 @@ function EvidenciaForm() {
                       }}
                       aria-invalid={Boolean(errors.actividad)}
                       disabled={cargandoActividades || misActividades.length === 0}
-                      className={`${INPUT_CLASS} appearance-none pr-9 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500`}
+                      className={`${INPUT_CLASS} appearance-none pr-10`}
                     >
                       <option value="">
                         {cargandoActividades
@@ -446,7 +445,7 @@ function EvidenciaForm() {
                         </option>
                       ))}
                     </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
                   </div>
                   {actividadSeleccionada && (
                     <p className={HINT_CLASS}>
@@ -520,10 +519,7 @@ function EvidenciaForm() {
                       setArchivoError("");
                       limpiarErrorCampo("tipo");
                     }}
-                    className={`rounded-lg border px-3 py-2.5 text-xs font-semibold transition-colors ${tipo === t.id
-                      ? "border-red-600 bg-red-50 text-red-700"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-red-300 hover:bg-slate-50"
-                      }`}
+                    className={`${claseOpcion(tipo === t.id)} px-3 py-3 text-center text-sm font-semibold ${tipo === t.id ? "text-ufps" : "text-slate-700"}`}
                   >
                     {t.label}
                   </button>
@@ -532,7 +528,7 @@ function EvidenciaForm() {
               {errors.tipo && <p className={ERROR_CLASS} role="alert">{errors.tipo}</p>}
 
               {soloEnlaces ? (
-                <p className="rounded-lg border border-slate-100 bg-[#f4f5f7] p-3 text-xs text-slate-600">
+                <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
                   Con el tipo <strong className="text-slate-800">Enlace</strong> solo se aceptan enlaces; no se pueden subir archivos.
                 </p>
               ) : (
@@ -543,12 +539,12 @@ function EvidenciaForm() {
                   }}
                   onDragLeave={() => setArrastrando(false)}
                   onDrop={handleDrop}
-                  className={`rounded-xl border-2 border-dashed p-6 text-center transition-colors ${arrastrando
-                    ? "border-red-400 bg-red-50/60"
-                    : "border-slate-200 bg-[#f4f5f7]"
+                  className={`rounded-2xl border-2 border-dashed p-6 text-center transition-colors ${arrastrando
+                    ? "border-ufps bg-white"
+                    : "border-slate-300 bg-superficie-alta"
                     }`}
                 >
-                  <Upload className="mx-auto h-6 w-6 text-slate-400" />
+                  <Upload className={`mx-auto h-7 w-7 ${arrastrando ? "text-ufps" : "text-slate-400"}`} aria-hidden="true" />
                   <p className="mt-2 text-sm font-semibold text-slate-800">Arrastra tu archivo aquí</p>
                   <p className="mb-4 text-xs text-slate-500">o selecciónalo desde tu equipo</p>
                   <button
@@ -589,7 +585,7 @@ function EvidenciaForm() {
                     className={INPUT_CLASS}
                   />
                   <button type="button" onClick={agregarEnlace} className={OUTLINE_BUTTON_CLASS}>
-                    <Link2 className="h-4 w-4" />
+                    <Link2 className="h-4 w-4" aria-hidden="true" />
                     Agregar enlace
                   </button>
                 </div>
@@ -600,36 +596,31 @@ function EvidenciaForm() {
 
             <div className="space-y-3">
               <h3 className={SECTION_CLASS}>Evidencias adjuntas ({adjuntos.length})</h3>
-              {errors.general && (
-                <p className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700" role="alert">
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                  {errors.general}
-                </p>
-              )}
+              <ErrorGeneral mensaje={errors.general} />
               {adjuntos.length === 0 ? (
-                <p className="text-xs text-slate-400">Aún no has adjuntado ninguna evidencia.</p>
+                <p className="text-sm text-slate-500">Aún no has adjuntado ninguna evidencia.</p>
               ) : (
                 <ul className="space-y-2">
                   {adjuntos.map((ad) => (
                     <li
                       key={ad.id}
-                      className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 ${soloEnlaces && ad.file ? "border-red-300 bg-red-50/40" : "border-slate-200"}`}
+                      className={`flex items-center gap-3 rounded-xl border bg-white px-3 py-2 ${soloEnlaces && ad.file ? "border-ufps" : "border-slate-200"}`}
                     >
-                      <span className="min-w-[38px] rounded-md bg-red-50 px-2 py-1 text-center text-[10px] font-bold text-red-700">
+                      <span className="min-w-[40px] rounded-md bg-slate-900 px-2 py-1 text-center text-[10px] font-bold text-white">
                         {ad.etiqueta}
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-slate-800">{ad.nombre}</p>
-                        <p className="text-[11px] text-slate-500">{ad.detalle}</p>
+                        <p className="text-xs text-slate-500">{ad.detalle}</p>
                       </div>
                       <button
                         type="button"
                         onClick={() => quitarAdjunto(ad.id)}
-                        className="rounded-md p-1 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                        className={`${BOTON_ICONO_PELIGRO} -my-1.5 -mr-1.5`}
                         title="Quitar evidencia"
                         aria-label={`Quitar ${ad.nombre}`}
                       >
-                        <X className="h-4 w-4" />
+                        <X className="h-4 w-4" aria-hidden="true" />
                       </button>
                     </li>
                   ))}
@@ -637,27 +628,18 @@ function EvidenciaForm() {
               )}
             </div>
 
-            {status === "success" && (
-              <p className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
-                <CheckCircle2 className="h-4 w-4 shrink-0" />
-                Tu evidencia se guardó correctamente.
-              </p>
-            )}
+            <AvisoPanel aviso={status === "success" ? { tipo: "exito", titulo: "Tu evidencia se guardó correctamente." } : null} />
 
-            <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
-              <button
-                type="button"
-                onClick={handleCancel}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
-              >
+            <div className="flex flex-col-reverse gap-2 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end">
+              <button type="button" onClick={handleCancel} className={BOTON_SECUNDARIO}>
                 Cancelar
               </button>
-              <button
-                type="submit"
-                disabled={!puedeGuardar}
-                className="inline-flex items-center gap-2 rounded-lg bg-[#c81e1e] px-4 py-2 text-xs font-semibold text-white shadow transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <Save className="h-4 w-4" />
+              <button type="submit" disabled={!puedeGuardar} className={BOTON_PRIMARIO}>
+                {status === "loading" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Save className="h-4 w-4" aria-hidden="true" />
+                )}
                 {status === "loading" ? "Guardando..." : "Guardar evidencia"}
               </button>
             </div>

@@ -1,6 +1,6 @@
 import { Equal } from "lucide-react"
 import { PESO_TOTAL, formatPorcentaje } from "../utils/rubricaUtils"
-import { BOTON_FANTASMA, tonoSegmento } from "./estilos"
+import { BOTON_FANTASMA, tonoSegmento } from "../../../components/ui/estilos"
 
 const ALTO = { lg: "h-4", sm: "h-2.5" }
 
@@ -42,7 +42,7 @@ export default function DistribucionPesos({
         )
     } else {
         mensaje = (
-            <p key="falta" className="text-sm font-medium text-amber-800">
+            <p key="falta" className="text-sm font-medium text-slate-600">
                 Te falta {formatPorcentaje(falta)} por repartir
             </p>
         )
@@ -62,7 +62,7 @@ export default function DistribucionPesos({
                     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                         <span
                             className={`font-bold tabular-nums transition-colors duration-200 ${grande ? "text-2xl" : "text-lg"
-                                } ${completo ? "text-emerald-700" : excedido ? "text-ufps" : "text-slate-900"}`}
+                                } ${completo ? "text-slate-900" : excedido ? "text-ufps" : "text-slate-500"}`}
                         >
                             {formatPorcentaje(total)}
                             <span className="ml-1 text-sm font-medium text-slate-500">de 100%</span>
@@ -97,7 +97,7 @@ export default function DistribucionPesos({
                     {falta > 0 && (
                         <div
                             style={{ width: `${falta}%` }}
-                            className="h-full rounded-full border-2 border-dashed border-red-200 transition-[width] duration-150 ease-out-suave motion-reduce:transition-none"
+                            className="h-full rounded-full border-2 border-dashed border-slate-300 transition-[width] duration-150 ease-out-suave motion-reduce:transition-none"
                         />
                     )}
                 </div>

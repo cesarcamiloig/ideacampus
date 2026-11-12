@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { Bell, CheckCheck, CheckCircle2, Clock, ArrowRight } from "lucide-react";
 import {
-  X,
-  Bell,
-  CheckCheck,
-  CheckCircle2,
-  AlertCircle,
-  Loader2,
-  Clock,
-  ArrowRight,
-} from "lucide-react";
+  BOTON_FANTASMA,
+  BOTON_SECUNDARIO,
+  Cargando,
+  ENLACE,
+  ErrorGeneral,
+  EstadoVacio,
+  Modal,
+  Pestanas,
+  SECCION,
+} from "../../../components/ui";
 import {
   getNotificacionesConvocatoria,
   marcarNotificacionLeida,
@@ -88,153 +90,16 @@ export function NotificacionesModal({ open, onOpenChange, onNotificationRead, on
   const unreadCount = notificaciones.filter((n) => !n.leida).length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="relative w-full max-w-xl max-h-[85vh] flex flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl">
-        {/* Línea roja UFPS */}
-        <div className="absolute top-0 left-0 right-0 h-1.5 rounded-t-2xl bg-gradient-to-r from-red-600 via-rose-600 to-red-500" />
-
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-50 text-red-600">
-              <Bell className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-900">
-                Notificaciones de Convocatorias
-              </h2>
-              <p className="text-xs text-slate-500">
-                Avisos institucionales sobre apertura, cierre y postulaciones
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => onOpenChange(false)}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* Barra de filtros y marcar todas leídas */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-2.5 bg-slate-50/50">
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setFilterLeida("todas")}
-              className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
-                filterLeida === "todas"
-                  ? "bg-white text-slate-900 shadow-sm border border-slate-200"
-                  : "text-slate-600 hover:bg-slate-100"
-              }`}
-            >
-              Todas
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterLeida("no_leidas")}
-              className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
-                filterLeida === "no_leidas"
-                  ? "bg-white text-red-600 shadow-sm border border-slate-200"
-                  : "text-slate-600 hover:bg-slate-100"
-              }`}
-            >
-              No leídas {unreadCount > 0 && `(${unreadCount})`}
-            </button>
-          </div>
-
-          {unreadCount > 0 && (
-            <button
-              type="button"
-              onClick={handleMarkAllAsRead}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 hover:text-red-700 transition-colors"
-            >
-              <CheckCheck className="h-3.5 w-3.5" />
-              <span>Marcar todas como leídas</span>
-            </button>
-          )}
-        </div>
-
-        {/* Lista de notificaciones */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-          {errorMessage && (
-            <div className="flex items-center gap-2 rounded-xl bg-red-50 p-3 text-xs text-red-700 border border-red-200">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
-
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-12 text-slate-400 space-y-2">
-              <Loader2 className="h-6 w-6 animate-spin text-red-600" />
-              <span className="text-xs">Cargando notificaciones...</span>
-            </div>
-          ) : notificaciones.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center text-slate-400 space-y-2">
-              <Bell className="h-8 w-8 text-slate-300 stroke-1" />
-              <p className="text-xs font-medium text-slate-600">No tienes notificaciones en este momento</p>
-              <p className="text-[11px] text-slate-400 max-w-xs">
-                Cuando se publiquen o actualicen convocatorias institucionales, aparecerán listadas aquí.
-              </p>
-            </div>
-          ) : (
-            notificaciones.map((notif) => (
-              <div
-                key={notif.id_notificacion}
-                className={`relative rounded-xl border p-4 transition-all ${
-                  notif.leida
-                    ? "bg-white border-slate-100 text-slate-600"
-                    : "bg-red-50/20 border-red-100 text-slate-900 shadow-sm"
-                }`}
-              >
-                {!notif.leida && (
-                  <div className="absolute top-4 right-4 h-2 w-2 rounded-full bg-red-600" />
-                )}
-
-                <div className="flex items-start justify-between gap-3 pr-4">
-                  <div className="space-y-1">
-                    <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-red-600">
-                      {notif.tipo === "apertura"
-                        ? "Apertura de Convocatoria"
-                        : notif.tipo === "cerrada"
-                        ? "Convocatoria Cerrada"
-                        : "Aviso de Convocatoria"}
-                    </span>
-                    <h4 className="text-xs font-bold text-slate-900 leading-snug">
-                      {notif.titulo}
-                    </h4>
-                    <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">
-                      {notif.mensaje}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-3 flex items-center justify-between border-t border-slate-100/70 pt-2 text-[11px] text-slate-400">
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    {formatDate(notif.fecha_creacion)}
-                  </span>
-
-                  {!notif.leida && (
-                    <button
-                      type="button"
-                      onClick={() => handleMarkAsRead(notif.id_notificacion)}
-                      className="inline-flex items-center gap-1 font-semibold text-red-600 hover:text-red-700 transition-colors"
-                    >
-                      <CheckCircle2 className="h-3 w-3" />
-                      Marcar leída
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="border-t border-slate-100 px-6 py-3 bg-slate-50/50 rounded-b-2xl flex items-center justify-between">
+    <Modal
+      open
+      onClose={() => onOpenChange(false)}
+      ancho="xl"
+      icono={Bell}
+      titulo="Notificaciones de Convocatorias"
+      subtitulo="Avisos institucionales sobre apertura, cierre y postulaciones"
+      etiquetaCerrar="Cerrar notificaciones"
+      pie={
+        <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
           {onNavigate ? (
             <button
               type="button"
@@ -242,22 +107,94 @@ export function NotificacionesModal({ open, onOpenChange, onNotificationRead, on
                 onOpenChange(false);
                 onNavigate("alertas");
               }}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-red-600 hover:text-red-700 transition-colors"
+              className={ENLACE}
             >
-              <span>Ver Centro de Alertas y Vencimientos</span>
-              <ArrowRight className="h-3.5 w-3.5" />
+              Ver Centro de Alertas y Vencimientos
+              <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
-          ) : <div />}
-
-          <button
-            type="button"
-            onClick={() => onOpenChange(false)}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
-          >
+          ) : (
+            <span />
+          )}
+          <button type="button" onClick={() => onOpenChange(false)} className={BOTON_SECUNDARIO}>
             Cerrar
           </button>
         </div>
+      }
+    >
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Pestanas
+            etiqueta="Filtrar notificaciones"
+            valor={filterLeida}
+            onChange={setFilterLeida}
+            opciones={[
+              { id: "todas", label: "Todas" },
+              { id: "no_leidas", label: "No leídas", count: unreadCount > 0 ? unreadCount : undefined },
+            ]}
+          />
+          {unreadCount > 0 && (
+            <button type="button" onClick={handleMarkAllAsRead} className={BOTON_FANTASMA}>
+              <CheckCheck className="h-4 w-4" aria-hidden="true" />
+              Marcar todas como leídas
+            </button>
+          )}
+        </div>
+
+        <ErrorGeneral mensaje={errorMessage} />
+
+        {isLoading ? (
+          <Cargando texto="Cargando notificaciones…" enTarjeta={false} />
+        ) : notificaciones.length === 0 ? (
+          <EstadoVacio icono={Bell} titulo="No tienes notificaciones en este momento" enTarjeta={false}>
+            Cuando se publiquen o actualicen convocatorias institucionales, aparecerán listadas aquí.
+          </EstadoVacio>
+        ) : (
+          <ul className="space-y-3">
+            {notificaciones.map((notif) => (
+              <li
+                key={notif.id_notificacion}
+                className={`relative overflow-hidden rounded-xl border bg-white py-4 pl-5 pr-4 ${
+                  notif.leida ? "border-slate-200" : "border-ufps shadow-sm"
+                }`}
+              >
+                <span
+                  className={`absolute inset-y-0 left-0 w-1 ${notif.leida ? "bg-slate-300" : "bg-ufps"}`}
+                  aria-hidden="true"
+                />
+                <div className="space-y-1">
+                  <p className={notif.leida ? "text-[11px] font-bold uppercase tracking-wider text-slate-500" : SECCION}>
+                    {notif.tipo === "apertura"
+                      ? "Apertura de Convocatoria"
+                      : notif.tipo === "cerrada"
+                        ? "Convocatoria Cerrada"
+                        : "Aviso de Convocatoria"}
+                    {!notif.leida && <span className="sr-only"> (no leída)</span>}
+                  </p>
+                  <h4 className="text-sm font-semibold leading-snug text-slate-900">{notif.titulo}</h4>
+                  <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600">{notif.mensaje}</p>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-xs text-slate-500">
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                    {formatDate(notif.fecha_creacion)}
+                  </span>
+                  {!notif.leida && (
+                    <button
+                      type="button"
+                      onClick={() => handleMarkAsRead(notif.id_notificacion)}
+                      className={`${BOTON_FANTASMA} -my-2 -mr-2 min-h-9 text-xs`}
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                      Marcar leída
+                    </button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 }

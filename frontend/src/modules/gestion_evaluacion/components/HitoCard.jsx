@@ -23,7 +23,7 @@ import {
     ERROR,
     ETIQUETA,
     tonoSegmento,
-} from "./estilos"
+} from "../../../components/ui/estilos"
 
 const NOTAS = Array.from({ length: ESCALA_MAX - ESCALA_MIN + 1 }, (_, i) => ESCALA_MIN + i)
 
@@ -50,7 +50,7 @@ function EstadoHito({ hito, errores }) {
         )
     }
     if (hito.criterios.length === 0) {
-        return <span className="text-xs font-medium text-amber-800">Todavía no tiene criterios</span>
+        return <span className="text-xs font-medium text-ufps">Todavía no tiene criterios</span>
     }
     if (totalCriterios === PESO_TOTAL) {
         return (
@@ -60,7 +60,7 @@ function EstadoHito({ hito, errores }) {
         )
     }
     return (
-        <span className="text-xs font-medium text-amber-800">
+        <span className="text-xs font-medium text-ufps">
             {totalCriterios > PESO_TOTAL
                 ? `Los criterios se pasan ${formatPorcentaje(totalCriterios - PESO_TOTAL)}`
                 : `A los criterios les falta ${formatPorcentaje(PESO_TOTAL - totalCriterios)}`}
@@ -189,8 +189,8 @@ export default function HitoCard({
 
     return (
         <li
-            className={`rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 transition-[background-color,box-shadow] duration-200 ease-out-suave motion-reduce:transition-none ${abierto ? "bg-ufps-suave" : "bg-white"
-                } ${errores || abierto ? "ring-ufps-borde" : "ring-slate-200 hover:ring-slate-300"}`}
+            className={`rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.06)] ring-1 transition-[background-color,box-shadow] duration-200 ease-out-suave motion-reduce:transition-none ${abierto ? "bg-white shadow-sm" : "bg-white"
+                } ${errores ? "ring-ufps" : abierto ? "ring-slate-300" : "ring-slate-200 hover:ring-slate-300"}`}
         >
             {/* Cabecera: se entiende sin abrir el hito */}
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 p-2 sm:p-3">
@@ -209,7 +209,7 @@ export default function HitoCard({
                     />
                     <span
                         aria-hidden="true"
-                        className={`h-3 w-3 shrink-0 rounded-full ${tonoSegmento(numero - 1)} ${activo ? "ring-2 ring-red-200 ring-offset-1" : ""}`}
+                        className={`h-3 w-3 shrink-0 rounded-full ${tonoSegmento(numero - 1)} ${activo ? "ring-2 ring-slate-300 ring-offset-1" : ""}`}
                     />
                     <span className="min-w-0 space-y-0.5">
                         <span className="block text-xs text-slate-600">Hito {numero}</span>
@@ -274,7 +274,7 @@ export default function HitoCard({
                     }`}
             >
                 <div className="min-h-0 overflow-hidden" inert={!abierto}>
-                    <div className="space-y-7 rounded-b-2xl border-t border-ufps-borde/60 bg-white/50 px-3 pb-4 pt-4 sm:px-5 sm:pb-5">
+                    <div className="space-y-7 rounded-b-2xl border-t border-slate-200 bg-superficie-alta px-3 pb-4 pt-4 sm:px-5 sm:pb-5">
                         {/* Datos del hito */}
                         <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
                             <div className="space-y-1.5">
@@ -386,7 +386,7 @@ export default function HitoCard({
                                                 <button
                                                     type="button"
                                                     onClick={() => onEliminarCriterio(criterio._key)}
-                                                    className={`${BOTON_ICONO} mt-[1.6rem] hover:bg-ufps-suave hover:text-ufps`}
+                                                    className={`${BOTON_ICONO} mt-[1.6rem] hover:text-ufps`}
                                                     aria-label={`Eliminar el criterio ${criterio.nombre.trim() || index + 1}`}
                                                     title="Eliminar criterio"
                                                 >

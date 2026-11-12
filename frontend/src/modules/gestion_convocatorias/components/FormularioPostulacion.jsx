@@ -1,19 +1,76 @@
 import React, { useState } from "react";
+import { ArrowLeft, CheckCircle2, ChevronDown, HelpCircle, Lightbulb, Loader2, UploadCloud, X } from "lucide-react";
 import {
-  ArrowLeft,
-  CheckCircle2,
-  FileText,
-  GraduationCap,
-  UploadCloud,
-  X,
-} from "lucide-react";
+  BOTON_FANTASMA,
+  BOTON_OSCURO,
+  Modal,
+  BOTON_ICONO,
+  BOTON_ICONO_PELIGRO,
+  BOTON_PRIMARIO,
+  BOTON_SECUNDARIO,
+  CAMPO,
+  Campo,
+  CabeceraTarjeta,
+  ErrorGeneral,
+  ETIQUETA,
+  AYUDA,
+  MensajeError,
+  SECCION,
+  TARJETA,
+  Tarjeta,
+  ZONA_ARCHIVO,
+  claseOpcion,
+} from "../../../components/ui";
 import { useAuth } from "../../../context/AuthContext";
 import { registrarPostulacion } from "../services/postulacionService";
 
 const TIPOS_INICIATIVA = [
-  { id: "emprendimiento", titulo: "Emprendimiento", desc: "Propuesta de negocio o empresa." },
-  { id: "innovacion", titulo: "Innovación", desc: "Solución novedosa a un problema." },
+  { id: "emprendimiento", titulo: "Emprendimiento" },
+  { id: "innovacion", titulo: "Innovación" },
 ];
+
+// Sectores tecnológicos sugeridos (el backend guarda el texto tal cual, máx. 100 caracteres)
+const SECTORES_TECNOLOGICOS = [
+  "Software y aplicaciones",
+  "Inteligencia artificial y analítica de datos",
+  "IoT y sistemas embebidos",
+  "Agrotecnología (AgTech)",
+  "Salud y bienestar (HealthTech)",
+  "Educación (EdTech)",
+  "Servicios financieros (FinTech)",
+  "Comercio electrónico y retail",
+  "Energía y medio ambiente (CleanTech)",
+  "Movilidad y logística",
+  "Ciberseguridad",
+  "Industria 4.0 y manufactura",
+  "Turismo, cultura y entretenimiento",
+  "Impacto social",
+  "Otro",
+];
+
+// Etapa actual = nivel de madurez de la plataforma (M0 a M9, el mismo que luego actualiza la evaluación)
+const ETAPAS_MADUREZ = [
+  { valor: "M0", texto: "M0 · Ideación inicial (solo la idea)" },
+  { valor: "M1", texto: "M1 · Formulación tecnológica" },
+  { valor: "M2", texto: "M2 · Concepto validado" },
+  { valor: "M3", texto: "M3 · Prueba de concepto" },
+  { valor: "M4", texto: "M4 · Prototipo básico" },
+  { valor: "M5", texto: "M5 · Prototipo de alta fidelidad" },
+  { valor: "M6", texto: "M6 · Sistema de demostración" },
+  { valor: "M7", texto: "M7 · Validación real con usuarios" },
+  { valor: "M8", texto: "M8 · Sistema calificado" },
+  { valor: "M9", texto: "M9 · Transferencia al mercado" },
+];
+
+// Qué escribir en "Detalle del origen" según el origen académico elegido
+const DETALLE_POR_ORIGEN = {
+  asignatura: { ayuda: "Escribe el nombre de la asignatura donde nació la idea.", ejemplo: "Ej: Sistemas Distribuidos" },
+  proyecto_aula: { ayuda: "Escribe la asignatura o el nombre del proyecto de aula.", ejemplo: "Ej: Proyecto de aula de Ingeniería de Software" },
+  integrador: { ayuda: "Escribe el nombre del proyecto integrador y su semestre.", ejemplo: "Ej: Proyecto Integrador VI semestre" },
+  semillero: { ayuda: "Escribe el nombre del semillero de investigación.", ejemplo: "Ej: Semillero de Investigación en Desarrollo de Software" },
+  practica: { ayuda: "Escribe la empresa o entidad donde hiciste la práctica.", ejemplo: "Ej: Práctica en Alcaldía de Cúcuta" },
+  trabajo_grado: { ayuda: "Escribe el título de tu trabajo de grado.", ejemplo: "Ej: Plataforma de monitoreo de cultivos con IoT" },
+};
 
 const ORIGENES_ACADEMICOS = [
   { id: "asignatura", titulo: "Asignatura", desc: "Proyecto desarrollado en una materia." },
@@ -24,8 +81,43 @@ const ORIGENES_ACADEMICOS = [
   { id: "trabajo_grado", titulo: "Trabajo de Grado", desc: "Propuesta relacionada con el trabajo de grado." },
 ];
 
-const CAMPO =
-  "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 transition-all placeholder:text-slate-400 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20";
+// Grupo de opciones en tarjeta (tipo de iniciativa, origen académico)
+function GrupoOpciones({ etiqueta, ayuda, opciones, valor, onChange, error, columnas, accion }) {
+  return (
+    <fieldset className="space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <legend className={ETIQUETA}>
+            {etiqueta} <span className="text-ufps">*</span>
+          </legend>
+          {ayuda && <p className={`${AYUDA} mt-0.5`}>{ayuda}</p>}
+        </div>
+        {accion}
+      </div>
+      <div className={`grid grid-cols-1 gap-3 ${columnas}`}>
+        {opciones.map((opcion) => {
+          const seleccionado = valor === opcion.id;
+          return (
+            <button
+              key={opcion.id}
+              type="button"
+              aria-pressed={seleccionado}
+              onClick={() => onChange(opcion.id)}
+              className={claseOpcion(seleccionado)}
+            >
+              <span className={`flex items-center justify-between gap-2 ${opcion.desc ? "mb-1.5" : ""}`}>
+                <span className="text-sm font-semibold text-slate-900">{opcion.titulo}</span>
+                {seleccionado && <CheckCircle2 className="h-4 w-4 shrink-0 text-ufps" aria-hidden="true" />}
+              </span>
+              {opcion.desc && <span className="block text-xs leading-snug text-slate-500">{opcion.desc}</span>}
+            </button>
+          );
+        })}
+      </div>
+      <MensajeError>{error}</MensajeError>
+    </fieldset>
+  );
+}
 
 export default function FormularioPostulacion({
   convocatoria,
@@ -45,6 +137,7 @@ export default function FormularioPostulacion({
   const [documento, setDocumento] = useState(null);
   const [errores, setErrores] = useState({});
   const [enviando, setEnviando] = useState(false);
+  const [ayudaTipoAbierta, setAyudaTipoAbierta] = useState(false);
 
   const actualizar = (campo, valor) => {
     setForm((actual) => ({ ...actual, [campo]: valor }));
@@ -138,223 +231,198 @@ export default function FormularioPostulacion({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      <section className={`${TARJETA} flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6`}>
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={onCancelar}
-            className="rounded-xl border border-slate-200 p-2 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
+            className={`${BOTON_ICONO} ring-1 ring-slate-200`}
             title="Volver a convocatorias"
+            aria-label="Volver a convocatorias"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           </button>
-          <div>
-            <div className="mb-1 flex items-center gap-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-red-600">
-                Nueva iniciativa
-              </span>
-              <span className="text-slate-300">•</span>
-              <span className="text-xs text-slate-500">{convocatoria.categoria}</span>
-            </div>
-            <h2 className="text-lg font-bold leading-snug text-slate-900">
-              {convocatoria.nombre}
-            </h2>
+          <div className="min-w-0">
+            <p className={SECCION}>
+              Nueva iniciativa{convocatoria.categoria ? ` · ${convocatoria.categoria}` : ""}
+            </p>
+            <h1 className="mt-1 text-xl font-bold leading-snug tracking-tight text-slate-900">{convocatoria.nombre}</h1>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onCancelar}
-          className="self-start text-xs font-semibold text-slate-500 transition-colors hover:text-red-600 sm:self-center"
-        >
+        <button type="button" onClick={onCancelar} className={`${BOTON_FANTASMA} self-start sm:self-center`}>
           Cancelar postulación
         </button>
-      </div>
+      </section>
 
-      <form
-        onSubmit={handleSubmit}
-        className="space-y-7 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7"
-      >
-        <section className="space-y-5">
-          <div className="border-b border-slate-100 pb-4">
-            <h3 className="text-lg font-bold text-slate-900">Información de la iniciativa</h3>
-            <p className="mt-1 text-xs text-slate-500">
-              Completa los datos principales que se registrarán en la convocatoria.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            <div className="space-y-1.5 md:col-span-2">
-              <label htmlFor="nombre-iniciativa" className="block text-xs font-bold text-slate-700">
-                Nombre de la iniciativa <span className="text-red-600">*</span>
-              </label>
-              <input
-                id="nombre-iniciativa"
-                className={CAMPO}
-                value={form.nombre}
-                onChange={(event) => actualizar("nombre", event.target.value)}
-                placeholder="Ej: Sistema Inteligente de Riego"
-                maxLength={150}
-                required
-              />
-              {errores.nombre && <p className="text-[11px] font-medium text-red-600">{errores.nombre}</p>}
-            </div>
-
-            <div className="space-y-1.5 md:col-span-2">
-              <label htmlFor="descripcion-iniciativa" className="block text-xs font-bold text-slate-700">
-                Descripción <span className="text-red-600">*</span>
-              </label>
-              <textarea
-                id="descripcion-iniciativa"
-                className={`${CAMPO} min-h-24 resize-y`}
-                value={form.descripcion}
-                onChange={(event) => actualizar("descripcion", event.target.value)}
-                placeholder="Describe brevemente la iniciativa."
-                maxLength={1000}
-                required
-              />
-              {errores.descripcion && <p className="text-[11px] font-medium text-red-600">{errores.descripcion}</p>}
-            </div>
-
-            <div className="space-y-1.5">
-              <label htmlFor="sector-tecnologico" className="block text-xs font-bold text-slate-700">
-                Sector tecnológico <span className="text-red-600">*</span>
-              </label>
-              <input
-                id="sector-tecnologico"
-                className={CAMPO}
-                value={form.sector_tecnologico}
-                onChange={(event) => actualizar("sector_tecnologico", event.target.value)}
-                placeholder="Ej: IoT"
-                maxLength={100}
-                required
-              />
-              {errores.sector_tecnologico && <p className="text-[11px] font-medium text-red-600">{errores.sector_tecnologico}</p>}
-            </div>
-
-            <div className="space-y-1.5">
-              <label htmlFor="etapa-actual" className="block text-xs font-bold text-slate-700">
-                Etapa actual <span className="text-red-600">*</span>
-              </label>
-              <input
-                id="etapa-actual"
-                className={CAMPO}
-                value={form.etapa_actual}
-                onChange={(event) => actualizar("etapa_actual", event.target.value)}
-                placeholder="Ej: Prototipo"
-                maxLength={50}
-                required
-              />
-              {errores.etapa_actual && <p className="text-[11px] font-medium text-red-600">{errores.etapa_actual}</p>}
-            </div>
-          </div>
-        </section>
-
-        <section className="space-y-4">
-          <div className="flex items-center gap-2 border-b border-slate-100 pb-4">
-            <GraduationCap className="h-5 w-5 text-red-600" />
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Clasificación académica</h3>
-              <p className="mt-1 text-xs text-slate-500">
-                Selecciona el tipo de iniciativa y su origen académico.
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
-              Tipo de iniciativa <span className="text-red-600">*</span>
-            </label>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {TIPOS_INICIATIVA.map((opcion) => {
-                const seleccionado = form.tipo === opcion.id;
-                return (
-                  <button
-                    key={opcion.id}
-                    type="button"
-                    aria-pressed={seleccionado}
-                    onClick={() => actualizar("tipo", opcion.id)}
-                    className={`rounded-xl border p-4 text-left transition-all ${seleccionado
-                        ? "border-red-500 bg-red-50/60 shadow-sm ring-2 ring-red-500/20"
-                        : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-                      }`}
-                  >
-                    <div className="mb-1.5 flex items-center justify-between">
-                      <span className="text-sm font-bold text-slate-900">{opcion.titulo}</span>
-                      {seleccionado && <CheckCircle2 className="h-4 w-4 text-red-600" />}
-                    </div>
-                    <p className="text-[11px] leading-snug text-slate-500">{opcion.desc}</p>
-                  </button>
-                );
-              })}
-            </div>
-            {errores.tipo && <p className="text-[11px] font-medium text-red-600">{errores.tipo}</p>}
-          </div>
-
-          <div className="space-y-3">
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
-              Origen académico <span className="text-red-600">*</span>
-            </label>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {ORIGENES_ACADEMICOS.map((opcion) => {
-                const seleccionado = form.origen_academico === opcion.id;
-                return (
-                  <button
-                    key={opcion.id}
-                    type="button"
-                    aria-pressed={seleccionado}
-                    onClick={() => actualizar("origen_academico", opcion.id)}
-                    className={`rounded-xl border p-4 text-left transition-all ${seleccionado
-                        ? "border-red-500 bg-red-50/60 shadow-sm ring-2 ring-red-500/20"
-                        : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-                      }`}
-                  >
-                    <div className="mb-1.5 flex items-center justify-between">
-                      <span className="text-sm font-bold text-slate-900">{opcion.titulo}</span>
-                      {seleccionado && <CheckCircle2 className="h-4 w-4 shrink-0 text-red-600" />}
-                    </div>
-                    <p className="text-[11px] leading-snug text-slate-500">{opcion.desc}</p>
-                  </button>
-                );
-              })}
-            </div>
-            {errores.origen_academico && (
-              <p className="text-[11px] font-medium text-red-600">{errores.origen_academico}</p>
-            )}
-          </div>
-
-          <div className="space-y-1.5">
-            <label htmlFor="detalle-origen" className="block text-xs font-bold text-slate-700">
-              Detalle del origen <span className="text-red-600">*</span>
-            </label>
-            <input
-              id="detalle-origen"
-              className={CAMPO}
-              value={form.detalle_origen}
-              onChange={(event) => actualizar("detalle_origen", event.target.value)}
-              placeholder="Ej: Sistemas Distribuidos"
-              maxLength={150}
-              required
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <Tarjeta
+          cabecera={
+            <CabeceraTarjeta
+              seccion="Paso 1"
+              titulo="Información de la iniciativa"
+              descripcion="Completa los datos principales que se registrarán en la convocatoria."
             />
-            {errores.detalle_origen && <p className="text-[11px] font-medium text-red-600">{errores.detalle_origen}</p>}
+          }
+        >
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <Campo etiqueta="Nombre de la iniciativa" requerido error={errores.nombre} className="md:col-span-2">
+              {(props) => (
+                <input
+                  {...props}
+                  className={CAMPO}
+                  value={form.nombre}
+                  onChange={(event) => actualizar("nombre", event.target.value)}
+                  placeholder="Ej: Sistema Inteligente de Riego"
+                  maxLength={150}
+                  required
+                />
+              )}
+            </Campo>
+            <Campo etiqueta="Descripción" requerido error={errores.descripcion} className="md:col-span-2">
+              {(props) => (
+                <textarea
+                  {...props}
+                  className={`${CAMPO} min-h-24 resize-y`}
+                  value={form.descripcion}
+                  onChange={(event) => actualizar("descripcion", event.target.value)}
+                  placeholder="Describe brevemente la iniciativa."
+                  maxLength={1000}
+                  required
+                />
+              )}
+            </Campo>
+            <Campo
+              etiqueta="Sector tecnológico"
+              requerido
+              error={errores.sector_tecnologico}
+              ayuda="Área en la que se aplica tu solución. Si ninguna encaja, elige «Otro»."
+            >
+              {(props) => (
+                <div className="relative">
+                  <select
+                    {...props}
+                    className={`${CAMPO} appearance-none pr-10`}
+                    value={form.sector_tecnologico}
+                    onChange={(event) => actualizar("sector_tecnologico", event.target.value)}
+                    required
+                  >
+                    <option value="">Selecciona un sector</option>
+                    {SECTORES_TECNOLOGICOS.map((sector) => (
+                      <option key={sector} value={sector}>
+                        {sector}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+                </div>
+              )}
+            </Campo>
+            <Campo
+              etiqueta="Etapa actual"
+              requerido
+              error={errores.etapa_actual}
+              ayuda="Qué tan avanzada está hoy tu iniciativa. Si solo tienes la idea, elige M0."
+            >
+              {(props) => (
+                <div className="relative">
+                  <select
+                    {...props}
+                    className={`${CAMPO} appearance-none pr-10`}
+                    value={form.etapa_actual}
+                    onChange={(event) => actualizar("etapa_actual", event.target.value)}
+                    required
+                  >
+                    <option value="">Selecciona la etapa</option>
+                    {ETAPAS_MADUREZ.map((etapa) => (
+                      <option key={etapa.valor} value={etapa.valor}>
+                        {etapa.texto}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+                </div>
+              )}
+            </Campo>
           </div>
-        </section>
+        </Tarjeta>
 
-        <section className="space-y-4">
-          <div className="border-b border-slate-100 pb-4">
-            <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-red-600" />
-              <h3 className="text-lg font-bold text-slate-900">Documento de la iniciativa</h3>
-            </div>
-            <p className="mt-1 text-xs text-slate-500">
-              Adjunta un único documento en formato PDF (máximo 10 MB).
+        <Tarjeta
+          cabecera={
+            <CabeceraTarjeta
+              seccion="Paso 2"
+              titulo="Clasificación académica"
+              descripcion="Selecciona el tipo de iniciativa y su origen académico."
+            />
+          }
+        >
+          <div className="space-y-6">
+            <GrupoOpciones
+              etiqueta="Tipo de iniciativa"
+              ayuda="Selecciona solo una opción."
+              opciones={TIPOS_INICIATIVA}
+              valor={form.tipo}
+              onChange={(id) => actualizar("tipo", id)}
+              error={errores.tipo}
+              columnas="sm:grid-cols-2"
+              accion={
+                <button
+                  type="button"
+                  onClick={() => setAyudaTipoAbierta(true)}
+                  aria-haspopup="dialog"
+                  className={`${BOTON_FANTASMA} -mt-2 min-h-9 shrink-0 text-xs`}
+                >
+                  <HelpCircle className="h-4 w-4 text-ufps" aria-hidden="true" />
+                  ¿Cuál selecciono?
+                </button>
+              }
+            />
+            <GrupoOpciones
+              etiqueta="Origen académico"
+              ayuda="Selecciona solo una opción: dónde nació la iniciativa."
+              opciones={ORIGENES_ACADEMICOS}
+              valor={form.origen_academico}
+              onChange={(id) => actualizar("origen_academico", id)}
+              error={errores.origen_academico}
+              columnas="sm:grid-cols-2 lg:grid-cols-3"
+            />
+            <Campo
+              etiqueta="Detalle del origen"
+              requerido
+              error={errores.detalle_origen}
+              ayuda={
+                DETALLE_POR_ORIGEN[form.origen_academico]?.ayuda ||
+                "Primero elige el origen académico; aquí escribirás el nombre de la asignatura, semillero, empresa o trabajo de grado."
+              }
+            >
+              {(props) => (
+                <input
+                  {...props}
+                  className={CAMPO}
+                  value={form.detalle_origen}
+                  onChange={(event) => actualizar("detalle_origen", event.target.value)}
+                  placeholder={DETALLE_POR_ORIGEN[form.origen_academico]?.ejemplo || "Ej: Sistemas Distribuidos"}
+                  maxLength={150}
+                  required
+                />
+              )}
+            </Campo>
+          </div>
+        </Tarjeta>
+
+        <Tarjeta
+          cabecera={
+            <CabeceraTarjeta
+              seccion="Paso 3"
+              titulo="Documento de la iniciativa"
+              descripcion="Adjunta un único documento en formato PDF (máximo 10 MB)."
+            />
+          }
+        >
+          <div className="space-y-3">
+            <p className={ETIQUETA}>
+              Documento PDF <span className="text-ufps">*</span>
             </p>
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-xs font-bold text-slate-700">
-              Documento PDF <span className="text-red-600">*</span>
-            </label>
-            <div className="group relative cursor-pointer rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50/50 p-8 text-center transition-colors hover:border-red-400">
+            <div className={ZONA_ARCHIVO}>
               <input
                 type="file"
                 onChange={seleccionarDocumento}
@@ -362,64 +430,87 @@ export default function FormularioPostulacion({
                 accept=".pdf,application/pdf"
                 aria-label="Seleccionar documento PDF"
               />
-              <UploadCloud className="mx-auto h-10 w-10 text-slate-400 transition-colors group-hover:text-red-600" />
-              <p className="mt-2 text-xs font-bold text-slate-800">
-                Arrastra tu documento o haz clic para buscarlo
-              </p>
-              <p className="mt-0.5 text-[11px] text-slate-500">
-                Solo se permite un archivo .PDF de hasta 10 MB.
-              </p>
+              <UploadCloud className="mx-auto h-10 w-10 text-slate-400 transition-colors group-hover:text-ufps" aria-hidden="true" />
+              <p className="mt-2 text-sm font-semibold text-slate-800">Arrastra tu documento o haz clic para buscarlo</p>
+              <p className="mt-0.5 text-xs text-slate-500">Solo se permite un archivo .PDF de hasta 10 MB.</p>
             </div>
-            {errores.documento_adjunto && (
-              <p className="text-[11px] font-medium text-red-600">{errores.documento_adjunto}</p>
-            )}
+            <MensajeError>{errores.documento_adjunto}</MensajeError>
             {documento && (
-              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3">
+              <div className="flex items-center justify-between gap-3 rounded-xl bg-white p-3 ring-1 ring-slate-200">
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-50 text-xs font-bold text-red-600">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-ufps text-[10px] font-bold text-white">
                     PDF
-                  </div>
+                  </span>
                   <div className="min-w-0">
-                    <p className="truncate text-xs font-bold text-slate-800">{documento.name}</p>
-                    <p className="text-[10px] text-slate-500">
-                      {(documento.size / (1024 * 1024)).toFixed(2)} MB
-                    </p>
+                    <p className="truncate text-sm font-semibold text-slate-800">{documento.name}</p>
+                    <p className="text-xs text-slate-500">{(documento.size / (1024 * 1024)).toFixed(2)} MB</p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setDocumento(null)}
-                  className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                  className={BOTON_ICONO_PELIGRO}
                   title="Quitar documento"
                   aria-label="Quitar documento"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
             )}
           </div>
-        </section>
+        </Tarjeta>
 
-        {errores.submit && (
-          <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-700">
-            {errores.submit}
-          </p>
-        )}
+        <Modal
+          open={ayudaTipoAbierta}
+          onClose={() => setAyudaTipoAbierta(false)}
+          icono={HelpCircle}
+          seccion="Tipo de iniciativa"
+          titulo="¿Cuál selecciono?"
+          ancho="md"
+          etiquetaCerrar="Cerrar ayuda"
+          pie={
+            <button type="button" onClick={() => setAyudaTipoAbierta(false)} className={BOTON_OSCURO}>
+              Entendido
+            </button>
+          }
+        >
+          <div className="space-y-4 text-sm leading-relaxed text-slate-600">
+            <div className="rounded-xl bg-slate-50 p-4">
+              <p className="font-semibold text-slate-900">Emprendimiento</p>
+              <p className="mt-1">
+                Elígelo si tu meta es crear una empresa o llevar al mercado un producto o servicio que quieres vender y
+                volver sostenible.
+              </p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-4">
+              <p className="font-semibold text-slate-900">Innovación</p>
+              <p className="mt-1">
+                Elígelo si buscas resolver un problema (tecnológico, social o de un proceso) con algo nuevo o mejorado,
+                aunque todavía no tenga un modelo de negocio.
+              </p>
+            </div>
+            <p className="text-xs text-slate-500">Solo puedes seleccionar una de las dos opciones.</p>
+          </div>
+        </Modal>
 
-        <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-between">
-          <button
-            type="button"
-            onClick={onCancelar}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50"
-          >
+        <ErrorGeneral mensaje={errores.submit} />
+
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+          <button type="button" onClick={onCancelar} className={BOTON_SECUNDARIO}>
             Cancelar
           </button>
-          <button
-            type="submit"
-            disabled={enviando}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {enviando ? "Enviando..." : "Registrar iniciativa"}
+          <button type="submit" disabled={enviando} className={BOTON_PRIMARIO}>
+            {enviando ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                Enviando...
+              </>
+            ) : (
+              <>
+                <Lightbulb className="h-4 w-4" aria-hidden="true" />
+                Registrar iniciativa
+              </>
+            )}
           </button>
         </div>
       </form>

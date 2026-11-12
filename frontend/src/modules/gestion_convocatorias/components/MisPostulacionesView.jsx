@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from "react";
+import { FileText, Calendar, Plus, GraduationCap, Eye } from "lucide-react";
 import {
-  FileText,
-  Calendar,
-  Layers,
-  Search,
-  Plus,
-  GraduationCap,
-  Eye,
-} from "lucide-react";
+  BOTON_OSCURO,
+  BOTON_PRIMARIO,
+  BOTON_SECUNDARIO,
+  Buscador,
+  Cargando,
+  Distintivo,
+  EncabezadoPagina,
+  ErrorGeneral,
+  EstadoVacio,
+  SECCION,
+  TARJETA,
+} from "../../../components/ui";
 import { getMisPostulaciones } from "../services/postulacionService";
 import { useAuth } from "../../../context/AuthContext";
 import DetalleExpedienteModal from "./DetalleExpedienteModal";
@@ -59,122 +64,69 @@ export default function MisPostulacionesView({ onNuevaPostulacion }) {
   const getEstadoBadge = (estado) => {
     switch (estado) {
       case "radicada":
-        return {
-          label: "Radicada",
-          color: "bg-blue-100 text-blue-800 border-blue-200",
-        };
+        return { label: "Radicada", tono: "gris" };
       case "en_revision":
-        return {
-          label: "En Revisión Documental",
-          color: "bg-amber-100 text-amber-800 border-amber-200",
-        };
+        return { label: "En Revisión Documental", tono: "contorno" };
       case "en_evaluacion":
-        return {
-          label: "En Evaluación Multicriterio",
-          color: "bg-purple-100 text-purple-800 border-purple-200",
-        };
+        return { label: "En Evaluación Multicriterio", tono: "oscuro" };
       case "aceptada":
-        return {
-          label: "Aceptada / Seleccionada",
-          color: "bg-emerald-100 text-emerald-800 border-emerald-200",
-        };
+        return { label: "Aceptada / Seleccionada", tono: "rojo" };
       default:
-        return {
-          label: estado,
-          color: "bg-slate-100 text-slate-800 border-slate-200",
-        };
+        return { label: estado, tono: "gris" };
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* HEADER DE MIS POSTULACIONES */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
-              <Layers className="h-3.5 w-3.5" />
-              Trazabilidad Longitudinal
-            </span>
-            <span className="text-xs text-slate-500 font-medium">
-              Expedientes de Emprendimiento UFPS
-            </span>
-          </div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900">
-            Mis Iniciativas Postuladas
-          </h2>
-          <p className="text-sm text-slate-600 mt-1 max-w-2xl">
-            Consulta el estado de radicación, el origen académico declarado y la documentación de tus propuestas enviadas a convocatorias institucionales.
-          </p>
-        </div>
-
-        {onNuevaPostulacion && (
-          <button
-            type="button"
-            onClick={onNuevaPostulacion}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition-colors shrink-0"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Postular a Convocatoria Abierta</span>
-          </button>
-        )}
-      </div>
-
-      {/* BARRA DE BÚSQUEDA Y ESTADÍSTICAS RÁPIDAS */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="md:col-span-3 relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar por radicado, título de iniciativa o convocatoria..."
-            className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl border border-slate-200 bg-white placeholder-slate-400 text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all shadow-sm"
-          />
-        </div>
-
-        <div className="bg-white rounded-xl border border-slate-200 px-4 py-2 flex items-center justify-between shadow-sm">
-          <span className="text-xs text-slate-500 font-medium">Total Iniciativas:</span>
-          <span className="text-base font-bold text-slate-900">
-            {postulaciones.length}
-          </span>
-        </div>
-      </div>
-
-      {/* CONTENIDO PRINCIPAL */}
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl border border-slate-200">
-          <div className="animate-spin rounded-full h-8 w-8 border-2 border-red-600 border-t-transparent" />
-          <span className="mt-3 text-xs font-medium text-slate-500">
-            Cargando tus postulaciones registradas...
-          </span>
-        </div>
-      ) : loadError ? (
-        <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center text-sm text-red-700">
-          {loadError}
-        </div>
-      ) : filtradas.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 p-8">
-          <FileText className="mx-auto h-12 w-12 text-slate-300" />
-          <h3 className="mt-3 text-base font-bold text-slate-800">
-            Aún no has radicado ninguna iniciativa
-          </h3>
-          <p className="mt-1 text-xs text-slate-500 max-w-sm mx-auto">
-            Explora las convocatorias abiertas de este periodo académico y postula tu proyecto declarando su origen académico.
-          </p>
-          {onNuevaPostulacion && (
-            <button
-              type="button"
-              onClick={onNuevaPostulacion}
-              className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl bg-red-600 hover:bg-red-700 text-white transition-colors shadow-sm"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Ver Convocatorias Abiertas</span>
+      <EncabezadoPagina
+        seccion="Trazabilidad longitudinal"
+        titulo="Mis Iniciativas Postuladas"
+        descripcion="Consulta el estado de radicación, el origen académico declarado y la documentación de tus propuestas enviadas a convocatorias institucionales."
+        acciones={
+          onNuevaPostulacion && (
+            <button type="button" onClick={onNuevaPostulacion} className={BOTON_PRIMARIO}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Postular a Convocatoria Abierta
             </button>
-          )}
+          )
+        }
+      />
+
+      {/* Búsqueda y total */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <Buscador
+          className="md:col-span-3"
+          valor={searchTerm}
+          onChange={setSearchTerm}
+          placeholder="Buscar por radicado, título de iniciativa o convocatoria…"
+        />
+        <div className={`${TARJETA} flex items-center justify-between px-4 py-2`}>
+          <span className="text-xs font-medium text-slate-500">Total iniciativas</span>
+          <span className="text-lg font-bold text-slate-900">{postulaciones.length}</span>
         </div>
+      </div>
+
+      {loading ? (
+        <Cargando texto="Cargando tus postulaciones registradas…" />
+      ) : loadError ? (
+        <ErrorGeneral mensaje={loadError} />
+      ) : filtradas.length === 0 ? (
+        <EstadoVacio
+          icono={FileText}
+          titulo="Aún no has radicado ninguna iniciativa"
+          accion={
+            onNuevaPostulacion && (
+              <button type="button" onClick={onNuevaPostulacion} className={BOTON_PRIMARIO}>
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Ver Convocatorias Abiertas
+              </button>
+            )
+          }
+        >
+          Explora las convocatorias abiertas de este periodo académico y postula tu proyecto declarando su origen académico.
+        </EstadoVacio>
       ) : (
-        <div className="grid grid-cols-1 gap-4">
+        <ul className="grid grid-cols-1 gap-4">
           {filtradas.map((post) => {
             const badge = getEstadoBadge(post.estado);
             const fechaStr = new Date(post.fecha_radicacion).toLocaleDateString("es-CO", {
@@ -186,89 +138,61 @@ export default function MisPostulacionesView({ onNuevaPostulacion }) {
             });
 
             return (
-              <div
+              <li
                 key={post.id || post.radicado}
-                className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:border-slate-300 transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+                className={`${TARJETA} flex flex-col justify-between gap-4 p-5 lg:flex-row lg:items-center`}
               >
-                <div className="space-y-2 flex-1">
+                <div className="flex-1 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-xs font-bold text-red-600 bg-red-50 px-2.5 py-0.5 rounded-lg border border-red-100">
-                      {post.radicado}
-                    </span>
-
-                    <span
-                      className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${badge.color}`}
-                    >
-                      {badge.label}
-                    </span>
-
-                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500">
-                      <Calendar className="h-3 w-3 text-slate-400" />
+                    <span className={`${SECCION} font-mono`}>{post.radicado}</span>
+                    <Distintivo tono={badge.tono}>{badge.label}</Distintivo>
+                    <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+                      <Calendar className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
                       Radicada el {fechaStr}
                     </span>
                   </div>
 
-                  <h3 className="text-base font-bold text-slate-900 leading-snug">
-                    {post.iniciativa?.titulo}
-                  </h3>
+                  <h3 className="text-base font-semibold leading-snug text-slate-900">{post.iniciativa?.titulo}</h3>
 
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
-                    <div>
-                      <span className="text-slate-400">Convocatoria: </span>
-                      <strong className="text-slate-700">
-                        {post.convocatoria?.nombre}
-                      </strong>
+                  <dl className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+                    <div className="flex gap-1">
+                      <dt className="text-slate-500">Convocatoria:</dt>
+                      <dd className="font-semibold text-slate-800">{post.convocatoria?.nombre}</dd>
                     </div>
-
                     <div className="flex items-center gap-1">
-                      <GraduationCap className="h-3.5 w-3.5 text-red-600" />
-                      <span className="text-slate-400">Origen: </span>
-                      <span className="font-medium text-slate-800 capitalize">
+                      <dt className="flex items-center gap-1 text-slate-500">
+                        <GraduationCap className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                        Origen:
+                      </dt>
+                      <dd className="font-medium capitalize text-slate-800">
                         {post.origen_academico?.tipo?.replace(/_/g, " ")}
-                        {post.origen_academico?.detalle_origen &&
-                          ` (${post.origen_academico.detalle_origen})`}
-                      </span>
+                        {post.origen_academico?.detalle_origen && ` (${post.origen_academico.detalle_origen})`}
+                      </dd>
                     </div>
-
-                    <div>
-                      <span className="text-slate-400">Etapa: </span>
-                      <span className="font-bold text-red-600">
-                        {post.iniciativa?.trl_inicial}
-                      </span>
+                    <div className="flex gap-1">
+                      <dt className="text-slate-500">Etapa:</dt>
+                      <dd className="font-bold text-ufps">{post.iniciativa?.trl_inicial}</dd>
                     </div>
-
-                    <div>
-                      <span className="text-slate-400">Archivos: </span>
-                      <span className="font-medium text-slate-700">
-                        {post.documentacion?.archivos?.length || 0} adjunto(s)
-                      </span>
+                    <div className="flex gap-1">
+                      <dt className="text-slate-500">Archivos:</dt>
+                      <dd className="font-medium text-slate-800">{post.documentacion?.archivos?.length || 0} adjunto(s)</dd>
                     </div>
-                  </div>
+                  </dl>
                 </div>
 
-                {/* BOTONES DE ACCIÓN */}
-                <div className="flex items-center gap-2 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedComprobante(post)}
-                    className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors"
-                  >
-                    <span>Comprobante</span>
+                <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-slate-100 pt-3 lg:border-t-0 lg:pt-0">
+                  <button type="button" onClick={() => setSelectedComprobante(post)} className={BOTON_SECUNDARIO}>
+                    Comprobante
                   </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setSelectedPostulacion(post)}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-semibold text-white transition-colors"
-                  >
-                    <Eye className="h-3.5 w-3.5" />
-                    <span>Ver Expediente</span>
+                  <button type="button" onClick={() => setSelectedPostulacion(post)} className={BOTON_OSCURO}>
+                    <Eye className="h-4 w-4" aria-hidden="true" />
+                    Ver Expediente
                   </button>
                 </div>
-              </div>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
 
       {/* MODAL DE DETALLE DE EXPEDIENTE */}

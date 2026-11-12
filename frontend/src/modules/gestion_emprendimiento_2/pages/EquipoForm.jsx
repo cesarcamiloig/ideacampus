@@ -1,8 +1,34 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../../context/AuthContext";
-import { CheckCircle2, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Loader2, Plus } from "lucide-react";
 import { fetchEstudiantes, registerEquipo, obtenerMisIniciativasAprobadas } from "../services/equipoService";
-import "./EquipoForm.css";
+import {
+  Avatar,
+  AvisoPanel,
+  BLOQUE,
+  BOTON_FANTASMA,
+  BOTON_PRIMARIO,
+  BOTON_SECUNDARIO,
+  BOTON_SECUNDARIO_SM,
+  Buscador,
+  CAMPO,
+  Campo,
+  Distintivo,
+  FilaMensaje,
+  MensajeError,
+  ROTULO,
+  SECCION,
+  TABLA_FILA,
+  TABLA_TD,
+  TARJETA,
+  Tabla,
+} from "../../../components/ui";
+
+const PASOS = [
+  { titulo: "Iniciativa Aprobada", desc: "Asociada directamente a tu postulación aprobada." },
+  { titulo: "Datos del equipo", desc: "Nombre y verificación institucional." },
+  { titulo: "Integrantes", desc: "Busca y agrega estudiantes registrados." },
+];
 
 const MIN_INTEGRANTES = 2;
 
@@ -149,242 +175,218 @@ function EquipoForm({ onEquipoCreado, onCancelar, showHeader = false, iniciativa
   }
 
   return (
-    <div className={showHeader ? "equipo-page" : "w-full"}>
+    <div className="w-full space-y-6">
       {showHeader && (
-        <header className="equipo-header">
-          <div className="equipo-brand">
-            <div className="equipo-brand-mark">U</div>
+        <header className={`${TARJETA} flex items-center justify-between gap-4 px-5 py-4`}>
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-ufps font-bold text-white">U</span>
             <div>
-              <div className="equipo-brand-name">GENNOVA</div>
-              <div className="equipo-brand-sub">Universidad Francisco de Paula Santander</div>
+              <p className="font-marca text-base font-bold tracking-[0.04em] text-slate-900">GENNOVA</p>
+              <p className="text-xs text-slate-500">Universidad Francisco de Paula Santander</p>
             </div>
           </div>
-          <span className="equipo-breadcrumb">Equipo Emprendedor</span>
+          <span className="text-sm font-medium text-slate-600">Equipo Emprendedor</span>
         </header>
       )}
 
-      <main className="equipo-layout" style={!showHeader ? { padding: "0", maxWidth: "100%" } : undefined}>
-        <aside className="equipo-aside">
-          <h1>Registra tu equipo</h1>
-          <p className="equipo-aside-text">
-            Como líder, agrega a cada integrante para formalizar la
-            participación colectiva de tu iniciativa de innovación aprobada.
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
+        {/* Guía lateral */}
+        <aside className={`${TARJETA} h-fit space-y-5 p-5 sm:p-6`}>
+          <div className="space-y-1">
+            <p className={SECCION}>Equipo emprendedor</p>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">Registra tu equipo</h1>
+            <p className="text-sm leading-relaxed text-slate-600">
+              Como líder, agrega a cada integrante para formalizar la participación colectiva de tu iniciativa de
+              innovación aprobada.
+            </p>
+          </div>
+
+          <ol className="space-y-4">
+            {PASOS.map((paso, i) => (
+              <li key={paso.titulo} className="flex items-start gap-3">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ufps text-xs font-semibold text-white">
+                  {i + 1}
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">{paso.titulo}</p>
+                  <p className="text-xs text-slate-500">{paso.desc}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+
+          <p className="rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+            Se requiere al menos <strong className="text-slate-900">1 integrante</strong> además del líder para registrar el
+            equipo.
           </p>
-
-          <div className="equipo-steps">
-            <div className="equipo-step">
-              <span className="equipo-step-number">1</span>
-              <div>
-                <div className="equipo-step-title">Iniciativa Aprobada</div>
-                <div className="equipo-step-desc">Asociada directamente a tu postulación aprobada.</div>
-              </div>
-            </div>
-            <div className="equipo-step">
-              <span className="equipo-step-number">2</span>
-              <div>
-                <div className="equipo-step-title">Datos del equipo</div>
-                <div className="equipo-step-desc">Nombre y verificación institucional.</div>
-              </div>
-            </div>
-            <div className="equipo-step">
-              <span className="equipo-step-number">3</span>
-              <div>
-                <div className="equipo-step-title">Integrantes</div>
-                <div className="equipo-step-desc">Busca y agrega estudiantes registrados.</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="equipo-required-note">
-            Se requiere al menos <span>1 integrante</span> además del líder para registrar el equipo.
-          </div>
         </aside>
 
-        <section className="equipo-card">
-          <form onSubmit={handleSubmit} noValidate>
-            <div className="equipo-section-label">Iniciativa Aprobada Vinculada</div>
-            <div style={{ marginBottom: 20, padding: 14, background: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0" }}>
-              {iniciativas.length > 1 ? (
-                <div className="equipo-field">
-                  <label htmlFor="selectIniciativa">
-                    Selecciona tu iniciativa aprobada <span className="required">*</span>
-                  </label>
-                  <select
-                    id="selectIniciativa"
-                    value={idIniciativa || ""}
-                    onChange={(e) => setIdIniciativa(Number(e.target.value))}
-                    style={{ width: "100%", padding: "10px", borderRadius: 8, border: "1px solid #cbd5e1", fontSize: "0.875rem" }}
-                  >
-                    {iniciativas.map((ini) => (
-                      <option key={ini.id_iniciativa} value={ini.id_iniciativa}>
-                        {ini.titulo} {ini.radicado ? `(${ini.radicado})` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : iniciativas.length === 1 ? (
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div>
-                    <div style={{ fontWeight: 600, color: "#1e293b", fontSize: "0.95rem" }}>
-                      {iniciativas[0].titulo}
+        <section className={`${TARJETA} p-5 sm:p-6`}>
+          <form onSubmit={handleSubmit} noValidate className="space-y-7">
+            {/* Iniciativa */}
+            <div className="space-y-3">
+              <h2 className={ROTULO}>Iniciativa Aprobada Vinculada</h2>
+              <div className={BLOQUE}>
+                {iniciativas.length > 1 ? (
+                  <Campo etiqueta="Selecciona tu iniciativa aprobada" requerido>
+                    {(props) => (
+                      <select
+                        {...props}
+                        value={idIniciativa || ""}
+                        onChange={(e) => setIdIniciativa(Number(e.target.value))}
+                        className={CAMPO}
+                      >
+                        {iniciativas.map((ini) => (
+                          <option key={ini.id_iniciativa} value={ini.id_iniciativa}>
+                            {ini.titulo} {ini.radicado ? `(${ini.radicado})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </Campo>
+                ) : iniciativas.length === 1 ? (
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-900">{iniciativas[0].titulo}</p>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {iniciativas[0].radicado ? `Radicado: ${iniciativas[0].radicado} • ` : ""}
+                        {iniciativas[0].convocatoria_nombre ? `Convocatoria: ${iniciativas[0].convocatoria_nombre}` : ""}
+                      </p>
                     </div>
-                    <div style={{ fontSize: "0.8rem", color: "#64748b", marginTop: 2 }}>
-                      {iniciativas[0].radicado ? `Radicado: ${iniciativas[0].radicado} • ` : ""}
-                      {iniciativas[0].convocatoria_nombre ? `Convocatoria: ${iniciativas[0].convocatoria_nombre}` : ""}
-                    </div>
+                    <Distintivo tono="rojo" icono={CheckCircle2}>
+                      Aprobada
+                    </Distintivo>
                   </div>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", background: "#dcfce7", color: "#15803d", borderRadius: 9999, fontSize: "0.75rem", fontWeight: 700 }}>
-                    <CheckCircle2 size={13} /> Aprobada
-                  </span>
-                </div>
-              ) : (
-                <div style={{ color: "#b91c1c", fontSize: "0.875rem" }}>
-                  No tienes iniciativas aprobadas disponibles para crear un equipo.
-                </div>
-              )}
-              {errors.idIniciativa && (
-                <span className="equipo-error" role="alert" style={{ marginTop: 6, display: "block" }}>
-                  {errors.idIniciativa}
-                </span>
-              )}
-            </div>
-
-            <div className="equipo-section-label">Datos del equipo</div>
-            <div className="equipo-field-grid">
-              <div className="equipo-field">
-                <label htmlFor="nombreEquipo">
-                  Nombre del equipo <span className="required">*</span>
-                </label>
-                <input
-                  id="nombreEquipo"
-                  type="text"
-                  placeholder="Ej. EcoSoluciones UFPS"
-                  value={nombreEquipo}
-                  onChange={(e) => setNombreEquipo(e.target.value)}
-                  aria-invalid={Boolean(errors.nombreEquipo)}
-                />
-                {errors.nombreEquipo && (
-                  <span className="equipo-error" role="alert">{errors.nombreEquipo}</span>
+                ) : (
+                  <p className="text-sm font-medium text-ufps">
+                    No tienes iniciativas aprobadas disponibles para crear un equipo.
+                  </p>
                 )}
-              </div>
-              <div className="equipo-field">
-                <label htmlFor="estudianteLider">Líder responsable</label>
-                <input
-                  id="estudianteLider"
-                  type="text"
-                  value={`${usuario?.nombre || "Estudiante"} (${usuario?.correo || ""})`}
-                  disabled
-                />
-              </div>
-            </div>
-
-            <div className="equipo-section-label">Integrantes del equipo</div>
-            <div className="equipo-members">
-              {miembros.map((m) => (
-                <div key={m.id} className={`equipo-member-row${m.esLider ? " equipo-member-row--lider" : ""}`}>
-                  <div className="equipo-avatar">{iniciales(m.nombre)}</div>
-                  <div>
-                    <div className="equipo-member-name">{m.nombre}</div>
-                    <div className="equipo-member-email">{m.correo}</div>
-                  </div>
-                  {m.esLider ? (
-                    <span className="equipo-badge-lider">Líder</span>
-                  ) : (
-                    <button
-                      type="button"
-                      className="equipo-remove-btn"
-                      onClick={() => quitarMiembro(m.id)}
-                    >
-                      Quitar
-                    </button>
-                  )}
+                <div className="mt-2">
+                  <MensajeError>{errors.idIniciativa}</MensajeError>
                 </div>
-              ))}
+              </div>
             </div>
-            {errors.miembros && (
-              <span className="equipo-error" role="alert">{errors.miembros}</span>
-            )}
 
-            <div className="equipo-section-label" style={{ marginTop: 28 }}>
-              Agregar estudiante registrado
+            {/* Datos */}
+            <div className="space-y-3">
+              <h2 className={ROTULO}>Datos del equipo</h2>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Campo etiqueta="Nombre del equipo" requerido error={errors.nombreEquipo}>
+                  {(props) => (
+                    <input
+                      {...props}
+                      type="text"
+                      placeholder="Ej. EcoSoluciones UFPS"
+                      value={nombreEquipo}
+                      onChange={(e) => setNombreEquipo(e.target.value)}
+                      className={CAMPO}
+                    />
+                  )}
+                </Campo>
+                <Campo etiqueta="Líder responsable">
+                  {(props) => (
+                    <input
+                      {...props}
+                      type="text"
+                      value={`${usuario?.nombre || "Estudiante"} (${usuario?.correo || ""})`}
+                      disabled
+                      className={CAMPO}
+                    />
+                  )}
+                </Campo>
+              </div>
             </div>
-            <input
-              type="text"
-              className="equipo-search"
-              placeholder="Buscar por nombre o correo..."
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-            />
 
-            <div className="equipo-table-wrap">
-              {cargandoEstudiantes ? (
-                <p className="equipo-table-msg">Cargando estudiantes disponibles...</p>
-              ) : errorEstudiantes ? (
-                <p className="equipo-table-msg equipo-table-msg--error">{errorEstudiantes}</p>
-              ) : estudiantesFiltrados.length === 0 ? (
-                <p className="equipo-table-msg">
-                  {busqueda.trim()
-                    ? "No hay estudiantes que coincidan con la búsqueda."
-                    : "No hay más estudiantes activos disponibles para agregar."}
-                </p>
-              ) : (
-                <table className="equipo-table">
-                  <thead>
-                    <tr>
-                      <th>Nombre</th>
-                      <th>Correo institucional</th>
-                      <th></th>
+            {/* Integrantes */}
+            <div className="space-y-3">
+              <h2 className={ROTULO}>Integrantes del equipo</h2>
+              <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl ring-1 ring-slate-200">
+                {miembros.map((m) => (
+                  <li key={m.id} className={`flex items-center gap-3 px-4 py-3 ${m.esLider ? "bg-slate-50" : "bg-white"}`}>
+                    <Avatar texto={iniciales(m.nombre)} tamano="h-9 w-9" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-slate-900">{m.nombre}</p>
+                      <p className="truncate text-xs text-slate-500">{m.correo}</p>
+                    </div>
+                    {m.esLider ? (
+                      <Distintivo tono="oscuro">Líder</Distintivo>
+                    ) : (
+                      <button type="button" className={`${BOTON_FANTASMA} min-h-9 text-xs text-ufps`} onClick={() => quitarMiembro(m.id)}>
+                        Quitar
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <MensajeError>{errors.miembros}</MensajeError>
+            </div>
+
+            {/* Agregar estudiantes */}
+            <div className="space-y-3">
+              <h2 className={ROTULO}>Agregar estudiante registrado</h2>
+              <Buscador valor={busqueda} onChange={setBusqueda} placeholder="Buscar por nombre o correo…" />
+              <Tabla
+                etiqueta="Estudiantes disponibles"
+                className="max-h-80 overflow-y-auto shadow-none"
+                columnas={[
+                  { id: "nombre", label: "Nombre" },
+                  { id: "correo", label: "Correo institucional" },
+                  { id: "accion", label: <span className="sr-only">Acción</span> },
+                ]}
+              >
+                {cargandoEstudiantes ? (
+                  <FilaMensaje columnas={3} cargando>
+                    Cargando estudiantes disponibles...
+                  </FilaMensaje>
+                ) : errorEstudiantes ? (
+                  <FilaMensaje columnas={3}>
+                    <span className="text-ufps">{errorEstudiantes}</span>
+                  </FilaMensaje>
+                ) : estudiantesFiltrados.length === 0 ? (
+                  <FilaMensaje columnas={3}>
+                    {busqueda.trim()
+                      ? "No hay estudiantes que coincidan con la búsqueda."
+                      : "No hay más estudiantes activos disponibles para agregar."}
+                  </FilaMensaje>
+                ) : (
+                  estudiantesFiltrados.map((est) => (
+                    <tr key={est.id} className={TABLA_FILA}>
+                      <td className={`${TABLA_TD} font-medium text-slate-900`}>{est.nombre}</td>
+                      <td className={TABLA_TD}>{est.correo}</td>
+                      <td className={`${TABLA_TD} text-right`}>
+                        <button type="button" className={BOTON_SECUNDARIO_SM} onClick={() => agregarMiembro(est)}>
+                          <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                          Agregar
+                        </button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {estudiantesFiltrados.map((est) => (
-                      <tr key={est.id}>
-                        <td>{est.nombre}</td>
-                        <td>{est.correo}</td>
-                        <td style={{ textAlign: "right" }}>
-                          <button
-                            type="button"
-                            className="equipo-add-btn"
-                            onClick={() => agregarMiembro(est)}
-                          >
-                            + Agregar
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+                  ))
+                )}
+              </Tabla>
+              <p className="text-xs leading-relaxed text-slate-500">
+                Se muestran estudiantes de Ingeniería de Sistemas con rol activo que todavía no pertenecen a otro equipo. Al
+                presionar "+ Agregar", pasan a la lista de integrantes del equipo.
+              </p>
             </div>
-            <p className="equipo-table-hint">
-              Se muestran estudiantes de Ingeniería de Sistemas con rol activo que todavía no pertenecen
-              a otro equipo. Al presionar "+ Agregar", pasan a la lista de integrantes del equipo.
-            </p>
 
-            <div className="equipo-actions">
+            <AvisoPanel aviso={status === "success" ? { tipo: "exito", titulo: "¡Tu equipo se registró exitosamente!" } : null} />
+            <AvisoPanel aviso={status === "error" ? { tipo: "error", titulo: serverError } : null} />
+
+            <div className="flex flex-col-reverse gap-2 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end">
               {onCancelar && (
-                <button
-                  type="button"
-                  className="equipo-cancel"
-                  onClick={onCancelar}
-                >
+                <button type="button" className={BOTON_SECUNDARIO} onClick={onCancelar}>
                   Cancelar
                 </button>
               )}
-              <button type="submit" className="equipo-submit" disabled={status === "loading"}>
+              <button type="submit" className={BOTON_PRIMARIO} disabled={status === "loading"}>
+                {status === "loading" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                 {status === "loading" ? "Guardando..." : "Guardar equipo"}
               </button>
             </div>
-
-            {status === "success" && (
-              <p className="equipo-success">¡Tu equipo se registró exitosamente!</p>
-            )}
-            {status === "error" && (
-              <p className="equipo-error-banner" role="alert">{serverError}</p>
-            )}
           </form>
         </section>
-      </main>
+      </div>
     </div>
   );
 }

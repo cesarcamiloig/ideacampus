@@ -1,5 +1,6 @@
 import React, { useState } from "react"
-import { X, Calendar } from "lucide-react"
+import { Calendar } from "lucide-react"
+import { BOTON_PRIMARIO, BOTON_SECUNDARIO, CAMPO, Campo, Modal } from "../../../components/ui"
 
 
 export function PeriodoFormDialog({ open, onOpenChange, onSave, initialData }) {
@@ -94,115 +95,76 @@ export function PeriodoFormDialog({ open, onOpenChange, onSave, initialData }) {
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-            <div className="relative w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
-                <button
-                    type="button"
-                    onClick={handleClose}
-                    className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                    <X className="h-5 w-5" />
-                </button>
-
-                <div className="mb-4">
-                    <div className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-100 text-red-600">
-                            <Calendar className="h-4 w-4" />
-                        </div>
-                        <h2 className="text-lg font-bold text-slate-900">
-                            Añadir Periodo Académico
-                        </h2>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-1">
-                        Configuración de ciclos semestrales para apertura de convocatorias (CU-18 / RF33).
-                    </p>
-                </div>
-
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                            <label className="text-xs font-semibold text-slate-700">Año Académico</label>
+        <Modal
+            open
+            onClose={handleClose}
+            icono={Calendar}
+            titulo="Añadir Periodo Académico"
+            subtitulo="Configuración de ciclos semestrales para apertura de convocatorias (CU-18 / RF33)."
+            etiquetaCerrar="Cerrar formulario de periodo"
+        >
+            <form onSubmit={handleSubmit} noValidate className="space-y-5">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <Campo etiqueta="Año Académico" error={errors.year}>
+                        {(props) => (
                             <input
+                                {...props}
                                 type="number"
                                 name="year"
                                 value={formData.year}
                                 onChange={handleChange}
                                 min="2024"
                                 max="2035"
-                                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-red-600 focus:outline-none focus:ring-1 focus:ring-red-600"
+                                className={CAMPO}
                             />
-                            {errors.year && <p className="text-xs text-red-600 font-medium">{errors.year}</p>}
-                        </div>
-
-                        <div className="space-y-1">
-                            <label className="text-xs font-semibold text-slate-700">Semestre</label>
-                            <select
-                                name="semester"
-                                value={formData.semester}
-                                onChange={handleChange}
-                                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-red-600 focus:outline-none focus:ring-1 focus:ring-red-600 bg-white"
-                            >
+                        )}
+                    </Campo>
+                    <Campo etiqueta="Semestre">
+                        {(props) => (
+                            <select {...props} name="semester" value={formData.semester} onChange={handleChange} className={CAMPO}>
                                 <option value="1">Primer Semestre (I)</option>
                                 <option value="2">Segundo Semestre (II)</option>
                             </select>
-                        </div>
-                    </div>
+                        )}
+                    </Campo>
+                </div>
 
-                    <div className="space-y-1">
-                        <label className="text-xs font-semibold text-slate-700">Nombre del Ciclo</label>
+                <Campo etiqueta="Nombre del Ciclo">
+                    {(props) => (
                         <input
+                            {...props}
                             type="text"
                             name="name"
                             value={formData.name}
                             onChange={handleChange}
                             placeholder="Ej: Ciclo 2026-I"
-                            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-red-600 focus:outline-none focus:ring-1 focus:ring-red-600"
+                            className={CAMPO}
                         />
-                    </div>
+                    )}
+                </Campo>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                            <label className="text-xs font-semibold text-slate-700">Fecha de Inicio</label>
-                            <input
-                                type="date"
-                                name="startDate"
-                                value={formData.startDate}
-                                onChange={handleChange}
-                                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-red-600 focus:outline-none focus:ring-1 focus:ring-red-600"
-                            />
-                            {errors.startDate && <p className="text-xs text-red-600 font-medium">{errors.startDate}</p>}
-                        </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <Campo etiqueta="Fecha de Inicio" error={errors.startDate}>
+                        {(props) => (
+                            <input {...props} type="date" name="startDate" value={formData.startDate} onChange={handleChange} className={CAMPO} />
+                        )}
+                    </Campo>
+                    <Campo etiqueta="Fecha de Cierre" error={errors.endDate}>
+                        {(props) => (
+                            <input {...props} type="date" name="endDate" value={formData.endDate} onChange={handleChange} className={CAMPO} />
+                        )}
+                    </Campo>
+                </div>
 
-                        <div className="space-y-1">
-                            <label className="text-xs font-semibold text-slate-700">Fecha de Cierre</label>
-                            <input
-                                type="date"
-                                name="endDate"
-                                value={formData.endDate}
-                                onChange={handleChange}
-                                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-red-600 focus:outline-none focus:ring-1 focus:ring-red-600"
-                            />
-                            {errors.endDate && <p className="text-xs text-red-600 font-medium">{errors.endDate}</p>}
-                        </div>
-                    </div>
-
-                    <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-                        <button
-                            type="button"
-                            onClick={handleClose}
-                            className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            type="submit"
-                            className="rounded-lg bg-[#c81e1e] px-4 py-2 text-xs font-semibold text-white shadow hover:bg-red-700 transition-colors"
-                        >
-                            Crear Periodo
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
+                <div className="flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
+                    <button type="button" onClick={handleClose} className={BOTON_SECUNDARIO}>
+                        Cancelar
+                    </button>
+                    <button type="submit" className={BOTON_PRIMARIO}>
+                        Crear Periodo
+                    </button>
+                </div>
+            </form>
+        </Modal>
     )
 }

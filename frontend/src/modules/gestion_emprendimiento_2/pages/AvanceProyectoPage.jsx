@@ -1,7 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, ChevronDown, Loader2, Plus, RefreshCw, Save } from "lucide-react";
+import { CheckCircle2, ChevronDown, Loader2, Plus, Save } from "lucide-react";
 import { useAuth } from "../../../context/AuthContext";
 import { DocumentoAdjunto } from "../components/EvidenciasCargadasPanel";
+import {
+  BOTON_OSCURO,
+  BOTON_PRIMARIO,
+  BOTON_SECUNDARIO,
+  CAMPO,
+  Cargando,
+  DISTINTIVO_BASE,
+  EncabezadoPagina,
+  ErrorCarga,
+  ErrorGeneral,
+  ETIQUETA,
+  FOCO,
+  ROTULO,
+
+  Selector,
+  TARJETA,
+  TONOS_DISTINTIVO,
+  Tarjeta,
+} from "../../../components/ui";
 import {
   getProyectosAvance,
   getTrayectoria,
@@ -16,11 +35,12 @@ const ESTADOS_AVANCE = [
   { id: "bloqueado", label: "Bloqueado" },
 ];
 
+// Paleta UFPS: validado = rojo, pendiente = negro, observado = contorno rojo, sin registro = gris
 const ESTADOS_VALIDACION = {
-  sin_registro: { label: "Sin registro", clase: "bg-slate-100 text-slate-600" },
-  pendiente: { label: "Pendiente de validación", clase: "bg-amber-50 text-amber-700" },
-  aprobado: { label: "Validado", clase: "bg-emerald-50 text-emerald-700" },
-  observado: { label: "Con observaciones", clase: "bg-red-50 text-red-700" },
+  sin_registro: { label: "Sin registro", clase: TONOS_DISTINTIVO.gris },
+  pendiente: { label: "Pendiente de validación", clase: TONOS_DISTINTIVO.oscuro },
+  aprobado: { label: "Validado", clase: TONOS_DISTINTIVO.rojo },
+  observado: { label: "Con observaciones", clase: TONOS_DISTINTIVO.alerta },
 };
 
 const FORMULARIO_VACIO = {
@@ -33,17 +53,13 @@ const FORMULARIO_VACIO = {
   recomendaciones: "",
 };
 
-// text-base en móvil: Safari de iPhone hace zoom automático en inputs con fuente menor a 16px
-const INPUT_CLASS =
-  "w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-base sm:text-sm text-slate-900 placeholder-slate-400 focus:border-red-600 focus:outline-none focus:ring-1 focus:ring-red-600 aria-[invalid=true]:border-red-500";
-const LABEL_CLASS = "text-xs font-semibold text-slate-700";
-const ERROR_CLASS = "text-xs font-medium text-red-600";
-const BOTON_PRIMARIO_CLASS =
-  "inline-flex items-center justify-center gap-2 rounded-lg bg-[#c81e1e] px-4 py-2 text-xs font-semibold text-white shadow transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60";
-const BOTON_SECUNDARIO_CLASS =
-  "inline-flex items-center justify-center gap-2 rounded-lg border border-red-600 bg-white px-4 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60";
-const BOTON_CANCELAR_CLASS =
-  "rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100 disabled:opacity-60";
+// Clases del sistema visual compartido (components/ui)
+const INPUT_CLASS = CAMPO;
+const LABEL_CLASS = ETIQUETA;
+const ERROR_CLASS = "text-xs font-medium text-ufps";
+const BOTON_PRIMARIO_CLASS = BOTON_PRIMARIO;
+const BOTON_SECUNDARIO_CLASS = BOTON_SECUNDARIO;
+const BOTON_CANCELAR_CLASS = BOTON_SECUNDARIO;
 
 function formatFecha(valor) {
   if (!valor) return "";
@@ -72,25 +88,20 @@ function erroresDelServidor(err, campos, mensajePorDefecto) {
 }
 
 function MensajeError({ children }) {
-  return (
-    <p className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700" role="alert">
-      <AlertCircle className="h-4 w-4 shrink-0" />
-      {children}
-    </p>
-  );
+  return <ErrorGeneral mensaje={children} />;
 }
 
 function EstadoValidacion({ estado }) {
   const { label, clase } = ESTADOS_VALIDACION[estado] || ESTADOS_VALIDACION.pendiente;
-  return <span className={`w-fit shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${clase}`}>{label}</span>;
+  return <span className={`${DISTINTIVO_BASE} w-fit ${clase}`}>{label}</span>;
 }
 
 function TextoRegistro({ titulo, texto }) {
   if (!texto) return null;
   return (
     <div>
-      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{titulo}</p>
-      <p className="mt-0.5 whitespace-pre-line break-words text-xs leading-relaxed text-slate-700">{texto}</p>
+      <p className={ROTULO}>{titulo}</p>
+      <p className="mt-0.5 whitespace-pre-line break-words text-sm leading-relaxed text-slate-700">{texto}</p>
     </div>
   );
 }
@@ -170,16 +181,16 @@ function FormularioRegistro({ proyectoId, etapa, onGuardado, onCancelar, onError
   );
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="space-y-4 rounded-lg border border-red-200 bg-red-50/30 p-4">
+    <form onSubmit={handleSubmit} noValidate className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
       <fieldset className="space-y-2">
-        <legend className={LABEL_CLASS}>Evidencia publicada que respalda el avance <span className="text-red-600">*</span></legend>
+        <legend className={LABEL_CLASS}>Evidencia publicada que respalda el avance <span className="text-ufps">*</span></legend>
         {etapa.evidencias.map((ev) => (
-          <label key={ev.id} className="flex items-start gap-2 text-xs text-slate-700">
+          <label key={ev.id} className="flex items-start gap-2 text-sm text-slate-700">
             <input
               type="checkbox"
               checked={datos.evidencias.includes(ev.id)}
               onChange={() => alternarEvidencia(ev.id)}
-              className="mt-0.5 accent-red-600"
+              className="mt-0.5 h-4 w-4 accent-ufps"
             />
             <span className="break-words">{ev.titulo} · {ev.usuario_nombre} · {formatFecha(ev.creado)}</span>
           </label>
@@ -225,10 +236,10 @@ function FormularioRegistro({ proyectoId, etapa, onGuardado, onCancelar, onError
 
       {errors.general && <MensajeError>{errors.general}</MensajeError>}
 
-      <div className="flex justify-end gap-3">
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <button type="button" onClick={onCancelar} disabled={guardando} className={BOTON_CANCELAR_CLASS}>Cancelar</button>
         <button type="submit" disabled={guardando} className={BOTON_PRIMARIO_CLASS}>
-          {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {guardando ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}
           {guardando ? "Guardando..." : "Guardar registro"}
         </button>
       </div>
@@ -259,7 +270,7 @@ function FormularioValidacion({ registroId, onGuardado, onCancelar, onErrorSesio
   }
 
   return (
-    <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
       <div className="space-y-1">
         <label htmlFor={`comentario-${registroId}`} className={LABEL_CLASS}>Retroalimentación del tutor *</label>
         <textarea
@@ -275,11 +286,11 @@ function FormularioValidacion({ registroId, onGuardado, onCancelar, onErrorSesio
       {errors.general && <MensajeError>{errors.general}</MensajeError>}
       <div className="flex flex-wrap justify-end gap-2">
         <button type="button" onClick={onCancelar} disabled={enviando} className={BOTON_CANCELAR_CLASS}>Cancelar</button>
-        <button type="button" onClick={() => enviar(false)} disabled={enviando} className={BOTON_SECUNDARIO_CLASS}>
+        <button type="button" onClick={() => enviar(false)} disabled={enviando} className={BOTON_OSCURO}>
           Dejar observaciones
         </button>
         <button type="button" onClick={() => enviar(true)} disabled={enviando} className={BOTON_PRIMARIO_CLASS}>
-          <CheckCircle2 className="h-4 w-4" />
+          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
           Validar avance
         </button>
       </div>
@@ -291,14 +302,14 @@ function RegistroAvance({ registro, esTutor, onActualizado, onErrorSesion }) {
   const [validando, setValidando] = useState(false);
 
   return (
-    <li className="space-y-3 rounded-lg border border-slate-200 p-4">
+    <li className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-slate-900">
             {registro.estado_avance_display}
             {registro.porcentaje_avance !== null && ` · ${registro.porcentaje_avance}%`}
           </p>
-          <p className="mt-0.5 text-[11px] text-slate-500">
+          <p className="mt-0.5 text-xs text-slate-500">
             {registro.registrado_por_nombre} · {formatFecha(registro.fecha_registro)}
           </p>
         </div>
@@ -311,22 +322,22 @@ function RegistroAvance({ registro, esTutor, onActualizado, onErrorSesion }) {
       <TextoRegistro titulo="Recomendaciones" texto={registro.recomendaciones} />
 
       <div>
-        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Evidencia que lo respalda</p>
-        <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-slate-700">
+        <p className={ROTULO}>Evidencia que lo respalda</p>
+        <ul className="mt-1 list-disc space-y-0.5 pl-4 text-sm text-slate-700">
           {registro.evidencias.map((ev) => <li key={ev.id} className="break-words">{ev.titulo}</li>)}
         </ul>
       </div>
 
       {registro.retroalimentaciones.length > 0 && (
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Retroalimentación del tutor</p>
+          <p className={ROTULO}>Retroalimentación del tutor</p>
           <ul className="mt-1 space-y-2">
             {registro.retroalimentaciones.map((retro) => (
-              <li key={retro.id} className="rounded-md bg-slate-50 px-3 py-2">
-                <p className="text-[11px] font-semibold text-slate-600">
+              <li key={retro.id} className="rounded-lg bg-slate-50 px-3 py-2">
+                <p className="text-xs font-semibold text-slate-600">
                   {retro.aprobado ? "Validado" : "Con observaciones"} · {retro.tutor_nombre} · {formatFecha(retro.fecha)}
                 </p>
-                <p className="mt-0.5 whitespace-pre-line break-words text-xs text-slate-700">{retro.comentario}</p>
+                <p className="mt-0.5 whitespace-pre-line break-words text-sm text-slate-700">{retro.comentario}</p>
               </li>
             ))}
           </ul>
@@ -345,7 +356,7 @@ function RegistroAvance({ registro, esTutor, onActualizado, onErrorSesion }) {
         />
       ) : (
         <button type="button" onClick={() => setValidando(true)} className={BOTON_SECUNDARIO_CLASS}>
-          <CheckCircle2 className="h-4 w-4" />
+          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
           Retroalimentar y validar
         </button>
       ))}
@@ -358,41 +369,41 @@ function EtapaTrayectoria({ etapa, proyectoId, esTutor, abierta, onAlternar, onA
   const hayEvidencia = etapa.evidencias.length > 0;
 
   return (
-    <li className="rounded-xl border border-slate-200 bg-white shadow-sm">
+    <li className={`${TARJETA} overflow-hidden`}>
       <button
         type="button"
         onClick={onAlternar}
         aria-expanded={abierta}
-        className="flex w-full flex-col gap-2 p-4 text-left sm:flex-row sm:items-center sm:justify-between sm:p-5"
+        className={`flex w-full flex-col gap-2 bg-superficie-alta px-5 py-4 text-left transition-colors hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between sm:px-6 ${FOCO}`}
       >
         <div className="flex min-w-0 items-start gap-3">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-50 text-xs font-bold text-red-600 ring-1 ring-red-200">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ufps text-xs font-semibold text-white">
             {etapa.numero_hito}
           </span>
           <div className="min-w-0">
-            <p className="break-words text-sm font-bold text-slate-900">{etapa.nombre}</p>
-            <p className="text-[11px] text-slate-500">
+            <p className="break-words text-base font-semibold text-slate-900">{etapa.nombre}</p>
+            <p className="text-xs text-slate-500">
               {etapa.evidencias.length} evidencia(s) · {etapa.registros.length} registro(s) de avance
             </p>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2 pl-10 sm:pl-0">
           <EstadoValidacion estado={etapa.estado_validacion} />
-          <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${abierta ? "rotate-180" : ""}`} />
+          <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform motion-reduce:transition-none ${abierta ? "rotate-180" : ""}`} aria-hidden="true" />
         </div>
       </button>
 
       {abierta && (
-        <div className="space-y-5 border-t border-slate-100 p-4 sm:p-5">
-          {etapa.descripcion && <p className="text-xs leading-relaxed text-slate-600">{etapa.descripcion}</p>}
+        <div className="space-y-6 border-t border-slate-200 p-5 sm:p-6">
+          {etapa.descripcion && <p className="text-sm leading-relaxed text-slate-600">{etapa.descripcion}</p>}
 
           <div className="space-y-2">
-            <h4 className="text-[11px] font-bold uppercase tracking-wider text-red-600">Evidencia publicada</h4>
+            <h4 className={ROTULO}>Evidencia publicada</h4>
             {hayEvidencia ? (
               <ul className="space-y-3">
                 {etapa.evidencias.map((ev) => (
                   <li key={ev.id} className="space-y-2">
-                    <p className="break-words text-xs font-semibold text-slate-800">
+                    <p className="break-words text-sm font-semibold text-slate-800">
                       {ev.titulo} <span className="font-normal text-slate-500">· {ev.usuario_nombre} · {formatFecha(ev.creado)}</span>
                     </p>
                     <ul className="space-y-2">
@@ -402,7 +413,7 @@ function EtapaTrayectoria({ etapa, proyectoId, esTutor, abierta, onAlternar, onA
                 ))}
               </ul>
             ) : (
-              <p className="text-xs text-slate-500">
+              <p className="text-sm text-slate-500">
                 {esTutor
                   ? "El equipo aún no ha publicado evidencia en esta etapa."
                   : "Aún no hay evidencia en esta etapa. Publícala en Evidencias de Avance para poder registrar el avance."}
@@ -412,10 +423,10 @@ function EtapaTrayectoria({ etapa, proyectoId, esTutor, abierta, onAlternar, onA
 
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h4 className="text-[11px] font-bold uppercase tracking-wider text-red-600">Registros de avance</h4>
+              <h4 className={ROTULO}>Registros de avance</h4>
               {hayEvidencia && !registrando && (
                 <button type="button" onClick={() => setRegistrando(true)} className={BOTON_SECUNDARIO_CLASS}>
-                  <Plus className="h-4 w-4" />
+                  <Plus className="h-4 w-4" aria-hidden="true" />
                   Registrar avance
                 </button>
               )}
@@ -433,7 +444,7 @@ function EtapaTrayectoria({ etapa, proyectoId, esTutor, abierta, onAlternar, onA
               />
             )}
             {etapa.registros.length === 0 ? (
-              !registrando && <p className="text-xs text-slate-500">Aún no se ha registrado avance en esta etapa.</p>
+              !registrando && <p className="text-sm text-slate-500">Aún no se ha registrado avance en esta etapa.</p>
             ) : (
               <ul className="space-y-3">
                 {etapa.registros.map((registro) => (
@@ -540,65 +551,43 @@ export default function AvanceProyectoPage({ rol }) {
 
   return (
     <div className="w-full space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-red-600">Avance del proyecto</span>
-          <h2 className="mt-0.5 text-xl font-bold text-slate-900">Trayectoria por etapas</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            {esTutor
-              ? "Registra y valida el avance de los proyectos que acompañas, con la evidencia publicada por el equipo."
-              : "Registra el avance de cada etapa con la evidencia publicada, sus dificultades, riesgos y recomendaciones."}
-          </p>
-        </div>
-        {proyectos.length > 1 && (
-          <div className="space-y-1 sm:w-64">
-            <label htmlFor="proyecto-avance" className={LABEL_CLASS}>Proyecto</label>
-            <select
-              id="proyecto-avance"
-              value={proyectoId ?? ""}
-              onChange={(e) => setProyectoId(Number(e.target.value))}
-              className={INPUT_CLASS}
-            >
-              {proyectos.map((proyecto) => (
-                <option key={proyecto.id} value={proyecto.id}>{proyecto.nombre}</option>
-              ))}
-            </select>
-          </div>
-        )}
-      </div>
+      <EncabezadoPagina
+        seccion="Avance del proyecto"
+        titulo="Trayectoria por etapas"
+        descripcion={
+          esTutor
+            ? "Registra y valida el avance de los proyectos que acompañas, con la evidencia publicada por el equipo."
+            : "Registra el avance de cada etapa con la evidencia publicada, sus dificultades, riesgos y recomendaciones."
+        }
+        acciones={
+          proyectos.length > 1 && (
+            <Selector
+              className="w-full sm:w-64"
+              etiqueta="Proyecto"
+              valor={proyectoId ?? ""}
+              onChange={(valor) => setProyectoId(Number(valor))}
+              opciones={proyectos.map((proyecto) => ({ valor: proyecto.id, texto: proyecto.nombre }))}
+            />
+          )
+        }
+      />
 
-      {error ? (
-        <div className="flex flex-col items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-xs text-red-700 sm:flex-row sm:items-center sm:justify-between">
-          <span className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            {error}
-          </span>
-          <button
-            type="button"
-            onClick={reintentar}
-            className="inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-white px-3 py-1.5 font-semibold text-red-700 hover:bg-red-50"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            Reintentar
-          </button>
-        </div>
-      ) : null}
+      {error ? <ErrorCarga mensaje={error} onReintentar={reintentar} /> : null}
 
       {cargando ? (
-        <div className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-16 text-xs text-slate-500 shadow-sm">
-          <Loader2 className="h-4 w-4 animate-spin text-red-600" />
-          Cargando la trayectoria...
-        </div>
+        <Cargando texto="Cargando la trayectoria..." />
       ) : !error && proyectos.length === 0 ? (
-        <p className="rounded-xl border border-slate-200 bg-white py-12 text-center text-xs text-slate-500 shadow-sm">
-          {esTutor ? "Aún no tienes proyectos asignados." : "Aún no participas en un proyecto aprobado."}
-        </p>
+        <Tarjeta>
+          <p className="text-center text-sm text-slate-500">
+            {esTutor ? "Aún no tienes proyectos asignados." : "Aún no participas en un proyecto aprobado."}
+          </p>
+        </Tarjeta>
       ) : trayectoria?.etapas.length === 0 ? (
-        <p className="rounded-xl border border-slate-200 bg-white py-12 text-center text-xs text-slate-500 shadow-sm">
-          La rúbrica de este tipo de iniciativa aún no tiene etapas definidas.
-        </p>
+        <Tarjeta>
+          <p className="text-center text-sm text-slate-500">La rúbrica de este tipo de iniciativa aún no tiene etapas definidas.</p>
+        </Tarjeta>
       ) : trayectoria ? (
-        <ol className="space-y-3">
+        <ol className="space-y-4">
           {trayectoria.etapas.map((etapa) => (
             <EtapaTrayectoria
               key={etapa.id}

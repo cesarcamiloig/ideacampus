@@ -18,7 +18,7 @@ import {
 } from "../utils/rubricaUtils"
 import DistribucionPesos from "./DistribucionPesos"
 import HitoCard from "./HitoCard"
-import { BOTON_PRIMARIO, BOTON_SECUNDARIO, CAMPO, ERROR, ETIQUETA } from "./estilos"
+import { BOTON_PRIMARIO, BOTON_SECUNDARIO, CAMPO, ERROR, ETIQUETA } from "../../../components/ui/estilos"
 
 // v2: hitos y criterios con _key local; el id es solo el del servidor
 const CLAVE_BORRADOR = "gennova:rubricas:borrador:v2"
@@ -452,7 +452,8 @@ export default function RubricasTab() {
 
             {/* Encabezado */}
             <div className="space-y-1.5">
-                <h2 className="text-2xl font-semibold tracking-tight text-slate-900">Rúbricas de evaluación</h2>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-ufps">Evaluación</p>
+                <h2 className="text-xl font-bold tracking-tight text-slate-900">Rúbricas de evaluación</h2>
                 <p className="max-w-2xl text-sm leading-relaxed text-slate-600">
                     Reparte cuánto pesa cada hito en la nota final y define con qué criterios se califica cada uno.
                     Los evaluadores ponen una nota de {ESCALA_MIN} a {ESCALA_MAX} en cada criterio.
@@ -460,10 +461,10 @@ export default function RubricasTab() {
             </div>
 
             {sinServidor && (
-                <div className="flex flex-col gap-3 rounded-2xl bg-amber-50 p-4 text-amber-900 sm:flex-row sm:items-start">
-                    <CloudOff className="h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
+                <div className="flex flex-col gap-3 rounded-2xl border border-ufps bg-white p-4 text-slate-800 sm:flex-row sm:items-start">
+                    <CloudOff className="h-5 w-5 shrink-0 text-ufps" aria-hidden="true" />
                     <div className="flex-1 space-y-1 text-sm leading-relaxed">
-                        <p className="font-semibold">Estás trabajando sin servidor</p>
+                        <p className="font-semibold text-ufps">Estás trabajando sin servidor</p>
                         <p>
                             Aún no hay conexión con el servidor de rúbricas, así que <strong>guardar va a fallar</strong>.
                             Puedes editar tranquilo: tus cambios quedan como borrador en este navegador.
@@ -477,8 +478,8 @@ export default function RubricasTab() {
             )}
 
             {!sinServidor && rubrica.id === null && (
-                <div className="flex gap-3 rounded-2xl bg-amber-50 p-4 text-sm leading-relaxed text-amber-900">
-                    <AlertCircle className="h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
+                <div className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-relaxed text-slate-700">
+                    <AlertCircle className="h-5 w-5 shrink-0 text-ufps" aria-hidden="true" />
                     <p>
                         El servidor todavía no tiene la rúbrica de <strong>{etiquetaDe(tipoActivo)}</strong>. Puedes
                         prepararla aquí, pero no se podrá guardar hasta que exista.
@@ -514,7 +515,7 @@ export default function RubricasTab() {
                                 {label}
                                 {tieneCambios[id] && (
                                     <>
-                                        <span className="h-2 w-2 rounded-full bg-amber-500" aria-hidden="true" />
+                                        <span className="h-2 w-2 rounded-full bg-ufps" aria-hidden="true" />
                                         <span className="sr-only">(con cambios sin guardar)</span>
                                     </>
                                 )}
@@ -635,8 +636,8 @@ export default function RubricasTab() {
                                 Guardando…
                             </p>
                         ) : saveStatus?.tipo === "success" ? (
-                            <p className="flex items-center gap-2 font-medium text-emerald-700 animate-aparecer motion-reduce:animate-desvanecer">
-                                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-white animate-confirmar motion-reduce:animate-desvanecer">
+                            <p className="flex items-center gap-2 font-medium text-slate-900 animate-aparecer motion-reduce:animate-desvanecer">
+                                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white animate-confirmar motion-reduce:animate-desvanecer">
                                     <Check className="h-3.5 w-3.5" strokeWidth={3} aria-hidden="true" />
                                 </span>
                                 {saveStatus.texto}
@@ -652,7 +653,7 @@ export default function RubricasTab() {
                             </p>
                         ) : cambiosActivos ? (
                             <p className="flex flex-wrap items-center gap-x-2 text-slate-700">
-                                <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />
+                                <span className="h-2 w-2 shrink-0 rounded-full bg-ufps" aria-hidden="true" />
                                 <span className="font-medium">Tienes cambios sin guardar en {etiquetaActiva}</span>                            </p>
                         ) : (
                             <p className="text-slate-500">

@@ -8,3 +8,14 @@ html, body, #root {
   margin: 0;
   padding: 0;
 }
+
+@layer base {
+  html {
+    @apply bg-superficie font-sans text-slate-800 antialiased;
+    font-synthesis: none;
+  }
+
+  body {
+    min-width: 320px;
+  }
+}
