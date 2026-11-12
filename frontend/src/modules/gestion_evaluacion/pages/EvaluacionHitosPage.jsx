@@ -436,13 +436,13 @@ function DetalleProyecto({ proyecto, onVolver, onCambio, manejarError }) {
         return plan ? actividades.filter((a) => a.plan_trabajo === plan.id_plan_trabajo) : []
     }
 
-    function alGuardar(guardada, mensaje) {
+    function alGuardar(guardada, mensaje, extra = {}) {
         setEvaluaciones((prev) => {
             const existe = prev.some((e) => e.id === guardada.id)
             return existe ? prev.map((e) => (e.id === guardada.id ? guardada : e)) : [...prev, guardada]
         })
         setEditor(null)
-        setAviso({ tipo: "exito", titulo: mensaje })
+        setAviso({ tipo: "exito", titulo: mensaje, ...extra })
         cargarResultados()
         onCambio()
     }

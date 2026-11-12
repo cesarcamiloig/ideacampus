@@ -1,6 +1,12 @@
-import { useId, useState } from "react"
+import { useCallback, useEffect, useId, useState } from "react"
 import { AlertCircle, Loader2 } from "lucide-react"
-import { actualizarEvaluacion, crearEvaluacion } from "../services/evaluacionService"
+import {
+    actualizarEvaluacion,
+    crearEvaluacion,
+    getMadurezProyecto,
+    registrarMadurez,
+} from "../services/evaluacionService"
+import SelectorMadurez from "./SelectorMadurez"
 import {
     NOTA_MAXIMA,
     PASO_NOTA,
@@ -157,6 +163,31 @@ export default function FormularioEvaluacion({ idProyecto, hito, evaluacion, onG
     const [errorGeneral, setErrorGeneral] = useState("")
     const [guardando, setGuardando] = useState(false)
     const idComentario = useId()
+    const [madurez, setMadurez] = useState({ cargando: true, error: "", niveles: [], actual: "M0" })
+    const [nivel, setNivel] = useState("")
+    const [errorComentario, setErrorComentario] = useState("")
+
+    const cargarMadurez = useCallback(async () => {
+        setMadurez((prev) => ({ ...prev, cargando: true, error: "" }))
+        try {
+            const datos = await getMadurezProyecto(idProyecto)
+            const actual = datos?.nivel_actual || "M0"
+            setMadurez({ cargando: false, error: "", niveles: datos?.niveles_disponibles || [], actual })
+            setNivel(actual)
+        } catch (err) {
+            setMadurez((prev) => ({
+                ...prev,
+                cargando: false,
+                error: mensajeDeError(err, "No se pudo cargar el nivel de madurez del proyecto."),
+            }))
+        }
+    }, [idProyecto])
+
+    useEffect(() => {
+        cargarMadurez()
+    }, [cargarMadurez])
+
+    const cambiaNivel = !madurez.cargando && !madurez.error && nivel !== "" && nivel !== madurez.actual
 
     const previa = notaHitoPrevia(criterios, notas)
     const completa = previa.calificados === criterios.length
@@ -178,7 +209,9 @@ export default function FormularioEvaluacion({ idProyecto, hito, evaluacion, onG
         })
         setErrores(nuevos)
         setErrorGeneral("")
-        if (Object.keys(nuevos).length > 0) {
+        const faltaJustificacion = cambiaNivel && !comentario.trim()
+        setErrorComentario(faltaJustificacion ? "Escribe la retroalimentación: es la justificación del cambio de nivel." : "")
+        if (Object.keys(nuevos).length > 0 || faltaJustificacion) {
             setErrorGeneral("Revisa los criterios marcados antes de guardar.")
             return
         }
@@ -196,7 +229,24 @@ export default function FormularioEvaluacion({ idProyecto, hito, evaluacion, onG
             const guardada = evaluacion
                 ? await actualizarEvaluacion(evaluacion.id, datos)
                 : await crearEvaluacion({ ...datos, proyecto: idProyecto, subrubrica: hito.id })
-            onGuardado(guardada, evaluacion ? "Evaluación actualizada." : "Evaluación registrada.")
+            const mensaje = evaluacion ? "Evaluación actualizada." : "Evaluación registrada."
+            if (!cambiaNivel) {
+                onGuardado(guardada, mensaje)
+                return
+            }
+            try {
+                await registrarMadurez(idProyecto, {
+                    nivel,
+                    criterio_cumplido: datos.comentario,
+                    evaluacion: guardada.id,
+                })
+                onGuardado(guardada, mensaje, { detalle: `Nivel de madurez actualizado de ${madurez.actual} a ${nivel}.` })
+            } catch (err) {
+                onGuardado(guardada, mensaje, {
+                    tipo: "error",
+                    detalle: `No se pudo actualizar el nivel de madurez: ${mensajeDeError(err, "error desconocido.")}`,
+                })
+            }
         } catch (err) {
             setErrorGeneral(mensajeDeError(err, "No se pudo guardar la evaluación."))
             setGuardando(false)
@@ -260,11 +310,36 @@ export default function FormularioEvaluacion({ idProyecto, hito, evaluacion, onG
                     id={idComentario}
                     rows={4}
                     value={comentario}
-                    onChange={(e) => setComentario(e.target.value)}
+                    onChange={(e) => {
+                        setComentario(e.target.value)
+                        if (errorComentario) setErrorComentario("")
+                    }}
+                    aria-invalid={Boolean(errorComentario)}
                     className={`${CAMPO} resize-y`}
                 />
-                <p className={AYUDA}>Fortalezas, aspectos por mejorar y recomendaciones para el equipo.</p>
+                {errorComentario ? (
+                    <p className={ERROR} role="alert">
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                        {errorComentario}
+                    </p>
+                ) : (
+                    <p className={AYUDA}>Fortalezas, aspectos por mejorar y recomendaciones para el equipo.</p>
+                )}
             </div>
+
+            <SelectorMadurez
+                niveles={madurez.niveles}
+                nivelActual={madurez.actual}
+                valor={nivel}
+                onChange={(codigo) => {
+                    setNivel(codigo)
+                    setErrorComentario("")
+                }}
+                cargando={madurez.cargando}
+                error={madurez.error}
+                onReintentar={cargarMadurez}
+                disabled={guardando}
+            />
 
             <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
                 <button type="button" onClick={onCancelar} className={BOTON_SECUNDARIO} disabled={guardando}>
