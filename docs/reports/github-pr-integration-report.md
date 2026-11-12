@@ -15,20 +15,20 @@ Se completó una revisión integral e integración del repositorio `ideacampus`,
 
 ### Diagnóstico e Integración de PRs y Ramas Pendientes:
 1. **PR #49 (`Refactor/frontend`, autor: `Dnielbermudez`):**
-   * **Estado en GitHub:** **ABIERTO** con rama origen `refactor/frontend` hacia `develop` (`1a480ba`).
+   * **Estado en GitHub:** **MERGED** con rama origen `refactor/frontend` hacia `develop` (`310a124`).
    * **Alcance técnico:** Unifica el diseño visual de toda la aplicación con el sistema de componentes reutilizables en `frontend/src/components/ui/` (`Componentes.jsx`, `Dialogos.jsx`, `MenuAcciones.jsx`, `estilos.js`, `utilidades.js`, `index.js`) bajo la paleta institucional UFPS (rojo, gris, blanco y negro), manteniendo intacta toda la lógica de negocio, `fix/Ajustes-Backend` y `HU-09`.
    * **Resolución e Integración:** Integrado en `develop` sin conflictos y complementado con el mapeo visual de los eventos `avance_etapa` (HU-19) y `cambio_madurez` (HU-11) en `LineaTiempoPanel.jsx`, además de la corrección de advertencias del analizador estático en `equipoService.js` y `HistorialEvaluacionesPage.jsx`.
 2. **PR #46 (`Feat/hu 09 frontend evaluacion`, autor: `Dnielbermudez`):**
-   * **Estado en GitHub:** **ABIERTO** con rama origen `feat/HU-09-Frontend-Evaluacion` hacia `main` (la cual incluye también `origin/HU-09-Backend-Evaluacion` de `miguelvl05`).
+   * **Estado en GitHub:** **CLOSED (Integrado en `develop`)** con rama origen `feat/HU-09-Frontend-Evaluacion` (la cual incluye también `origin/HU-09-Backend-Evaluacion` de `miguelvl05`).
    * **Resolución e Integración:** **100% integrado** en `develop` (commit `a66e5b6`), resolviendo limpiamente los 4 conflictos en `backend/gestion_evaluacion/` (`urls.py`, `views.py`, `serializers.py`, `tests.py`) frente a HU-11 (`PR #47`) y conectando `es_evaluador_asignado` con `proyecto.evaluador_id` de HU-17 (commit `f06a441`).
 3. **Rama `origin/fix/Ajustes-Backend` (autor: `miguelvl05`):**
    * **Resolución e Integración:** **100% integrada** en `develop` (commit `4a4f6e0`), incorporando la migración `0006_revision_tutor_recomendaciones_errores.py` (separación de recomendaciones y errores del tutor en HU-19) y el manejo de roles activos mediante la cabecera `X-Rol-Activo`.
 4. **PR #47 (`feat(evaluacion): cálculo de madurez M0-M9 y seguimiento de etapas (HU-11 / HU-19)`, autor: `cesarcamiloig`):**
    * **Estado:** **MERGED** en `develop` (`390e75f`).
 5. **PR #45 (`Feat/hu 17 asignacion evaluadores`, autor: `Miguel-0405`):**
-   * **Estado:** **ABIERTO** en GitHub hacia `main`, pero **100% integrado** en `develop` (commit `bb128f7`).
+   * **Estado:** **CLOSED (Integrado en `develop` en `bb128f7`)**.
 6. **PR #44 (`Test/hu 20 integracion`, autor: `Dnielbermudez`):**
-   * **Estado:** **ABIERTO** en GitHub hacia `main`, pero **100% integrado** en `develop` (commits `6dcd6fe`, `b56b878` y `5cd2546`).
+   * **Estado:** **CLOSED (Integrado en `develop` en `6dcd6fe`, `b56b878` y `5cd2546`)**.
 
 ### Métricas Clave de Verificación
 * **Pruebas automatizadas Backend (Django 6.1 / Python 3.12):** **248 pruebas ejecutadas — 248 aprobadas (100% OK)**.
@@ -48,12 +48,12 @@ Se completó una revisión integral e integración del repositorio `ideacampus`,
 ### 2.1 Estado de Pull Requests en GitHub
 | PR # | Título | Autor | Rama Origen → Base | Estado en GitHub | Estado de Integración en `develop` | Notas Técnicas |
 | :---: | :--- | :--- | :--- | :---: | :---: | :--- |
-| **#49** | `Refactor/frontend` | `Dnielbermudez` | `refactor/frontend` → `develop` | **Open** | **100% Integrado** | Sistema de componentes UI reutilizables (`frontend/src/components/ui`) y unificación bajo paleta UFPS. |
+| **#49** | `Refactor/frontend` | `Dnielbermudez` | `refactor/frontend` → `develop` | **Closed (Merged)** | **100% Integrado (`310a124`)** | Sistema de componentes UI reutilizables (`frontend/src/components/ui`) y unificación bajo paleta UFPS. |
 | **#48** | `Refactor/frontend` | `Dnielbermudez` | `refactor/frontend` → `main` | **Closed** | **Reemplazado por PR #49** | Cerrado por su autor al reabrirse contra `develop` como PR #49. |
 | **#47** | `feat(evaluacion): cálculo de madurez M0-M9...` (HU-11/HU-19) | `cesarcamiloig` | `feat/HU-11-calculo-madurez` → `develop` | **Closed (Merged)** | **100% Integrado (`390e75f`)** | Modelos `RegistroMadurez`, validación RN-07 y línea de tiempo. |
-| **#46** | `Feat/hu 09 frontend evaluacion` | `Dnielbermudez` | `feat/HU-09-Frontend-Evaluacion` → `main` | **Open** | **100% Integrado (`a66e5b6`)** | Incluye `HU-09-Backend-Evaluacion` + vistas de evaluación de hitos e historial + conexión con HU-17 (`f06a441`). |
-| **#45** | `Feat/hu 17 asignacion evaluadores` | `Miguel-0405` | `feat/HU-17-asignacion-evaluadores` → `main` | **Open** | **100% Integrado (`bb128f7`)** | Base en PR configurada en `main`. Código ya consolidado en `develop`. |
-| **#44** | `Test/hu 20 integracion` | `Dnielbermudez` | `test/HU-20-integracion` → `main` | **Open** | **100% Integrado (`b56b878`)** | Base en PR configurada en `main`. Código ya consolidado en `develop`. |
+| **#46** | `Feat/hu 09 frontend evaluacion` | `Dnielbermudez` | `feat/HU-09-Frontend-Evaluacion` → `main` | **Closed** | **100% Integrado (`a66e5b6`)** | Incluye `HU-09-Backend-Evaluacion` + vistas de evaluación de hitos e historial + conexión con HU-17 (`f06a441`). |
+| **#45** | `Feat/hu 17 asignacion evaluadores` | `Miguel-0405` | `feat/HU-17-asignacion-evaluadores` → `main` | **Closed** | **100% Integrado (`bb128f7`)** | Base en PR configurada en `main`. Código consolidado en `develop`. |
+| **#44** | `Test/hu 20 integracion` | `Dnielbermudez` | `test/HU-20-integracion` → `main` | **Closed** | **100% Integrado (`b56b878`)** | Base en PR configurada en `main`. Código consolidado en `develop`. |
 | **#43** | `feat(linea-tiempo): mostrar cronologicamente las etapas...` (HU-08) | `obedayalaufps` | `feat/HU-08-frontend-linea-tiempo` → `develop` | **Closed (Merged)** | **Integrado (`f12e406`)** | Panel de línea de tiempo frontend. |
 | **#41** | `feat: Endpoint de Línea de Tiempo (HU-08)` | `faridl28` | `feat/HU-08-backend-linea-tiempo` → `develop` | **Closed (Merged)** | **Integrado (`a7b9420`)** | Servicio y endpoint de línea de tiempo. |
 | **#40** | `feat(avance): registrar y validar el avance por etapas...` (HU-19) | `obedayalaufps` | `feat/HU-19-registro-validacion-avance` → `develop` | **Closed (Merged)** | **Integrado (`3b0a6e1`)** | Registro y validación de avance por etapas. |
