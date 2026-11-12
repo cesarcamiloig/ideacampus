@@ -584,14 +584,14 @@ class TrayectoriaAvanceTests(RegistroAvanceBaseTests):
         self.assertEqual(self.client.get(url).status_code, status.HTTP_403_FORBIDDEN)
 
     def test_quien_entra_como_admin_y_cambia_a_tutor_ve_sus_proyectos(self):
-        # El token dice "admin"; el frontend envía el rol elegido en X-Rol-Activo
+        # El mismo token sirve para todos sus roles; la interfaz envía el rol elegido en X-Rol-Activo
         rol_admin, _ = Rol.objects.get_or_create(nombre_rol="admin")
         UsuarioRol.objects.create(usuario=self.tutor, rol=rol_admin)
         self.autenticar(self.tutor, "admin")
         url = f"{self.URL_AVANCE}mis-proyectos/"
 
-        # Sin cabecera manda el rol del token: como admin no tiene proyectos propios (antes daba 500)
-        res = self.client.get(url)
+        # Como admin no tiene proyectos propios (antes daba 500)
+        res = self.client.get(url, HTTP_X_ROL_ACTIVO="admin")
         self.assertEqual((res.status_code, res.data), (status.HTTP_200_OK, []))
 
         res = self.client.get(url, HTTP_X_ROL_ACTIVO="tutor")
