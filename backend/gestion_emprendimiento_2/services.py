@@ -441,7 +441,10 @@ def obtener_linea_tiempo_proyecto(id_proyecto=None, id_iniciativa=None, orden_as
                     if retro.tutor and retro.tutor.usuario
                     else "Tutor"
                 ),
-                "observaciones": retro.comentario or ("Avance validado." if retro.aprobado else "Ajustes requeridos."),
+                "observaciones": (
+                    retro.errores or retro.recomendaciones or retro.comentario
+                    or ("Avance validado." if retro.aprobado else "Ajustes requeridos.")
+                ),
                 "tipo_evento": "avance_etapa",
                 "orden": (
                     retro.registro_avance.etapa.numero_hito

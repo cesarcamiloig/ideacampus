@@ -76,9 +76,9 @@ export const ROLE_CONFIG = {
       },
       avance: {
         title: "Avance por Etapas",
-        desc: "Registra el avance de cada etapa con la evidencia publicada, sus dificultades, riesgos y recomendaciones.",
+        desc: "Registra el avance de cada etapa con la evidencia publicada, sus dificultades y riesgos.",
         details:
-          "Control formal de la trayectoria del proyecto, validado por el tutor asignado.",
+          "Control formal de la trayectoria del proyecto, revisado por el tutor asignado.",
         actionLabel: "Registrar avance",
       },
     },
@@ -127,10 +127,10 @@ export const ROLE_CONFIG = {
       },
       avance: {
         title: "Avance de Proyectos",
-        desc: "Registra y valida el avance de los proyectos asignados con la evidencia publicada por cada equipo.",
+        desc: "Revisa el avance que registra cada equipo: deja recomendaciones y señala los errores a corregir.",
         details:
           "Control formal de la trayectoria de cada proyecto a través de sus etapas.",
-        actionLabel: "Validar avance",
+        actionLabel: "Revisar avance",
       },
       acompanamiento: {
         title: "Registro de Tutorías",

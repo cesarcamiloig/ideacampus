@@ -42,12 +42,9 @@ def puede_subir_evidencia(usuario, proyecto):
 
 def puede_registrar_avance(usuario, proyecto):
     """
-    Puede registrar el avance de un proyecto, según el rol activo:
-    - tutor: el tutor asignado al proyecto.
-    - estudiante: quien puede subir evidencias al proyecto.
+    Registra el avance el estudiante que puede subir evidencias al proyecto;
+    el tutor no lo registra, lo revisa.
     """
-    if getattr(usuario, "rol_activo", None) == "tutor":
-        return proyectos_del_tutor(usuario).filter(pk=proyecto.pk).exists()
     return puede_subir_evidencia(usuario, proyecto)
 
 
@@ -257,9 +254,9 @@ class RetroalimentacionAvanceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = RetroalimentacionAvance
-        fields = ["id", "registro_avance", "tutor", "tutor_nombre",
-                  "comentario", "aprobado", "fecha"]
-        read_only_fields = ["id", "registro_avance", "tutor", "tutor_nombre", "fecha"]
+        fields = ["id", "registro_avance", "tutor", "tutor_nombre", "recomendaciones",
+                  "errores", "comentario", "aprobado", "fecha"]
+        read_only_fields = fields
 
 
 class RegistroAvanceSerializer(serializers.ModelSerializer):
@@ -296,7 +293,10 @@ class RegistroAvanceSerializer(serializers.ModelSerializer):
 
 
 class RegistroAvanceCrearSerializer(serializers.ModelSerializer):
-    """Serializer de escritura para que el estudiante o el tutor cree un registro de avance."""
+    """
+    Serializer de escritura para que el estudiante registre el avance de una etapa.
+    Estado, porcentaje y recomendaciones no se reciben: las recomendaciones las da el tutor al revisarlo.
+    """
     proyecto = serializers.PrimaryKeyRelatedField(
         queryset=Proyecto.objects.select_related("iniciativa")
     )
@@ -309,12 +309,7 @@ class RegistroAvanceCrearSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = RegistroAvance
-        fields = [
-            "proyecto", "etapa", "evidencias",
-            "estado_avance", "porcentaje_avance",
-            "descripcion_avance",
-            "dificultades", "riesgos", "recomendaciones",
-        ]
+        fields = ["proyecto", "etapa", "evidencias", "descripcion_avance", "dificultades", "riesgos"]
 
     def validate(self, attrs):
         usuario = self.context["request"].user
@@ -324,8 +319,8 @@ class RegistroAvanceCrearSerializer(serializers.ModelSerializer):
         if not puede_registrar_avance(usuario, proyecto):
             raise serializers.ValidationError(
                 {"proyecto": (
-                    "Solo puede registrar avance el titular de la iniciativa aprobada, "
-                    "un integrante del equipo o el tutor asignado a este proyecto."
+                    "Solo puede registrar avance el titular de la iniciativa aprobada "
+                    "o un integrante del equipo de este proyecto."
                 )}
             )
 
@@ -355,8 +350,20 @@ class RegistroAvanceCrearSerializer(serializers.ModelSerializer):
 
 
 class RetroalimentacionCrearSerializer(serializers.ModelSerializer):
-    """Serializer para que el tutor deje retroalimentación sobre un registro de avance."""
+    """
+    Revisión del tutor sobre un registro de avance: recomendaciones y errores encontrados.
+    Si señala errores, el avance queda con observaciones; si no, queda aprobado (validado).
+    """
 
     class Meta:
         model = RetroalimentacionAvance
-        fields = ["comentario", "aprobado"]
+        fields = ["recomendaciones", "errores"]
+
+    def validate(self, attrs):
+        recomendaciones = attrs.get("recomendaciones", "").strip()
+        errores = attrs.get("errores", "").strip()
+        if not recomendaciones and not errores:
+            raise serializers.ValidationError(
+                "Escribe al menos una recomendación o un error encontrado en el avance."
+            )
+        return {"recomendaciones": recomendaciones, "errores": errores, "aprobado": not errores}

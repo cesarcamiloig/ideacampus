@@ -62,6 +62,12 @@ class JWTAuthentication(BaseAuthentication):
 
         rol_activo = rol_token if (rol_token in roles_vigentes) else roles_vigentes[0]
 
+        # Al cambiar de rol en la interfaz no se emite otro token: el frontend envía el rol con el
+        # que trabaja en X-Rol-Activo. Solo se acepta si es uno de los roles vigentes del usuario.
+        rol_solicitado = (request.headers.get("X-Rol-Activo") or "").strip()
+        if rol_solicitado in roles_vigentes:
+            rol_activo = rol_solicitado
+
         usuario.rol_activo = rol_activo
         usuario.roles_activos = roles_vigentes
         usuario.roles_asignados = roles_vigentes
