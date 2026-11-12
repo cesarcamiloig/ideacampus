@@ -33,7 +33,9 @@ const TIPOS_EVENTO = {
   creacion_proyecto: { etiqueta: "Proyecto", Icono: FolderKanban },
   asignacion_tutor: { etiqueta: "Tutoría", Icono: GraduationCap },
   hito_plan_trabajo: { etiqueta: "Hito del plan", Icono: Flag },
+  avance_etapa: { etiqueta: "Validación de etapa", Icono: ClipboardCheck },
   evaluacion: { etiqueta: "Evaluación", Icono: ClipboardCheck },
+  cambio_madurez: { etiqueta: "Madurez tecnológica", Icono: Flag },
 };
 const ALIAS_TIPO = { iniciativa: "postulacion" };
 
@@ -46,7 +48,7 @@ const TONOS = {
 };
 const ESTADOS_EXITO = ["completado", "aprobada", "aprobado", "aceptada", "aceptado", "validada", "activo", "finalizado", "tutor_asignado"];
 const ESTADOS_PROCESO = ["en_progreso", "en_evaluacion", "en_revision", "pendiente", "pausado", "radicada"];
-const ESTADOS_ALERTA = ["rechazada", "rechazado", "cancelado"];
+const ESTADOS_ALERTA = ["rechazada", "rechazado", "cancelado", "requiere_ajustes"];
 
 function tipoDe(evento) {
   const tipo = evento.tipo_evento || "";
@@ -65,7 +67,7 @@ function textoLegible(valor) {
 
 function tonoEstado(estado) {
   const e = (estado || "").toLowerCase();
-  if (ESTADOS_EXITO.includes(e) || e.startsWith("calificado")) return TONOS.exito;
+  if (ESTADOS_EXITO.includes(e) || e.startsWith("calificado") || e.startsWith("nivel ")) return TONOS.exito;
   if (ESTADOS_PROCESO.includes(e)) return TONOS.proceso;
   if (ESTADOS_ALERTA.includes(e)) return TONOS.alerta;
   return TONOS.neutro;

@@ -66,7 +66,9 @@ export default function HistorialEvaluacionesPage() {
     const [errorCarga, setErrorCarga] = useState("")
 
     const logoutRef = useRef(logout)
-    logoutRef.current = logout
+    useEffect(() => {
+        logoutRef.current = logout
+    }, [logout])
 
     const cargar = useCallback(async () => {
         setCargando(true)

@@ -41,7 +41,7 @@ export async function obtenerMisIniciativasAprobadas() {
   try {
     const data = await apiClient.get("/iniciativas/mis-aprobadas/");
     return Array.isArray(data) ? data : data?.results || [];
-  } catch (err) {
+  } catch {
     try {
       // Solo las del usuario de la sesión, aunque también tenga roles de gestión
       const data = await apiClient.get("/iniciativas/mias/");
