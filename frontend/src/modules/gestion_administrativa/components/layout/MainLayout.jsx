@@ -14,6 +14,7 @@ import {
     Check,
     FileUp,
     FolderKanban,
+    Globe,
     Menu,
     X,
 } from "lucide-react"
@@ -170,6 +171,7 @@ export default function MainLayout({
         ],
         coordinador: [
             { id: "iniciativas", label: "Proyectos", icon: FolderKanban },
+            { id: "catalogo", label: "Catálogo e Informes", icon: Globe },
             { id: "reportes", label: "Métricas e Impacto", icon: Award },
             { id: "alertas", label: "Centro de Alertas", icon: Bell },
         ],

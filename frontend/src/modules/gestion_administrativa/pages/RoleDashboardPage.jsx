@@ -26,6 +26,7 @@ import AlertasPage from "../../gestion_convocatorias/pages/AlertasPage";
 import RubricasTab from "../../gestion_evaluacion/components/RubricasTab";
 import EvaluacionHitosPage from "../../gestion_evaluacion/pages/EvaluacionHitosPage";
 import HistorialEvaluacionesPage from "../../gestion_evaluacion/pages/HistorialEvaluacionesPage";
+import CatalogoInformesPage from "../../gestion_catalogo/pages/CatalogoInformesPage";
 import { BOTON_PRIMARIO, CabeceraTarjeta, Cargando, Tarjeta } from "../../../components/ui";
 
 export const ROLE_CONFIG = {
@@ -98,6 +99,12 @@ export const ROLE_CONFIG = {
         desc: "Iniciativas recibidas en las convocatorias y mentores de los proyectos aprobados.",
         details: "Revisión de expedientes y asignación de mentores a los proyectos.",
         actionLabel: "Ver iniciativas",
+      },
+      catalogo: {
+        title: "Catálogo e Informes",
+        desc: "Informes exportables de las iniciativas y catálogo público de las iniciativas autorizadas.",
+        details: "Difusión de resultados del programa de emprendimiento.",
+        actionLabel: "Generar informe",
       },
       reportes: {
         title: "Métricas e Impacto",
@@ -396,6 +403,8 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule, mos
             <Tarjeta>
               <RubricasTab key="rubricas" />
             </Tarjeta>
+          ) : normalizedRole === "coordinador" && activeModule === "catalogo" ? (
+            <CatalogoInformesPage key="catalogo" />
           ) : normalizedRole === "tutor" && activeModule === "avance" ? (
             <AvanceProyectoPage key="avance" rol="tutor" />
           ) : normalizedRole === "tutor" && activeModule === "tutorias" ? (

@@ -94,7 +94,7 @@ function BgAccentBL() {
   );
 }
 
-function LoginCard({ status, errorMessage, googleButtonRef, rolSeleccionado, setRolSeleccionado }) {
+function LoginCard({ status, errorMessage, googleButtonRef, rolSeleccionado, setRolSeleccionado, onVerCatalogo }) {
   return (
     <main
       className="relative z-10 flex w-[min(88vw,366px)] flex-col items-center rounded-2xl border border-white/20 bg-ufps px-6 pb-6 pt-7 text-white shadow-[0_28px_64px_rgba(31,41,55,0.16),0_6px_18px_rgba(200,30,30,0.14),inset_0_1px_0_rgba(255,255,255,0.18)] sm:w-[430px] sm:px-11 sm:pb-7 sm:pt-9"
@@ -157,6 +157,16 @@ function LoginCard({ status, errorMessage, googleButtonRef, rolSeleccionado, set
           <strong className="mt-px block text-[13.5px] font-semibold tracking-[0.01em]">@ufps.edu.co</strong>
         </div>
       </section>
+
+      {onVerCatalogo && (
+        <button
+          type="button"
+          onClick={onVerCatalogo}
+          className="mt-5 w-full border-t border-white/20 pt-4 text-[12.5px] font-semibold text-white underline decoration-white/40 underline-offset-4 transition-colors hover:decoration-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white/70"
+        >
+          Explorar el catálogo público de iniciativas
+        </button>
+      )}
     </main>
   );
 }
@@ -174,7 +184,7 @@ function PageFooter() {
   );
 }
 
-function LoginPage({ onLoginSuccess }) {
+function LoginPage({ onLoginSuccess, onVerCatalogo }) {
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("No pudimos verificar tu cuenta.");
   const [rolSeleccionado, setRolSeleccionado] = useState("");
@@ -258,6 +268,7 @@ function LoginPage({ onLoginSuccess }) {
       googleButtonRef={googleButtonRef}
       rolSeleccionado={rolSeleccionado}
       setRolSeleccionado={setRolSeleccionado}
+      onVerCatalogo={onVerCatalogo}
     />
     <PageFooter />
   </div>
