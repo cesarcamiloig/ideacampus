@@ -5,10 +5,30 @@ import AdminParametrosPage from "./modules/gestion_administrativa/pages/AdminPar
 import ConvocatoriasPage from "./modules/gestion_convocatorias/pages/ConvocatoriasPage";
 import RoleDashboardPage from "./modules/gestion_administrativa/pages/RoleDashboardPage";
 import { consumirBienvenidaPendiente } from "./modules/gestion_administrativa/services/authService";
+import CatalogoPublicoPage from "./modules/gestion_catalogo/pages/CatalogoPublicoPage";
+import { RUTA_CATALOGO } from "./modules/gestion_catalogo/utils/catalogoUtils";
 import { BOTON_PRIMARIO, BOTON_SECUNDARIO, SECCION, TARJETA } from "./components/ui";
+
+// La app no usa router: la única ruta propia es el catálogo público (HU-15), que se abre sin sesión
+function useRuta() {
+  const [ruta, setRuta] = useState(() => window.location.pathname);
+
+  useEffect(() => {
+    const alNavegar = () => setRuta(window.location.pathname);
+    window.addEventListener("popstate", alNavegar);
+    return () => window.removeEventListener("popstate", alNavegar);
+  }, []);
+
+  const irA = (nueva) => {
+    window.history.pushState(null, "", nueva);
+    setRuta(nueva);
+  };
+  return [ruta, irA];
+}
 
 function AppContent() {
   const { isAuthenticated, usuario, refreshSession } = useAuth();
+  const [ruta, irA] = useRuta();
   const rolActivo = usuario?.rol?.trim().toLowerCase();
   const [currentModule, setCurrentModule] = useState(null);
   const [mostrarBienvenida, setMostrarBienvenida] = useState(false);
@@ -37,8 +57,12 @@ function AppContent() {
     setCurrentModule(modulo);
   }
 
+  if (ruta.startsWith(RUTA_CATALOGO)) {
+    return <CatalogoPublicoPage haySesion={isAuthenticated} onSalir={() => irA("/")} />;
+  }
+
   if (!isAuthenticated) {
-    return <LoginPage onLoginSuccess={refreshSession} />;
+    return <LoginPage onLoginSuccess={refreshSession} onVerCatalogo={() => irA(RUTA_CATALOGO)} />;
   }
 
   // 1. Administrador del Sistema
