@@ -26,6 +26,7 @@ import AlertasPage from "../../gestion_convocatorias/pages/AlertasPage";
 import RubricasTab from "../../gestion_evaluacion/components/RubricasTab";
 import EvaluacionHitosPage from "../../gestion_evaluacion/pages/EvaluacionHitosPage";
 import HistorialEvaluacionesPage from "../../gestion_evaluacion/pages/HistorialEvaluacionesPage";
+import DashboardMetricasPage from "../../gestion_analitica/pages/DashboardMetricasPage";
 import { BOTON_PRIMARIO, CabeceraTarjeta, Cargando, Tarjeta } from "../../../components/ui";
 
 export const ROLE_CONFIG = {
@@ -387,6 +388,8 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule, mos
               }}
               activeRole={normalizedRole}
             />
+          ) : ["direccion_del_programa", "direccion"].includes(normalizedRole) && activeModule === "indicadores" ? (
+            <DashboardMetricasPage key="dashboard-metricas" />
           ) : normalizedRole === "evaluador" && activeModule === "evaluaciones" ? (
             <EvaluacionHitosPage key="evaluaciones" />
           ) : normalizedRole === "evaluador" && activeModule === "rubricas" ? (
