@@ -130,13 +130,3 @@ export function formatoFecha(iso) {
     ? "—"
     : fecha.toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" });
 }
-
-// Formato común de los por_* del backend → filas de las barras
-export function aBarras(items = []) {
-  return lista(items).map((i) => ({
-    clave: String(i.valor ?? i.etiqueta),
-    etiqueta: i.etiqueta ?? String(i.valor),
-    valor: i.total ?? 0,
-    porcentaje: i.porcentaje,
-  }));
-}
