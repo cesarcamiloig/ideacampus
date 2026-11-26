@@ -4,11 +4,13 @@ import { FOCO } from "../../../components/ui";
 // segunda serie y gris claro para el riel y lo no seleccionado. Barras finas con el extremo
 // redondeado y cada valor rotulado en texto (nunca solo con color).
 
-function porcentaje(valor, total) {
-  return total > 0 ? Math.round((valor / total) * 100) : 0;
+// Usa el porcentaje que manda el backend (0-100) y, si no viene, lo calcula sobre el total
+function porcentaje(d, total) {
+  const valor = d.porcentaje ?? (total > 0 ? (d.valor / total) * 100 : 0);
+  return String(Math.round(valor * 10) / 10).replace(".", ",");
 }
 
-// Lista de barras horizontales. datos: [{ clave, etiqueta, valor, detalle? }]
+// Lista de barras horizontales. datos: [{ clave, etiqueta, valor, porcentaje?, detalle? }]
 // Con onSeleccionar cada fila es un botón que filtra el tablero; la fila elegida queda en rojo
 // y las demás en gris.
 export function BarrasHorizontales({ datos, etiqueta, onSeleccionar, seleccionado, mostrarPorcentaje = true }) {
@@ -26,7 +28,7 @@ export function BarrasHorizontales({ datos, etiqueta, onSeleccionar, seleccionad
               <span className="min-w-0 truncate font-medium text-slate-700">{d.etiqueta}</span>
               <span className="shrink-0 tabular-nums text-slate-900">
                 <span className="font-semibold">{d.valor}</span>
-                {mostrarPorcentaje && <span className="ml-1.5 text-xs text-slate-500">{porcentaje(d.valor, total)}%</span>}
+                {mostrarPorcentaje && <span className="ml-1.5 text-xs text-slate-500">{porcentaje(d, total)}%</span>}
               </span>
             </span>
             <span className="mt-1.5 block h-2 w-full rounded-full bg-slate-100" aria-hidden="true">
@@ -64,7 +66,7 @@ export function BarrasHorizontales({ datos, etiqueta, onSeleccionar, seleccionad
 }
 
 // Columnas verticales con una o dos series.
-// datos: [{ clave, etiqueta, valores: { [serie]: número } }]
+// datos: [{ clave, etiqueta, detalle?, valores: { [serie]: número } }] — detalle es el texto largo del tooltip
 // series: [{ id, label, clase }] — la clase es el color de relleno de la serie
 export function Columnas({ datos, series, etiqueta, alto = "h-44" }) {
   const maximo = Math.max(1, ...datos.flatMap((d) => series.map((s) => d.valores[s.id] || 0)));
@@ -91,7 +93,7 @@ export function Columnas({ datos, series, etiqueta, alto = "h-44" }) {
                 key={d.clave}
                 role="listitem"
                 tabIndex={0}
-                aria-label={`${d.etiqueta}. ${resumen}`}
+                aria-label={`${d.detalle || d.etiqueta}. ${resumen}`}
                 className={`group relative flex min-w-[2.75rem] flex-1 flex-col items-center gap-2 rounded-lg ${FOCO}`}
               >
                 {/* Detalle al pasar el cursor o enfocar la columna */}
@@ -99,7 +101,7 @@ export function Columnas({ datos, series, etiqueta, alto = "h-44" }) {
                   role="tooltip"
                   className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 -translate-x-1/2 whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
                 >
-                  <p className="font-semibold">{d.etiqueta}</p>
+                  <p className="font-semibold">{d.detalle || d.etiqueta}</p>
                   {series.map((s) => (
                     <p key={s.id} className="tabular-nums text-slate-200">
                       {s.label}: {d.valores[s.id] || 0}
