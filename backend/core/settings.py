@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'gestion_emprendimiento_2',
     'gestion_evaluacion',
     'gestion_evidencia',
+    'gestion_analitica',
     'django.contrib.sites',
     'allauth',
     'allauth.account',
