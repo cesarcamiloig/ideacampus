@@ -132,7 +132,9 @@ export function ConvocatoriaFormDialog({
       const payload = {
         nombre: formData.nombre.trim(),
         categoria: formData.categoria.trim(),
-        periodo: formData.periodo ? parseInt(formData.periodo, 10) : null,
+        // id_periodo es texto en el backend (p. ej. "PER-2026-2"): convertirlo a número daba NaN
+        // y el periodo terminaba guardándose vacío
+        periodo: formData.periodo || null,
         fecha_apertura: new Date(formData.fecha_apertura).toISOString(),
         fecha_cierre: new Date(formData.fecha_cierre).toISOString(),
         estado: formData.estado,
