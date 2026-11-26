@@ -26,6 +26,7 @@ import AlertasPage from "../../gestion_convocatorias/pages/AlertasPage";
 import RubricasTab from "../../gestion_evaluacion/components/RubricasTab";
 import EvaluacionHitosPage from "../../gestion_evaluacion/pages/EvaluacionHitosPage";
 import HistorialEvaluacionesPage from "../../gestion_evaluacion/pages/HistorialEvaluacionesPage";
+import DashboardAnaliticaPage from "../../gestion_analitica/pages/DashboardAnaliticaPage";
 import { BOTON_PRIMARIO, CabeceraTarjeta, Cargando, Tarjeta } from "../../../components/ui";
 
 export const ROLE_CONFIG = {
@@ -206,20 +207,13 @@ export const ROLE_CONFIG = {
   },
   direccion_del_programa: {
     roleName: "Dirección de Programa",
-    defaultModule: "dashboard",
+    defaultModule: "indicadores",
     icon: Sparkles,
     subtitle:
       "Supervisión estratégica de resultados, trazabilidad longitudinal e indicadores de alta calidad.",
     description:
       "Tablero de control institucional para conocer el impacto de las iniciativas del Programa de Ingeniería de Sistemas para procesos de acreditación.",
     modules: {
-      dashboard: {
-        title: "Panel Estratégico",
-        desc: "Consolidado gerencial de iniciativas activas, tasa de éxito y evolución del ecosistema.",
-        details:
-          "Monitoreo de la transición de niveles de madurez tecnológica (M0 a M9).",
-        actionLabel: "Ver resumen directivo",
-      },
       iniciativas: {
         title: "Banco de Iniciativas del Programa",
         desc: "Trazabilidad completa de proyectos nacidos en asignaturas, semilleros y trabajos de grado.",
@@ -387,6 +381,8 @@ export default function RoleDashboardPage({ role, onNavigate, defaultModule, mos
               }}
               activeRole={normalizedRole}
             />
+          ) : ["direccion_del_programa", "direccion"].includes(normalizedRole) && activeModule === "indicadores" ? (
+            <DashboardAnaliticaPage key="dashboard-analitica" />
           ) : normalizedRole === "evaluador" && activeModule === "evaluaciones" ? (
             <EvaluacionHitosPage key="evaluaciones" />
           ) : normalizedRole === "evaluador" && activeModule === "rubricas" ? (
